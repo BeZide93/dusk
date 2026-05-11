@@ -174,6 +174,39 @@ BOOL daAlink_c::setBodyAngleToCamera() {
     return 0;
 }
 
+BOOL daAlink_c::setBodyAngleToCameraView() {
+    camera_process_class* camera = dComIfGp_getCamera(field_0x317c);
+    cXyz direction = *fopCamM_GetCenter_p(camera) - *fopCamM_GetEye_p(camera);
+    f32 horizontal = JMAFastSqrt(SQUARE(direction.x) + SQUARE(direction.z));
+    if (horizontal <= 0.001f) {
+        return FALSE;
+    }
+
+    field_0x310e = field_0x310a;
+    field_0x3110 = field_0x310c;
+    onEndResetFlg2(ERFLG2_UNK_20);
+
+    shape_angle.y = cM_atan2s(direction.x, direction.z);
+    s16 angle_x = cM_atan2s(-direction.y, horizontal);
+
+    if (checkNotItemSinkLimit() && angle_x > 0) {
+        cLib_addCalcAngleS(&angle_x, 0, 5, 0x1000, 0x400);
+    }
+
+    s16 min_angle;
+    if (!dComIfGp_checkPlayerStatus0(0, 0x202000) && mEquipItem == dItemNo_IRONBALL_e) {
+        min_angle = -10000;
+    } else {
+        min_angle = mpHIO->mItem.m.mItemFPUpMaxUnk;
+    }
+
+    mBodyAngle.x = cLib_minMaxLimit<s16>((s16)angle_x, min_angle, mpHIO->mItem.m.mItemFPMaxUnk);
+    checkBodyAngleX(mBodyAngle.x);
+    field_0x310a = mBodyAngle.x;
+    field_0x310c = shape_angle.y;
+    return TRUE;
+}
+
 void daAlink_c::setSubjectMode() {
     dComIfGp_setPlayerStatus0(0, 0x2000);
     seStartSystem(Z2SE_SUBJ_VIEW_IN);

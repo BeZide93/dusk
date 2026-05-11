@@ -1589,6 +1589,7 @@ public:
     void setItemActionButtonStatus(u8 i_status);
     BOOL itemActionTrigger();
     void setStickData();
+    void setAimCStickMovementData();
     void setAtnList();
     void setRStatus(u8 i_status);
     void setRStatusEmphasys(u8 i_status);
@@ -1828,6 +1829,7 @@ public:
     int checkSubjectAction();
     s16 checkBodyAngleX(s16 i_angle);
     BOOL setBodyAngleToCamera();
+    BOOL setBodyAngleToCameraView();
     void setSubjectMode();
     BOOL subjectCancelTrigger();
     BOOL checkSubjectEnd(BOOL i_isPlaySe);
@@ -2699,6 +2701,7 @@ public:
     void setIronBallBaseAnime();
     BOOL checkUpperItemActionIronBall();
     int checkNextActionIronBall();
+    void setIronBallSight();
     int procIronBallSubjectInit();
     int procIronBallSubject();
     int procIronBallMoveInit();

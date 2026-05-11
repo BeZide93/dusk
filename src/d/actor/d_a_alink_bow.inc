@@ -477,8 +477,18 @@ int daAlink_c::checkNextActionBow() {
         }
     }
 
+    BOOL use_third_person_item_aim = FALSE;
+#if TARGET_PC
+    use_third_person_item_aim =
+        mEquipItem != dItemNo_HAWK_ARROW_e &&
+        (dusk::getSettings().game.enableAimMovement ||
+         dusk::getSettings().game.enableThirdPersonAim);
+#endif
+
     BOOL rt = FALSE;
-    if (!checkAttentionLock() && mFastShotTime == 0) {
+    if (!checkAttentionLock() && mFastShotTime == 0
+        IF_DUSK(&& !use_third_person_item_aim))
+    {
         if (checkModeFlg(0x400)) {
             if (checkCanoeRide()) {
                 rt = procCanoeBowSubjectInit();
@@ -551,7 +561,14 @@ void daAlink_c::setBowSight() {
         getArrowFlyData(&dist, &speed, TRUE);
         checkSightLine(dist, &sight_pos);
         mSight.setPos(&sight_pos);
-        mSight.offDrawFlg();
+#if TARGET_PC
+        if (dusk::getSettings().game.enableThirdPersonAim) {
+            mSight.onDrawFlg();
+        } else
+#endif
+        {
+            mSight.offDrawFlg();
+        }
     } else {
         mSight.offDrawFlg();
     }
@@ -606,6 +623,8 @@ int daAlink_c::procBowMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
+        setAimCStickMovementData();
+
         if (checkZeroSpeedF()) {
             onModeFlg(1);
 
@@ -619,7 +638,18 @@ int daAlink_c::procBowMove() {
         }
 
         setBlendAtnMoveAnime(morf);
-        setBodyAngleXReadyAnime(0);
+#if TARGET_PC
+        if ((dusk::getSettings().game.enableAimMovement ||
+             dusk::getSettings().game.enableThirdPersonAim) && setBodyAngleToCameraView())
+        {
+            if (dusk::getSettings().game.enableThirdPersonAim) {
+                setBowSight();
+            }
+        } else
+#endif
+        {
+            setBodyAngleXReadyAnime(0);
+        }
     }
 
     return 1;

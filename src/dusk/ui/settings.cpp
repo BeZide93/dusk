@@ -1728,6 +1728,12 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Invert horizontal movement while aiming with items or first person camera. Applies to both stick and gyro aiming.");
         addOption("Invert First Person Y Axis", getSettings().game.invertFirstPersonYAxis,
             "Invert vertical movement while aiming with items or first person camera. Applies to both stick and gyro aiming.");
+        addOption("Aim Movement", getSettings().game.enableAimMovement,
+            "Allows movement while aiming supported items. Supported items include the Slingshot, "
+            "Hero's Bow, Clawshot(s), and Ball and Chain.");
+        addOption("Third-Person Aim", getSettings().game.enableThirdPersonAim,
+            "Keeps supported items in third-person aim and shows a reticle. Supported items include "
+            "the Slingshot, Hero's Bow, Clawshot(s), and Ball and Chain.");
 
         leftPane.add_section("Gyro");
         leftPane.register_control(

@@ -877,6 +877,14 @@ BOOL daAlink_c::checkUpperItemActionIronBall() {
     return cancelUpperItemReadyAnime(0);
 }
 
+void daAlink_c::setIronBallSight() {
+    cXyz sight_pos;
+    checkSightLine(10000.0f, &sight_pos);
+    mSight.setPos(&sight_pos);
+    mSight.onDrawFlg();
+    mSight.offLockFlg();
+}
+
 int daAlink_c::checkNextActionIronBall() {
     if (mFastShotTime != 0) {
         mFastShotTime--;
@@ -891,7 +899,9 @@ int daAlink_c::checkNextActionIronBall() {
         }
     }
 
-    if (!checkAttentionLock() && mFastShotTime == 0) {
+    if (!checkAttentionLock() && mFastShotTime == 0
+        IF_DUSK(&& !dusk::getSettings().game.enableAimMovement && !dusk::getSettings().game.enableThirdPersonAim))
+    {
         return procIronBallSubjectInit();
     } else {
         return procIronBallMoveInit();
@@ -922,7 +932,13 @@ int daAlink_c::procIronBallSubject() {
     setShapeAngleToAtnActor(0);
 
     if (!checkNextAction(0) && itemButton() && mItemVar0.field_0x3018 == 2) {
-        setBodyAngleToCamera();
+        if (setBodyAngleToCamera()) {
+#if TARGET_PC
+            if (dusk::getSettings().game.enableThirdPersonAim) {
+                setIronBallSight();
+            }
+#endif
+        }
     }
 
     return 1;
@@ -955,6 +971,8 @@ int daAlink_c::procIronBallMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
+        setAimCStickMovementData();
+
         if (checkIronBallPreSwingAnime()) {
             mNormalSpeed = 0.0f;
         }
@@ -977,6 +995,16 @@ int daAlink_c::procIronBallMove() {
         }
 
         setBodyAngleXReadyAnime(0);
+#if TARGET_PC
+        if ((dusk::getSettings().game.enableAimMovement ||
+             dusk::getSettings().game.enableThirdPersonAim) && itemButton() &&
+            mItemVar0.field_0x3018 == 2 && setBodyAngleToCameraView())
+        {
+            if (dusk::getSettings().game.enableThirdPersonAim) {
+                setIronBallSight();
+            }
+        }
+#endif
     }
 
     return 1;

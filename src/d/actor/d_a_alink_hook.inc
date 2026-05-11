@@ -737,7 +737,9 @@ int daAlink_c::checkNextActionHookshot() {
         }
     }
 
-    if (!checkAttentionLock() && mFastShotTime == 0) {
+    if (!checkAttentionLock() && mFastShotTime == 0
+        IF_DUSK(&& !dusk::getSettings().game.enableAimMovement && !dusk::getSettings().game.enableThirdPersonAim))
+    {
         if (checkModeFlg(0x400)) {
             if (checkCanoeRide()) {
                 return procCanoeHookshotSubjectInit();
@@ -1525,6 +1527,8 @@ int daAlink_c::procHookshotMove() {
     if (!checkNextAction(0)) {
         f32 blend = -1.0f;
 
+        setAimCStickMovementData();
+
         if (checkZeroSpeedF()) {
             onModeFlg(1);
 
@@ -1538,7 +1542,18 @@ int daAlink_c::procHookshotMove() {
 
         if (checkHookshotWait()) {
             setBlendAtnMoveAnime(blend);
-            setBodyAngleXReadyAnime(0);
+#if TARGET_PC
+            if ((dusk::getSettings().game.enableAimMovement ||
+                 dusk::getSettings().game.enableThirdPersonAim) && setBodyAngleToCameraView())
+            {
+                if (dusk::getSettings().game.enableThirdPersonAim) {
+                    setHookshotSight();
+                }
+            } else
+#endif
+            {
+                setBodyAngleXReadyAnime(0);
+            }
         } else if (checkChaseHookshot()) {
             setBodyAngleXReadyAnime(0);
         }

@@ -9403,6 +9403,26 @@ BOOL daAlink_c::itemActionTrigger() {
     return spActionTrigger();
 }
 
+void daAlink_c::setAimCStickMovementData() {
+#if TARGET_PC
+    if (!dusk::getSettings().game.enableAimMovement) {
+        return;
+    }
+
+    f32 c_stick_value = cLib_minMaxLimit<f32>(mDoCPd_c::getSubStickValue(PAD_1), 0.0f, 1.0f);
+    if (c_stick_value <= 0.05f) {
+        mStickValue = 0.0f;
+        mMoveValue = 0.0f;
+        return;
+    }
+
+    mStickValue = c_stick_value;
+    mMoveValue = c_stick_value;
+    mStickAngle = mDoCPd_c::getSubStickAngle(PAD_1) - -0x8000;
+    mMoveAngle = mStickAngle + dCam_getControledAngleY(dComIfGp_getCamera(field_0x317c));
+#endif
+}
+
 void daAlink_c::setStickData() {
     BOOL var_r31 = false;
     field_0x2f8f = mItemButton;
