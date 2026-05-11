@@ -30,6 +30,7 @@
 
 #if TARGET_PC
 #include "dusk/frame_interpolation.h"
+#include "dusk/settings.h"
 #include "dusk/logging.h"
 #include "imgui.h"
 #endif
@@ -323,6 +324,16 @@ inline static u32 check_owner_action(u32 param_0, u32 param_1) {
 inline static u32 check_owner_action1(u32 param_0, u32 param_1) {
     return dComIfGp_checkPlayerStatus1(param_0, param_1);
 }
+
+#if TARGET_PC
+inline static bool useDuskThirdPersonItemAim(u32 pad) {
+    return (dusk::getSettings().game.enableAimMovement ||
+            dusk::getSettings().game.enableThirdPersonAim) &&
+           (check_owner_action(pad, 0x1040) ||
+            check_owner_action(pad, 0x4000) ||
+            check_owner_action(pad, 0x400));
+}
+#endif
 
 inline static bool isPlayerCharging(u32 param_0) {
     return check_owner_action(param_0, 0x40000000);
@@ -1729,7 +1740,8 @@ s32 dCamera_c::nextMode(s32 i_curMode) {
             next_mode = 2;
         } else if (check_owner_action(mPadID, 0x200000)) {
 #else
-        } else if (check_owner_action(mPadID, 0x200000) && !attn->Lockon()) {
+        } else if (check_owner_action(mPadID, 0x200000) && !attn->Lockon()
+                   IF_DUSK(&& !useDuskThirdPersonItemAim(mPadID))) {
 #endif
             if (check_owner_action(mPadID, 0x25040)) {
                 next_mode = 7;
@@ -1930,7 +1942,8 @@ s32 dCamera_c::nextType(s32 i_curType) {
             }
 
             if (check_owner_action(mPadID, 0x200000) && ChangeModeOK(4)
-                                                     && !dComIfGp_getAttention()->Lockon()) {
+                                                     && !dComIfGp_getAttention()->Lockon()
+                                                     IF_DUSK(&& !useDuskThirdPersonItemAim(mPadID))) {
                 next_type = specialType[CAM_TYPE_SCOPE];
                 var_r28 = 0x6f;
             } else if (iVar14 != 0xff && !(mTagCamTool.mFlags & 0x10)) {

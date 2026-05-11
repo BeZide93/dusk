@@ -909,6 +909,14 @@ int daAlink_c::checkNextActionIronBall() {
 }
 
 int daAlink_c::procIronBallSubjectInit() {
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement ||
+        dusk::getSettings().game.enableThirdPersonAim)
+    {
+        return procIronBallMoveInit();
+    }
+#endif
+
     if (!commonProcInitNotSameProc(PROC_IRON_BALL_SUBJECT)) {
         return 0;
     }
@@ -925,6 +933,14 @@ int daAlink_c::procIronBallSubjectInit() {
 }
 
 int daAlink_c::procIronBallSubject() {
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement ||
+        dusk::getSettings().game.enableThirdPersonAim)
+    {
+        return procIronBallMoveInit();
+    }
+#endif
+
     if (checkIronBallAnime()) {
         setDoStatus(BUTTON_STATUS_BACK);
     }

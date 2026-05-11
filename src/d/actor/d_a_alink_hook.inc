@@ -1464,6 +1464,14 @@ int daAlink_c::commonHookshotWallWait() {
 }
 
 int daAlink_c::procHookshotSubjectInit() {
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement ||
+        dusk::getSettings().game.enableThirdPersonAim)
+    {
+        return procHookshotMoveInit();
+    }
+#endif
+
     if (!commonProcInitNotSameProc(PROC_HOOKSHOT_SUBJECT)) {
         return 0;
     }
@@ -1482,6 +1490,14 @@ int daAlink_c::procHookshotSubjectInit() {
 }
 
 int daAlink_c::procHookshotSubject() {
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement ||
+        dusk::getSettings().game.enableThirdPersonAim)
+    {
+        return procHookshotMoveInit();
+    }
+#endif
+
     if (checkHookshotWait()) {
         setDoStatus(BUTTON_STATUS_BACK);
     }

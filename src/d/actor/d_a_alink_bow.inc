@@ -575,6 +575,15 @@ void daAlink_c::setBowSight() {
 }
 
 int daAlink_c::procBowSubjectInit() {
+#if TARGET_PC
+    if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+        (dusk::getSettings().game.enableAimMovement ||
+         dusk::getSettings().game.enableThirdPersonAim))
+    {
+        return procBowMoveInit();
+    }
+#endif
+
     if (!commonProcInitNotSameProc(PROC_BOW_SUBJECT)) {
         return 0;
     }
@@ -587,6 +596,15 @@ int daAlink_c::procBowSubjectInit() {
 }
 
 int daAlink_c::procBowSubject() {
+#if TARGET_PC
+    if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+        (dusk::getSettings().game.enableAimMovement ||
+         dusk::getSettings().game.enableThirdPersonAim))
+    {
+        return procBowMoveInit();
+    }
+#endif
+
     setDoStatus(BUTTON_STATUS_BACK);
     if (!checkNextAction(0) && setBodyAngleToCamera()) {
         setBowSight();
