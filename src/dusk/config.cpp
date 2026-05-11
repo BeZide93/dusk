@@ -157,6 +157,7 @@ namespace dusk::config {
     template class ConfigImpl<dusk::DiscVerificationState>;
     template class ConfigImpl<dusk::GameLanguage>;
     template class ConfigImpl<dusk::GyroMode>;
+    template class ConfigImpl<dusk::AimMode>;
     template class ConfigImpl<dusk::ControllerOverlayLayout>;
     template class ConfigImpl<dusk::ControllerStyle>;
 }

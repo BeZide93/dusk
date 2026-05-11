@@ -481,8 +481,7 @@ int daAlink_c::checkNextActionBow() {
 #if TARGET_PC
     use_third_person_item_aim =
         mEquipItem != dItemNo_HAWK_ARROW_e &&
-        (dusk::getSettings().game.enableAimMovement ||
-         dusk::getSettings().game.enableThirdPersonAim);
+        dusk::UseThirdPersonAim();
 #endif
 
     BOOL rt = FALSE;
@@ -562,7 +561,7 @@ void daAlink_c::setBowSight() {
         checkSightLine(dist, &sight_pos);
         mSight.setPos(&sight_pos);
 #if TARGET_PC
-        if (dusk::getSettings().game.enableThirdPersonAim) {
+        if (dusk::UseThirdPersonAim() || dusk::UseCinemaAim()) {
             mSight.onDrawFlg();
         } else
 #endif
@@ -577,8 +576,7 @@ void daAlink_c::setBowSight() {
 int daAlink_c::procBowSubjectInit() {
 #if TARGET_PC
     if (mEquipItem != dItemNo_HAWK_ARROW_e &&
-        (dusk::getSettings().game.enableAimMovement ||
-         dusk::getSettings().game.enableThirdPersonAim))
+        dusk::UseThirdPersonAim())
     {
         return procBowMoveInit();
     }
@@ -598,16 +596,56 @@ int daAlink_c::procBowSubjectInit() {
 int daAlink_c::procBowSubject() {
 #if TARGET_PC
     if (mEquipItem != dItemNo_HAWK_ARROW_e &&
-        (dusk::getSettings().game.enableAimMovement ||
-         dusk::getSettings().game.enableThirdPersonAim))
+        dusk::UseThirdPersonAim())
     {
         return procBowMoveInit();
     }
 #endif
 
     setDoStatus(BUTTON_STATUS_BACK);
-    if (!checkNextAction(0) && setBodyAngleToCamera()) {
-        setBowSight();
+
+#if TARGET_PC
+    if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+        dusk::getSettings().game.enableAimMovement &&
+        !dusk::UseThirdPersonAim() &&
+        !dusk::UseCinemaAim())
+    {
+        f32 stick_value = mStickValue;
+        f32 move_value = mMoveValue;
+        s16 stick_angle = mStickAngle;
+        s16 move_angle = mMoveAngle;
+        s16 shape_angle_y = shape_angle.y;
+        setAimCStickMovementData();
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        mStickValue = stick_value;
+        mMoveValue = move_value;
+        mStickAngle = stick_angle;
+        mMoveAngle = move_angle;
+    }
+
+    if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+        dusk::getSettings().game.enableAimMovement &&
+        dusk::UseCinemaAim())
+    {
+        s16 shape_angle_y = shape_angle.y;
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        setCinemaAimMoveAnime(3, true, false);
+    }
+#endif
+
+    if (!checkNextAction(0)) {
+#if TARGET_PC
+        if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseCinemaAim()) {
+            if (setBodyAngleToCameraCStick()) {
+                setBowSight();
+            }
+        } else
+#endif
+        if (setBodyAngleToCamera()) {
+            setBowSight();
+        }
     }
 
     return 1;
@@ -641,7 +679,11 @@ int daAlink_c::procBowMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
-        setAimCStickMovementData();
+#if TARGET_PC
+        if (dusk::getSettings().game.enableAimMovement) {
+            setSpeedAndAngleAtn();
+        }
+#endif
 
         if (checkZeroSpeedF()) {
             onModeFlg(1);
@@ -657,12 +699,9 @@ int daAlink_c::procBowMove() {
 
         setBlendAtnMoveAnime(morf);
 #if TARGET_PC
-        if ((dusk::getSettings().game.enableAimMovement ||
-             dusk::getSettings().game.enableThirdPersonAim) && setBodyAngleToCameraView())
+        if (dusk::UseThirdPersonAim() && setBodyAngleToCameraView())
         {
-            if (dusk::getSettings().game.enableThirdPersonAim) {
-                setBowSight();
-            }
+            setBowSight();
         } else
 #endif
         {

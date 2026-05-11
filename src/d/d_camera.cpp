@@ -327,9 +327,9 @@ inline static u32 check_owner_action1(u32 param_0, u32 param_1) {
 
 #if TARGET_PC
 inline static bool useDuskThirdPersonItemAim(u32 pad) {
-    return (dusk::getSettings().game.enableAimMovement ||
-            dusk::getSettings().game.enableThirdPersonAim) &&
+    return dusk::UseThirdPersonAim() &&
            (check_owner_action(pad, 0x1040) ||
+            check_owner_action(pad, 0x80000) ||
             check_owner_action(pad, 0x4000) ||
             check_owner_action(pad, 0x400));
 }
@@ -1781,9 +1781,11 @@ s32 dCamera_c::nextMode(s32 i_curMode) {
             next_mode = 2;
         } else if (check_owner_action(mPadID, 0x12000)) {
             next_mode = 4;
-        } else if (check_owner_action(mPadID, 0x25040) && !attn->Lockon()) {
+        } else if (check_owner_action(mPadID, 0x25040) && !attn->Lockon()
+                   IF_DUSK(&& !useDuskThirdPersonItemAim(mPadID))) {
             next_mode = 7;
-        } else if ((check_owner_action(mPadID, 0x80480) && !attn->Lockon())
+        } else if ((check_owner_action(mPadID, 0x80480) && !attn->Lockon()
+                    IF_DUSK(&& !useDuskThirdPersonItemAim(mPadID)))
                                                         || link->checkHawkWait()) {
             next_mode = 8;
         } else if (check_owner_action(mPadID, 0x4000000) || link->checkChainBlockPushPull()) {
@@ -6914,6 +6916,11 @@ bool dCamera_c::subjectCamera(s32 param_0) {
     bool magne_boots_on = player->checkMagneBootsOn() != 0;
     bool sp10 = check_owner_action(mPadID, 0x80080) != 0;
     bool sp0F = check_owner_action(mPadID, 0x40) != 0;
+#if TARGET_PC
+    bool dusk_cinema_item_aim = dusk::UseCinemaAim() && (sp14 || sp13 || sp12 || sp10);
+#else
+    constexpr bool dusk_cinema_item_aim = false;
+#endif
 
     if (mCurCamStyleTimer == 0) {
         subject->field_0x0 = 'SUBN';
@@ -7048,7 +7055,7 @@ bool dCamera_c::subjectCamera(s32 param_0) {
         } else {
             mCStickYState = 0;
         }
-    } else if (sp12 || player->checkIronBallThrowReturnMode()) {
+    } else if (sp12 || player->checkIronBallThrowReturnMode() || dusk_cinema_item_aim) {
         val0 = 0.0f;
         val2 = 40.0f;
         val1 = 50.0f;
@@ -7123,7 +7130,7 @@ bool dCamera_c::subjectCamera(s32 param_0) {
 
     sp1D4 = dCamMath::xyzRotateX(sp1E0, angle_x);
     sp1E0 = dCamMath::xyzRotateY(sp1D4, angle_y);
-    f32 sp6C = sp12 ? 40.0f : 0.0f;
+    f32 sp6C = (sp12 || dusk_cinema_item_aim) ? 40.0f : 0.0f;
     cXyz sp294(0.0f, sp6C, -val7);
     sp1D4 = dCamMath::xyzRotateX(sp294, angle_x);
     sp294 = dCamMath::xyzRotateY(sp1D4, angle_y);

@@ -32,6 +32,12 @@ enum class GyroMode : u8 {
     Mouse = 1,
 };
 
+enum class AimMode : u8 {
+    Vanilla = 0,
+    ThirdPerson = 1,
+    Cinema = 2,
+};
+
 enum class ControllerOverlayLayout : u8 {
     GameCube = 0,
     WiiU = 1,
@@ -66,6 +72,12 @@ template <>
 struct ConfigEnumRange<GyroMode> {
     static constexpr auto min = GyroMode::Sensor;
     static constexpr auto max = GyroMode::Mouse;
+};
+
+template <>
+struct ConfigEnumRange<AimMode> {
+    static constexpr auto min = AimMode::Vanilla;
+    static constexpr auto max = AimMode::Cinema;
 };
 
 template <>
@@ -170,6 +182,7 @@ struct UserSettings {
         ConfigVar<bool> invertFirstPersonXAxis;
         ConfigVar<bool> invertFirstPersonYAxis;
         ConfigVar<bool> enableAimMovement;
+        ConfigVar<AimMode> aimMode;
         ConfigVar<bool> enableThirdPersonAim;
         ConfigVar<float> freeCameraSensitivity;
         ConfigVar<bool> debugFlyCam;
@@ -271,6 +284,10 @@ struct UserSettings {
 };
 
 UserSettings& getSettings();
+AimMode GetAimMode() noexcept;
+const char* AimModeName(AimMode mode) noexcept;
+bool UseThirdPersonAim() noexcept;
+bool UseCinemaAim() noexcept;
 const char* ControllerStyleName(ControllerStyle style) noexcept;
 bool UseWiiUControllerStyle() noexcept;
 

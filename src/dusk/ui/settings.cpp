@@ -79,6 +79,12 @@ constexpr std::array kGyroInputModeLabels = {
     "Mouse",
 };
 
+constexpr std::array kAimModes = {
+    AimMode::Vanilla,
+    AimMode::ThirdPerson,
+    AimMode::Cinema,
+};
+
 constexpr std::array kControllerOverlayLayouts = {
     ControllerOverlayLayout::GameCube,
     ControllerOverlayLayout::WiiU,
@@ -1272,6 +1278,40 @@ SelectButton& config_layout_select(Pane& leftPane, Pane& rightPane,
     return button;
 }
 
+SelectButton& config_aim_mode_select(Pane& leftPane, Pane& rightPane) {
+    auto& var = getSettings().game.aimMode;
+    auto& legacyThirdPersonVar = getSettings().game.enableThirdPersonAim;
+    auto& button = leftPane.add_select_button({
+        .key = "Aim Mode",
+        .getValue = [] { return Rml::String{AimModeName(GetAimMode())}; },
+        .isModified =
+            [] {
+                return GetAimMode() != getSettings().game.aimMode.getDefaultValue();
+            },
+    });
+    leftPane.register_control(button, rightPane, [&var, &legacyThirdPersonVar](Pane& pane) {
+        pane.clear();
+        for (const auto mode : kAimModes) {
+            pane
+                .add_button({
+                    .text = Rml::String{AimModeName(mode)},
+                    .isSelected = [mode] { return GetAimMode() == mode; },
+                })
+                .on_pressed([&var, &legacyThirdPersonVar, mode] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    var.setValue(mode);
+                    legacyThirdPersonVar.setValue(mode == AimMode::ThirdPerson);
+                    config::Save();
+                });
+        }
+        pane.add_text(
+            "Chooses the camera behavior for supported item aiming. Vanilla keeps the original "
+            "aim camera, 3rd Person keeps Link visible with a reticle, and Cinema uses an "
+            "over-the-shoulder item view.");
+    });
+    return button;
+}
+
 SelectButton& config_controller_style_select(Pane& leftPane, Pane& rightPane) {
     auto& var = getSettings().game.controllerStyle;
     auto& button = leftPane.add_select_button({
@@ -1730,10 +1770,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Invert vertical movement while aiming with items or first person camera. Applies to both stick and gyro aiming.");
         addOption("Aim Movement", getSettings().game.enableAimMovement,
             "Allows movement while aiming supported items. Supported items include the Slingshot, "
-            "Hero's Bow, Clawshot(s), and Ball and Chain.");
-        addOption("Third-Person Aim", getSettings().game.enableThirdPersonAim,
-            "Keeps supported items in third-person aim and shows a reticle. Supported items include "
-            "the Slingshot, Hero's Bow, Clawshot(s), and Ball and Chain.");
+            "Hero's Bow, Gale Boomerang, Clawshot(s), and Ball and Chain.");
+        config_aim_mode_select(leftPane, rightPane);
 
         leftPane.add_section("Gyro");
         leftPane.register_control(

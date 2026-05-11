@@ -1549,6 +1549,7 @@ public:
     f32 getMoveGroundAngleSpeedRate();
     void setBlendMoveAnime(f32 i_morf);
     void setBlendAtnMoveAnime(f32 i_morf);
+    void setCinemaAimMoveAnime(u8 i_waitDirection, bool i_updateRightWaitAngle, bool i_useIronBallBase);
     void setBlendAtnBackMoveAnime(f32 i_morf);
     void setFaceBck(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo);
     void setFaceBtp(u16 i_resIdx, BOOL i_isPriIdx, u16 i_arcNo);
@@ -1829,6 +1830,7 @@ public:
     int checkSubjectAction();
     s16 checkBodyAngleX(s16 i_angle);
     BOOL setBodyAngleToCamera();
+    BOOL setBodyAngleToCameraCStick();
     BOOL setBodyAngleToCameraView();
     void setSubjectMode();
     BOOL subjectCancelTrigger();

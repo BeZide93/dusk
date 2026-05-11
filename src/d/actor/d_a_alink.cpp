@@ -8087,6 +8087,32 @@ void daAlink_c::setBlendAtnMoveAnime(f32 i_morf) {
     }
 }
 
+void daAlink_c::setCinemaAimMoveAnime(u8 i_waitDirection, bool i_updateRightWaitAngle,
+                                      bool i_useIronBallBase) {
+    f32 morf = -1.0f;
+
+    if (checkZeroSpeedF()) {
+        onModeFlg(1);
+
+        if (field_0x2f98 != i_waitDirection) {
+            field_0x2f98 = i_waitDirection;
+            morf = mpHIO->mBasic.m.mBasicInterpolation;
+        }
+
+        if (i_updateRightWaitAngle) {
+            current.angle.y = shape_angle.y - 0x4000;
+        }
+    } else {
+        offModeFlg(1);
+    }
+
+    if (i_useIronBallBase && checkModeFlg(1)) {
+        setIronBallBaseAnime();
+    } else {
+        setBlendAtnMoveAnime(morf);
+    }
+}
+
 void daAlink_c::setBlendAtnBackMoveAnime(f32 i_morf) {
     f32 var_f27;
     f32 var_f31;
@@ -19556,6 +19582,13 @@ int daAlink_c::draw() {
     if (mSight.getDrawFlg() && !checkEventRun()) {
         #if PLATFORM_GCN
         mSight.setSight();
+        #if TARGET_PC
+        if (dusk::UseCinemaAim() &&
+            (checkBowAndSlingItem(mEquipItem) || checkHookshotItem(mEquipItem)))
+        {
+            mSight.mProjMtx[0][3] += 10.0f;
+        }
+        #endif
         #endif
     }
 

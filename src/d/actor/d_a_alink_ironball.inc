@@ -900,7 +900,7 @@ int daAlink_c::checkNextActionIronBall() {
     }
 
     if (!checkAttentionLock() && mFastShotTime == 0
-        IF_DUSK(&& !dusk::getSettings().game.enableAimMovement && !dusk::getSettings().game.enableThirdPersonAim))
+        IF_DUSK(&& !dusk::UseThirdPersonAim()))
     {
         return procIronBallSubjectInit();
     } else {
@@ -910,8 +910,7 @@ int daAlink_c::checkNextActionIronBall() {
 
 int daAlink_c::procIronBallSubjectInit() {
 #if TARGET_PC
-    if (dusk::getSettings().game.enableAimMovement ||
-        dusk::getSettings().game.enableThirdPersonAim)
+    if (dusk::UseThirdPersonAim())
     {
         return procIronBallMoveInit();
     }
@@ -934,8 +933,7 @@ int daAlink_c::procIronBallSubjectInit() {
 
 int daAlink_c::procIronBallSubject() {
 #if TARGET_PC
-    if (dusk::getSettings().game.enableAimMovement ||
-        dusk::getSettings().game.enableThirdPersonAim)
+    if (dusk::UseThirdPersonAim())
     {
         return procIronBallMoveInit();
     }
@@ -947,10 +945,49 @@ int daAlink_c::procIronBallSubject() {
 
     setShapeAngleToAtnActor(0);
 
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement &&
+        !dusk::UseThirdPersonAim() &&
+        !dusk::UseCinemaAim())
+    {
+        f32 stick_value = mStickValue;
+        f32 move_value = mMoveValue;
+        s16 stick_angle = mStickAngle;
+        s16 move_angle = mMoveAngle;
+        s16 shape_angle_y = shape_angle.y;
+        setAimCStickMovementData();
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        mStickValue = stick_value;
+        mMoveValue = move_value;
+        mStickAngle = stick_angle;
+        mMoveAngle = move_angle;
+    }
+
+    if (dusk::getSettings().game.enableAimMovement &&
+        dusk::UseCinemaAim())
+    {
+        s16 shape_angle_y = shape_angle.y;
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        if (checkIronBallPreSwingAnime()) {
+            mNormalSpeed = 0.0f;
+        }
+        setCinemaAimMoveAnime(2, false, true);
+    }
+#endif
+
     if (!checkNextAction(0) && itemButton() && mItemVar0.field_0x3018 == 2) {
+#if TARGET_PC
+        if (dusk::UseCinemaAim()) {
+            if (setBodyAngleToCameraCStick()) {
+                setIronBallSight();
+            }
+        } else
+#endif
         if (setBodyAngleToCamera()) {
 #if TARGET_PC
-            if (dusk::getSettings().game.enableThirdPersonAim) {
+            if (dusk::UseThirdPersonAim() || dusk::UseCinemaAim()) {
                 setIronBallSight();
             }
 #endif
@@ -987,7 +1024,11 @@ int daAlink_c::procIronBallMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
-        setAimCStickMovementData();
+#if TARGET_PC
+        if (dusk::getSettings().game.enableAimMovement) {
+            setSpeedAndAngleAtn();
+        }
+#endif
 
         if (checkIronBallPreSwingAnime()) {
             mNormalSpeed = 0.0f;
@@ -1012,13 +1053,10 @@ int daAlink_c::procIronBallMove() {
 
         setBodyAngleXReadyAnime(0);
 #if TARGET_PC
-        if ((dusk::getSettings().game.enableAimMovement ||
-             dusk::getSettings().game.enableThirdPersonAim) && itemButton() &&
+        if (dusk::UseThirdPersonAim() && itemButton() &&
             mItemVar0.field_0x3018 == 2 && setBodyAngleToCameraView())
         {
-            if (dusk::getSettings().game.enableThirdPersonAim) {
-                setIronBallSight();
-            }
+            setIronBallSight();
         }
 #endif
     }

@@ -174,6 +174,36 @@ BOOL daAlink_c::setBodyAngleToCamera() {
     return 0;
 }
 
+BOOL daAlink_c::setBodyAngleToCameraCStick() {
+#if TARGET_PC
+    f32 stick_value = mStickValue;
+    f32 move_value = mMoveValue;
+    s16 stick_angle = mStickAngle;
+    s16 move_angle = mMoveAngle;
+
+    f32 c_stick_value = cLib_minMaxLimit<f32>(mDoCPd_c::getSubStickValue(PAD_1), 0.0f, 1.0f);
+    if (c_stick_value <= 0.05f) {
+        mStickValue = 0.0f;
+        mMoveValue = 0.0f;
+    } else {
+        mStickValue = c_stick_value;
+        mMoveValue = c_stick_value;
+        mStickAngle = mDoCPd_c::getSubStickAngle(PAD_1) - -0x8000;
+        mMoveAngle = mStickAngle + dCam_getControledAngleY(dComIfGp_getCamera(field_0x317c));
+    }
+
+    BOOL result = setBodyAngleToCamera();
+
+    mStickValue = stick_value;
+    mMoveValue = move_value;
+    mStickAngle = stick_angle;
+    mMoveAngle = move_angle;
+    return result;
+#else
+    return setBodyAngleToCamera();
+#endif
+}
+
 BOOL daAlink_c::setBodyAngleToCameraView() {
     camera_process_class* camera = dComIfGp_getCamera(field_0x317c);
     cXyz direction = *fopCamM_GetCenter_p(camera) - *fopCamM_GetEye_p(camera);

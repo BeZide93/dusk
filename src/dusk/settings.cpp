@@ -91,6 +91,7 @@ UserSettings g_userSettings = {
         .invertFirstPersonXAxis {"game.invertFirstPersonXAxis", false},
         .invertFirstPersonYAxis {"game.invertFirstPersonYAxis", false},
         .enableAimMovement {"game.enableAimMovement", false},
+        .aimMode {"game.aimMode", AimMode::Vanilla},
         .enableThirdPersonAim {"game.enableThirdPersonAim", false},
         .freeCameraSensitivity {"game.freeCameraSensitivity", 1.0f},
         .debugFlyCam {"game.debugFlyCam", false},
@@ -195,6 +196,41 @@ UserSettings& getSettings() {
     return g_userSettings;
 }
 
+AimMode GetAimMode() noexcept {
+#if TARGET_PC
+    auto& settings = getSettings().game;
+    if (settings.aimMode.getLayer() == config::ConfigVarLayer::Default &&
+        settings.enableThirdPersonAim.getValue())
+    {
+        return AimMode::ThirdPerson;
+    }
+
+    return settings.aimMode.getValue();
+#else
+    return AimMode::Vanilla;
+#endif
+}
+
+const char* AimModeName(AimMode mode) noexcept {
+    switch (mode) {
+    case AimMode::ThirdPerson:
+        return "3rd Person";
+    case AimMode::Cinema:
+        return "Cinema";
+    case AimMode::Vanilla:
+    default:
+        return "Vanilla";
+    }
+}
+
+bool UseThirdPersonAim() noexcept {
+    return GetAimMode() == AimMode::ThirdPerson;
+}
+
+bool UseCinemaAim() noexcept {
+    return GetAimMode() == AimMode::Cinema;
+}
+
 const char* ControllerStyleName(ControllerStyle style) noexcept {
     switch (style) {
     case ControllerStyle::WiiU:
@@ -255,6 +291,7 @@ void registerSettings() {
     Register(g_userSettings.game.invertFirstPersonXAxis);
     Register(g_userSettings.game.invertFirstPersonYAxis);
     Register(g_userSettings.game.enableAimMovement);
+    Register(g_userSettings.game.aimMode);
     Register(g_userSettings.game.enableThirdPersonAim);
     Register(g_userSettings.game.freeCameraSensitivity);
     Register(g_userSettings.game.minimalHUD);

@@ -309,7 +309,9 @@ int daAlink_c::checkNextActionBoomerang() {
         }
     }
 
-    if (!checkAttentionLock() && mFastShotTime == 0) {
+    if (!checkAttentionLock() && mFastShotTime == 0
+        IF_DUSK(&& !dusk::UseThirdPersonAim()))
+    {
         if (checkModeFlg(0x400)) {
             if (checkCanoeRide()) {
                 return procCanoeBoomerangSubjectInit();
@@ -364,6 +366,13 @@ void daAlink_c::setBoomerangSight() {
 }
 
 int daAlink_c::procBoomerangSubjectInit() {
+#if TARGET_PC
+    if (dusk::UseThirdPersonAim())
+    {
+        return procBoomerangMoveInit();
+    }
+#endif
+
     if (!commonProcInitNotSameProc(PROC_BOOMERANG_SUBJECT)) {
         return 0;
     }
@@ -379,6 +388,13 @@ int daAlink_c::procBoomerangSubjectInit() {
 }
 
 int daAlink_c::procBoomerangSubject() {
+#if TARGET_PC
+    if (dusk::UseThirdPersonAim())
+    {
+        return procBoomerangMoveInit();
+    }
+#endif
+
     if (!checkItemActorPointer()) {
         return 1;
     }
@@ -389,7 +405,43 @@ int daAlink_c::procBoomerangSubject() {
 
     setShapeAngleToAtnActor(0);
 
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement &&
+        !dusk::UseThirdPersonAim() &&
+        !dusk::UseCinemaAim())
+    {
+        f32 stick_value = mStickValue;
+        f32 move_value = mMoveValue;
+        s16 stick_angle = mStickAngle;
+        s16 move_angle = mMoveAngle;
+        s16 shape_angle_y = shape_angle.y;
+        setAimCStickMovementData();
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        mStickValue = stick_value;
+        mMoveValue = move_value;
+        mStickAngle = stick_angle;
+        mMoveAngle = move_angle;
+    }
+
+    if (dusk::getSettings().game.enableAimMovement &&
+        dusk::UseCinemaAim())
+    {
+        s16 shape_angle_y = shape_angle.y;
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        setCinemaAimMoveAnime(3, false, false);
+    }
+#endif
+
     if (!checkNextAction(0)) {
+#if TARGET_PC
+        if (dusk::UseCinemaAim()) {
+            if (setBodyAngleToCameraCStick()) {
+                setBoomerangSight();
+            }
+        } else
+#endif
         if (setBodyAngleToCamera()) {
             setBoomerangSight();
         }
@@ -424,6 +476,12 @@ int daAlink_c::procBoomerangMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
+#if TARGET_PC
+        if (dusk::getSettings().game.enableAimMovement) {
+            setSpeedAndAngleAtn();
+        }
+#endif
+
         if (checkZeroSpeedF()) {
             onModeFlg(1);
 
@@ -441,7 +499,15 @@ int daAlink_c::procBoomerangMove() {
         }
 
         setBlendAtnMoveAnime(morf);
-        setBodyAngleXReadyAnime(0);
+#if TARGET_PC
+        if (dusk::UseThirdPersonAim() && setBodyAngleToCameraView())
+        {
+            setBoomerangSight();
+        } else
+#endif
+        {
+            setBodyAngleXReadyAnime(0);
+        }
     }
 
     return 1;
