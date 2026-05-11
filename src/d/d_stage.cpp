@@ -1592,11 +1592,46 @@ dStage_roomControl_c::roomDzs_c dStage_roomControl_c::m_roomDzs;
 u8 dStage_roomControl_c::mNoArcBank;
 #endif
 
+#if TARGET_PC
+static const char* dStage_getNewGamePlusActorName(const char* i_name) {
+    if (!dComIfGs_getSaveData()->getReserve().isNewGamePlus()) {
+        return i_name;
+    }
+
+    struct ActorReplacement {
+        const char* from;
+        const char* to;
+    };
+
+    static const ActorReplacement replacements[] = {
+        {"E_rd", "E_rdy"},
+        {"E_tk", "E_tk2"},
+        {"E_sm", "E_sm2"},
+        {"E_mm", "E_mm2"},
+        {"E_zm", "E_zm2"},
+    };
+
+    for (int i = 0; i < ARRAY_SIZE(replacements); i++) {
+        if (strcmp(i_name, replacements[i].from) == 0) {
+            return replacements[i].to;
+        }
+    }
+
+    return i_name;
+}
+#endif
+
 static void dStage_actorCreate(stage_actor_data_class* i_actorData, fopAcM_prm_class* i_actorPrm) {
-    dStage_objectNameInf* actorInf = dStage_searchName(i_actorData->name);
+    const char* actorName = i_actorData->name;
+
+#if TARGET_PC
+    actorName = dStage_getNewGamePlusActorName(actorName);
+#endif
+
+    dStage_objectNameInf* actorInf = dStage_searchName(actorName);
 
     if (actorInf == NULL) {
-        OS_REPORT("\x1B""[43;30mStage Actor Name Nothing !! <%s>\n\x1B[m", i_actorData->name);
+        OS_REPORT("\x1B""[43;30mStage Actor Name Nothing !! <%s>\n\x1B[m", actorName);
         JKRFree(i_actorPrm);
     } else {
         i_actorPrm->argument = actorInf->argument;

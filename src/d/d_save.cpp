@@ -1521,6 +1521,40 @@ static void dummy() {
     dComIfGs_setOptAttentionType(0);
 }
 
+void dSv_reserve_c::init() {
+    memset(unk, 0, sizeof(unk));
+}
+
+bool dSv_reserve_c::isNewGamePlus() const {
+    static const char magic[] = "DUSKNGP1";
+    return memcmp(unk, magic, sizeof(magic) - 1) == 0;
+}
+
+void dSv_reserve_c::setNewGamePlus(bool enabled) {
+    static const char magic[] = "DUSKNGP1";
+
+    if (enabled) {
+        memcpy(unk, magic, sizeof(magic) - 1);
+    } else {
+        memset(unk, 0, sizeof(magic) - 1);
+    }
+}
+
+bool dSv_reserve_c::isIntroSkipped() const {
+    static const char magic[] = "DUSKSKP1";
+    return memcmp(unk + 16, magic, sizeof(magic) - 1) == 0;
+}
+
+void dSv_reserve_c::setIntroSkipped(bool enabled) {
+    static const char magic[] = "DUSKSKP1";
+
+    if (enabled) {
+        memcpy(unk + 16, magic, sizeof(magic) - 1);
+    } else {
+        memset(unk + 16, 0, sizeof(magic) - 1);
+    }
+}
+
 void dSv_save_c::init() {
     mPlayer.init();
     for (int i = 0; i < STAGE_MAX; i++) {
@@ -1532,6 +1566,7 @@ void dSv_save_c::init() {
     }
 
     mEvent.init();
+    reserve.init();
     mMiniGame.init();
 }
 

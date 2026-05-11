@@ -211,6 +211,24 @@ public:
         DATASELPROC_TO_NAME_MOVE2,
         DATASELPROC_NEXT_MODE_WAIT,
 
+        #if TARGET_PC
+        DATASELPROC_NEW_GAME_PLUS_MODE_IN,
+        DATASELPROC_NEW_GAME_PLUS_MODE_SELECT,
+        DATASELPROC_NEW_GAME_PLUS_MODE_CURSOR_MOVE,
+        DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_NAME,
+        DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_SOURCE,
+        DATASELPROC_NEW_GAME_PLUS_MODE_CANCEL,
+        DATASELPROC_NEW_GAME_PLUS_SOURCE_SELECT,
+        DATASELPROC_NEW_GAME_PLUS_SOURCE_MOVE_ANM,
+        DATASELPROC_NEW_GAME_PLUS_SOURCE_RETURN_ANM,
+        DATASELPROC_NEW_GAME_PLUS_SOURCE_CANCEL,
+        DATASELPROC_SKIP_INTRO_MODE_IN,
+        DATASELPROC_SKIP_INTRO_MODE_SELECT,
+        DATASELPROC_SKIP_INTRO_MODE_CURSOR_MOVE,
+        DATASELPROC_SKIP_INTRO_MODE_CLOSE_TO_NAME,
+        DATASELPROC_SKIP_INTRO_MODE_CANCEL,
+        #endif
+
         #if PLATFORM_WII || PLATFORM_SHIELD
         DATASELPROC_DATA_SELECT_IN_COPY,
         DATASELPROC_CARD_TO_NAND_DATA_COPY,
@@ -289,6 +307,7 @@ public:
     void selectDataMoveAnmInitSet(int, int);
     bool selectDataMoveAnm();
     void dataSelectAnmSet();
+    bool dataSelectMoveAnimeStep(bool);
     void dataSelectMoveAnime();
     void makeRecInfo(u8);
     void selectDataOpenMove();
@@ -376,7 +395,30 @@ public:
     void menuCursorShow();
     void yesnoWakuAlpahAnmInit(u8, u8, u8, u8);
     bool yesnoWakuAlpahAnm(u8);
+    void startNewGameNameInput();
     #if TARGET_PC
+    void setYesNoLabels(bool);
+    void headerTxtSetRaw(const char*, u8, u8);
+    bool isValidNewGamePlusSource(u8, u8);
+    u8 findNewGamePlusSource(u8);
+    void startSkipIntroPrompt();
+    void applyNewGamePlusCarryOver();
+    void applySkipIntroPreset();
+    void newGamePlusModeIn();
+    void newGamePlusModeSelect();
+    void newGamePlusModeCursorMove();
+    void newGamePlusModeCloseToName();
+    void newGamePlusModeCloseToSource();
+    void newGamePlusModeCancel();
+    void newGamePlusSourceSelect();
+    void newGamePlusSourceMoveAnm();
+    void newGamePlusSourceReturnAnm();
+    void newGamePlusSourceCancel();
+    void skipIntroModeIn();
+    void skipIntroModeSelect();
+    void skipIntroModeCursorMove();
+    void skipIntroModeCloseToName();
+    void skipIntroModeCancel();
     void fileSelectWide();
     #endif
     void _draw();
@@ -681,6 +723,14 @@ public:
     /* 0x03B8 */ SaveDataBuf mSaveData[SAVEDATA_NUM];
     /* 0x2374 */ u8 mFadeFlag;
     /* 0x2375 */ bool mHasDrawn;
+
+    #if TARGET_PC
+    u8 mNewGamePlusSourceSlot;
+    u8 mNewGamePlusTargetSlot;
+    bool mNewGamePlusPending;
+    bool mSkipIntroPending;
+    u8 mNewGamePlusPad[3];
+    #endif
 
     #if PLATFORM_GCN
     /* 0x2378 */ J2DPicture* mpFadePict;

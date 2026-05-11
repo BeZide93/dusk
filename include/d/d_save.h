@@ -888,6 +888,12 @@ public:
 
 class dSv_reserve_c {
 public:
+    void init();
+    bool isNewGamePlus() const;
+    void setNewGamePlus(bool enabled);
+    bool isIntroSkipped() const;
+    void setIntroSkipped(bool enabled);
+
 private:
     u8 unk[80];
 };
@@ -909,6 +915,7 @@ public:
         mSave[i_stageNo] = mem;
     }
     dSv_event_c& getEvent() { return mEvent; }
+    dSv_reserve_c& getReserve() { return reserve; }
     dSv_MiniGame_c& getMiniGame() { return mMiniGame; }
 
     static const int STAGE_MAX = 32;

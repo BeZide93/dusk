@@ -318,6 +318,24 @@ static DataSelProcFunc DataSelProc[] = {
     &dFile_select_c::ToNameMove2,
     &dFile_select_c::nextModeWait,
 
+    #if TARGET_PC
+    &dFile_select_c::newGamePlusModeIn,
+    &dFile_select_c::newGamePlusModeSelect,
+    &dFile_select_c::newGamePlusModeCursorMove,
+    &dFile_select_c::newGamePlusModeCloseToName,
+    &dFile_select_c::newGamePlusModeCloseToSource,
+    &dFile_select_c::newGamePlusModeCancel,
+    &dFile_select_c::newGamePlusSourceSelect,
+    &dFile_select_c::newGamePlusSourceMoveAnm,
+    &dFile_select_c::newGamePlusSourceReturnAnm,
+    &dFile_select_c::newGamePlusSourceCancel,
+    &dFile_select_c::skipIntroModeIn,
+    &dFile_select_c::skipIntroModeSelect,
+    &dFile_select_c::skipIntroModeCursorMove,
+    &dFile_select_c::skipIntroModeCloseToName,
+    &dFile_select_c::skipIntroModeCancel,
+    #endif
+
     #if PLATFORM_WII || PLATFORM_SHIELD
     &dFile_select_c::dataSelectInCopy,
     &dFile_select_c::cardToNandDataCopy,
@@ -798,6 +816,151 @@ static u16 msgTbl[3] = {
     0x0042,
 };
 
+#if TARGET_PC
+void dFile_select_c::setYesNoLabels(bool i_newGamePlusLabels) {
+    static u8 defaultMsgIds[2] = {0x08, 0x07};
+    static const char* newGamePlusLabels[2] = {"New Game", "New Game+"};
+
+    for (int i = 0; i < 2; i++) {
+        J2DTextBox* textBox = (J2DTextBox*)mYnSelTxtPane[i]->getPanePtr();
+        if (i_newGamePlusLabels) {
+            textBox->setString(newGamePlusLabels[i]);
+        } else {
+            char textBuf[16];
+            fopMsgM_messageGet(textBuf, defaultMsgIds[i]);
+            textBox->setString(textBuf);
+        }
+    }
+}
+
+void dFile_select_c::headerTxtSetRaw(const char* i_text, u8 i_type, u8 param_3) {
+    u8 dispIdx = mHeaderTxtDispIdx ^ 1;
+    if (param_3 != 0) {
+        dispIdx = mHeaderTxtDispIdx;
+    }
+
+    static f32 fontsize[2] = {21.0f, 27.0f};
+#if VERSION == VERSION_GCN_JPN
+    static f32 linespace[2] = {22.0f, 20.0f};
+    static f32 charspace[2] = {2.0f, 3.0f};
+#else
+    static f32 linespace[2] = {21.0f, 20.0f};
+    static f32 charspace[2] = {0.0f, 0.0f};
+#endif
+
+    J2DTextBox* textBox = (J2DTextBox*)mHeaderTxtPane[dispIdx]->getPanePtr();
+    textBox->setFont(fileSel.font[i_type]);
+    textBox->setFontSize(fontsize[i_type], fontsize[i_type]);
+    textBox->setLineSpace(linespace[i_type]);
+    textBox->setCharSpace(charspace[i_type]);
+    strncpy(mHeaderStringPtr[dispIdx], i_text, 511);
+    mHeaderStringPtr[dispIdx][511] = '\0';
+    textBox->setString(mHeaderStringPtr[dispIdx]);
+
+    if (param_3 == 0) {
+        mHeaderTxtPane[mHeaderTxtDispIdx]->alphaAnimeStart(0);
+        mHeaderTxtPane[mHeaderTxtDispIdx ^ 1]->alphaAnimeStart(0);
+        field_0x021d = 0;
+    }
+}
+
+bool dFile_select_c::isValidNewGamePlusSource(u8 i_slot, u8 i_targetSlot) {
+    return i_slot < 3 && i_slot != i_targetSlot && !mIsNoData[i_slot] && mIsDataNew[i_slot] == 0;
+}
+
+u8 dFile_select_c::findNewGamePlusSource(u8 i_targetSlot) {
+    for (u8 i = 0; i < 3; i++) {
+        if (isValidNewGamePlusSource(i, i_targetSlot)) {
+            return i;
+        }
+    }
+
+    return 0xff;
+}
+
+static bool isIntroSkipBottleItem(u8 i_itemNo) {
+    return i_itemNo >= dItemNo_EMPTY_BOTTLE_e && i_itemNo <= dItemNo_DROP_BOTTLE_e;
+}
+
+static bool hasIntroSkipItem(u8 i_itemNo) {
+    if (dComIfGs_isItemFirstBit(i_itemNo)) {
+        return true;
+    }
+
+    for (int i = 0; i < MAX_ITEM_SLOTS; i++) {
+        if (dComIfGs_getItem(i, false) == i_itemNo) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static bool hasIntroSkipBottle() {
+    for (int i = SLOT_11; i <= SLOT_14; i++) {
+        if (isIntroSkipBottleItem(dComIfGs_getItem(i, false))) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void ensureIntroSkipItem(int i_slotNo, u8 i_itemNo) {
+    if (!hasIntroSkipItem(i_itemNo)) {
+        dComIfGs_setItem(i_slotNo, i_itemNo);
+    }
+
+    dComIfGs_onItemFirstBit(i_itemNo);
+}
+
+static void setIntroSkipSelectItemIfEmpty(int i_selectNo, u8 i_slotNo) {
+    if (dComIfGs_getSelectItemIndex(i_selectNo) == dItemNo_NONE_e) {
+        dComIfGs_setMixItemIndex(i_selectNo, dItemNo_NONE_e);
+        dComIfGs_setSelectItemIndex(i_selectNo, i_slotNo);
+    }
+}
+
+void dFile_select_c::startSkipIntroPrompt() {
+    dComIfGs_setDataNum(mSelectNum);
+    headerTxtSetRaw("Skip intro?", 1, 0);
+    yesnoMenuMoveAnmInitSet(0x473, 0x47d);
+    setYesNoLabels(false);
+    modoruTxtDispAnmInit(1);
+    mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_IN;
+}
+#endif
+
+void dFile_select_c::startNewGameNameInput() {
+#if PLATFORM_GCN
+    dComIfGs_setNewFile(128);
+#endif
+
+    dComIfGs_setDataNum(mSelectNum);
+    mSelIcon->setAlphaRate(0.0f);
+    mDoAud_seStart(Z2SE_SY_NEW_FILE, NULL, 0, 0);
+    headerTxtSet(0x385, 1, 0);
+    fileRecScaleAnmInitSet2(1.0f, 0.0f);
+    nameMoveAnmInitSet(3359, 3369);
+
+    mSelFileMoyoPane[mSelectNum]->setAlpha(0);
+    mSelFileGoldPane[mSelectNum]->setAlpha(0);
+    mSelFileGold2Pane[mSelectNum]->setAlpha(0);
+
+    char namebuf[32];
+    dMeter2Info_getString(0x382, namebuf, NULL);
+    dComIfGs_setPlayerName(namebuf);
+    mpName->setNextNameStr(dComIfGs_getPlayerName());
+    mpName->initial();
+    modoruTxtChange(1);
+
+    dComIfGs_getSaveData()->getReserve().setNewGamePlus(false);
+    #if TARGET_PC
+    dComIfGs_getSaveData()->getReserve().setIntroSkipped(false);
+    #endif
+    mDataSelProc = DATASELPROC_SELECT_DATA_NAME_MOVE;
+}
+
 void dFile_select_c::dataSelectStart() {
     mSelIcon->setAlphaRate(0.0f);
 
@@ -820,28 +983,27 @@ void dFile_select_c::dataSelectStart() {
 
         mDataSelProc = DATASELPROC_SELECT_DATA_OPENERASE_MOVE;
     } else if (mIsDataNew[mSelectNum] != 0) {
-        #if PLATFORM_GCN
-        dComIfGs_setNewFile(128);
+        #if TARGET_PC
+        mNewGamePlusSourceSlot = 0xff;
+        mNewGamePlusTargetSlot = mSelectNum;
+        mNewGamePlusPending = false;
+        mSkipIntroPending = false;
+
+        if (findNewGamePlusSource(mNewGamePlusTargetSlot) != 0xff) {
+            dComIfGs_setDataNum(mSelectNum);
+            headerTxtSetRaw("Select new game type", 1, 0);
+            yesnoMenuMoveAnmInitSet(0x473, 0x47d);
+            setYesNoLabels(true);
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_IN;
+        } else
         #endif
-
-        dComIfGs_setDataNum(mSelectNum);
-        mDoAud_seStart(Z2SE_SY_NEW_FILE, NULL, 0, 0);
-        headerTxtSet(0x385, 1, 0);
-        fileRecScaleAnmInitSet2(1.0f, 0.0f);
-        nameMoveAnmInitSet(3359, 3369);
-
-        mSelFileMoyoPane[mSelectNum]->setAlpha(0);
-        mSelFileGoldPane[mSelectNum]->setAlpha(0);
-        mSelFileGold2Pane[mSelectNum]->setAlpha(0);
-
-        char namebuf[32];
-        dMeter2Info_getString(0x382, namebuf, NULL);
-        dComIfGs_setPlayerName(namebuf);
-        mpName->setNextNameStr(dComIfGs_getPlayerName());
-        mpName->initial();
-        modoruTxtChange(1);
-
-        mDataSelProc = DATASELPROC_SELECT_DATA_NAME_MOVE;
+        {
+            #if TARGET_PC
+            startSkipIntroPrompt();
+            #else
+            startNewGameNameInput();
+            #endif
+        }
     } else {
         #if PLATFORM_GCN
         dComIfGs_setNewFile(0);
@@ -946,7 +1108,7 @@ void dFile_select_c::dataSelectAnmSet() {
     }
 }
 
-void dFile_select_c::dataSelectMoveAnime() {
+bool dFile_select_c::dataSelectMoveAnimeStep(bool i_showCursor) {
     bool iVar7 = true;
     bool iVar6 = true;
     bool bVar1 = true;
@@ -988,16 +1150,462 @@ void dFile_select_c::dataSelectMoveAnime() {
     if (iVar7 == true && iVar6 == true && bVar1 == true && iVar5 == true && bVar2 == true) {
         if (mSelectNum != 0xff) {
             mSelFilePanes[mSelectNum]->getPanePtr()->setAnimation((J2DAnmTransform*)NULL);
-            selFileCursorShow();
+            if (i_showCursor) {
+                selFileCursorShow();
+            }
         }
 
         if (mLastSelectNum != 0xff) {
             mSelFilePanes[mLastSelectNum]->getPanePtr()->setAnimation((J2DAnmTransform*)NULL);
         }
 
+        return true;
+    }
+
+    return false;
+}
+
+void dFile_select_c::dataSelectMoveAnime() {
+    if (dataSelectMoveAnimeStep(true)) {
         mDataSelProc = DATASELPROC_DATA_SELECT;
     }
 }
+
+#if TARGET_PC
+void dFile_select_c::newGamePlusModeIn() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::newGamePlusModeSelect() {
+    stick->checkTrigger();
+
+    if (mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigStart(PAD_1)) {
+        mDoAud_seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0);
+        mSelIcon->setAlphaRate(0.0f);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+
+        if (field_0x0268 == 0) {
+            mNewGamePlusPending = false;
+            mNewGamePlusSourceSlot = 0xff;
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_NAME;
+        } else {
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_SOURCE;
+        }
+    } else if (mDoCPd_c::getTrigB(PAD_1)) {
+        mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mSelIcon->setAlphaRate(0.0f);
+        headerTxtSet(0x43, 1, 0);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+        modoruTxtDispAnmInit(0);
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CANCEL;
+    } else if (stick->checkRightTrigger()) {
+        if (field_0x0268 != 0) {
+            mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+            field_0x0269 = field_0x0268;
+            field_0x0268 = 0;
+            yesnoSelectAnmSet();
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CURSOR_MOVE;
+        }
+    } else if (stick->checkLeftTrigger() && field_0x0268 != 1) {
+        mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+        field_0x0269 = field_0x0268;
+        field_0x0268 = 1;
+        yesnoSelectAnmSet();
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CURSOR_MOVE;
+    }
+}
+
+void dFile_select_c::newGamePlusModeCursorMove() {
+    bool isYnSelMove = yesnoSelectMoveAnm();
+    bool isYnWakuAlpha = yesnoWakuAlpahAnm(field_0x0269);
+    if (isYnSelMove && isYnWakuAlpha) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::newGamePlusModeCloseToName() {
+    if (yesnoMenuMoveAnm()) {
+        startSkipIntroPrompt();
+    }
+}
+
+void dFile_select_c::newGamePlusModeCloseToSource() {
+    if (!yesnoMenuMoveAnm()) {
+        return;
+    }
+
+    u8 sourceSlot = findNewGamePlusSource(mNewGamePlusTargetSlot);
+    if (sourceSlot == 0xff) {
+        mNewGamePlusPending = false;
+        mNewGamePlusSourceSlot = 0xff;
+        headerTxtSet(0x43, 1, 0);
+        modoruTxtDispAnmInit(0);
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CANCEL;
+        return;
+    }
+
+    headerTxtSetRaw("Select source file", 1, 0);
+    mLastSelectNum = mSelectNum;
+    mSelectNum = sourceSlot;
+    dataSelectAnmSet();
+    mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_MOVE_ANM;
+}
+
+void dFile_select_c::newGamePlusModeCancel() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        selFileCursorShow();
+        mDataSelProc = DATASELPROC_DATA_SELECT;
+    }
+}
+
+void dFile_select_c::newGamePlusSourceSelect() {
+    stick->checkTrigger();
+
+    if (mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigStart(PAD_1)) {
+        if (!isValidNewGamePlusSource(mSelectNum, mNewGamePlusTargetSlot)) {
+            mDoAud_seStart(Z2SE_SY_FILE_ERROR, NULL, 0, 0);
+            return;
+        }
+
+        mDoAud_seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0);
+        mNewGamePlusSourceSlot = mSelectNum;
+        mNewGamePlusPending = true;
+        mSelIcon->setAlphaRate(0.0f);
+
+        mLastSelectNum = mSelectNum;
+        mSelectNum = mNewGamePlusTargetSlot;
+        dataSelectAnmSet();
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_RETURN_ANM;
+    } else if (mDoCPd_c::getTrigB(PAD_1)) {
+        mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mNewGamePlusPending = false;
+        mNewGamePlusSourceSlot = 0xff;
+        mSelIcon->setAlphaRate(0.0f);
+        headerTxtSet(0x43, 1, 0);
+        modoruTxtDispAnmInit(0);
+
+        if (mSelectNum != mNewGamePlusTargetSlot) {
+            mLastSelectNum = mSelectNum;
+            mSelectNum = mNewGamePlusTargetSlot;
+            dataSelectAnmSet();
+        } else {
+            mLastSelectNum = 0xff;
+        }
+
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_CANCEL;
+    } else if (stick->checkUpTrigger()) {
+        if (mSelectNum != 0) {
+            mDoAud_seStart(Z2SE_FILE_SELECT_CURSOR, NULL, 0, 0);
+            mLastSelectNum = mSelectNum;
+            mSelectNum--;
+            dataSelectAnmSet();
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_MOVE_ANM;
+        }
+    } else if (stick->checkDownTrigger()) {
+        if (mSelectNum != 2) {
+            mDoAud_seStart(Z2SE_FILE_SELECT_CURSOR, NULL, 0, 0);
+            mLastSelectNum = mSelectNum;
+            mSelectNum++;
+            dataSelectAnmSet();
+            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_MOVE_ANM;
+        }
+    }
+}
+
+void dFile_select_c::newGamePlusSourceMoveAnm() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isDataSelectMove = dataSelectMoveAnimeStep(true);
+
+    if (isHeaderTxtChange && isDataSelectMove) {
+        mDataSelProc = DATASELPROC_NEW_GAME_PLUS_SOURCE_SELECT;
+    }
+}
+
+void dFile_select_c::newGamePlusSourceReturnAnm() {
+    if (dataSelectMoveAnimeStep(false)) {
+        startSkipIntroPrompt();
+    }
+}
+
+void dFile_select_c::newGamePlusSourceCancel() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+    bool isDataSelectMove = true;
+
+    if (mLastSelectNum != 0xff) {
+        isDataSelectMove = dataSelectMoveAnimeStep(true);
+    }
+
+    if (isHeaderTxtChange && isModoruTxtDisp && isDataSelectMove) {
+        selFileCursorShow();
+        mNewGamePlusTargetSlot = 0xff;
+        mDataSelProc = DATASELPROC_DATA_SELECT;
+    }
+}
+
+void dFile_select_c::skipIntroModeIn() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::skipIntroModeSelect() {
+    stick->checkTrigger();
+
+    if (mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigStart(PAD_1)) {
+        mDoAud_seStart(field_0x0268 != 0 ? Z2SE_SY_CURSOR_OK : Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mSkipIntroPending = field_0x0268 != 0;
+        mSelIcon->setAlphaRate(0.0f);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+        mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_CLOSE_TO_NAME;
+    } else if (mDoCPd_c::getTrigB(PAD_1)) {
+        mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mSkipIntroPending = false;
+        mSelIcon->setAlphaRate(0.0f);
+        headerTxtSet(0x43, 1, 0);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+        modoruTxtDispAnmInit(0);
+        mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_CANCEL;
+    } else if (stick->checkRightTrigger()) {
+        if (field_0x0268 != 0) {
+            mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+            field_0x0269 = field_0x0268;
+            field_0x0268 = 0;
+            yesnoSelectAnmSet();
+            mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_CURSOR_MOVE;
+        }
+    } else if (stick->checkLeftTrigger() && field_0x0268 != 1) {
+        mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+        field_0x0269 = field_0x0268;
+        field_0x0268 = 1;
+        yesnoSelectAnmSet();
+        mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_CURSOR_MOVE;
+    }
+}
+
+void dFile_select_c::skipIntroModeCursorMove() {
+    bool isYnSelMove = yesnoSelectMoveAnm();
+    bool isYnWakuAlpha = yesnoWakuAlpahAnm(field_0x0269);
+
+    if (isYnSelMove && isYnWakuAlpha) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_SKIP_INTRO_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::skipIntroModeCloseToName() {
+    if (yesnoMenuMoveAnm()) {
+        startNewGameNameInput();
+    }
+}
+
+void dFile_select_c::skipIntroModeCancel() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        selFileCursorShow();
+        mDataSelProc = DATASELPROC_DATA_SELECT;
+    }
+}
+
+void dFile_select_c::applyNewGamePlusCarryOver() {
+    if (!mNewGamePlusPending ||
+        !isValidNewGamePlusSource(mNewGamePlusSourceSlot, mNewGamePlusTargetSlot))
+    {
+        mNewGamePlusPending = false;
+        mNewGamePlusSourceSlot = 0xff;
+        mNewGamePlusTargetSlot = 0xff;
+        return;
+    }
+
+    dSv_save_c* srcSave = (dSv_save_c*)&mSaveData[mNewGamePlusSourceSlot];
+    dSv_save_c* dstSave = dComIfGs_getSaveData();
+    dSv_player_c& srcPlayer = srcSave->getPlayer();
+    dSv_player_c& dstPlayer = dstSave->getPlayer();
+
+    char playerName[17];
+    char horseName[17];
+    strncpy(playerName, dstPlayer.getPlayerInfo().getPlayerName(), sizeof(playerName) - 1);
+    playerName[sizeof(playerName) - 1] = '\0';
+    strncpy(horseName, dstPlayer.getPlayerInfo().getHorseName(), sizeof(horseName) - 1);
+    horseName[sizeof(horseName) - 1] = '\0';
+
+    dSv_player_status_a_c& srcStatus = srcPlayer.getPlayerStatusA();
+    dSv_player_status_a_c& dstStatus = dstPlayer.getPlayerStatusA();
+    dstStatus.setMaxLife(srcStatus.getMaxLife());
+    dstStatus.setLife(srcStatus.getMaxLife());
+    dstStatus.setRupee(srcStatus.getRupee());
+    dstStatus.setMaxOil(srcStatus.getMaxOil());
+    dstStatus.setOil(srcStatus.getOil());
+    dstStatus.setWalletSize(srcStatus.getWalletSize());
+    dstStatus.setMaxMagic(srcStatus.getMaxMagic());
+    dstStatus.setMagic(srcStatus.getMagic());
+
+    for (int i = 0; i < MAX_SELECT_ITEM; i++) {
+        dstStatus.setSelectItemIndex(i, srcStatus.getSelectItemIndex(i));
+        dstStatus.setMixItemIndex(i, srcStatus.getMixItemIndex(i));
+    }
+
+    for (int i = 0; i < MAX_EQUIPMENT; i++) {
+        dstStatus.setSelectEquip(i, srcStatus.getSelectEquip(i));
+    }
+
+    dstPlayer.getItem() = srcPlayer.getItem();
+    dstPlayer.getGetItem() = srcPlayer.getGetItem();
+    dstPlayer.getItemRecord() = srcPlayer.getItemRecord();
+    dstPlayer.getItemMax() = srcPlayer.getItemMax();
+    dstPlayer.getCollect() = srcPlayer.getCollect();
+
+    for (int i = 0; i < 4; i++) {
+        dstPlayer.getCollect().offCollectCrystal(i);
+        dstPlayer.getCollect().offCollectMirror(i);
+    }
+
+    dstPlayer.getPlayerInfo().setPlayerName(playerName);
+    dstPlayer.getPlayerInfo().setHorseName(horseName);
+    dstSave->getReserve().setNewGamePlus(true);
+    dComIfGs_setLineUpItem();
+
+    mNewGamePlusPending = false;
+    mNewGamePlusSourceSlot = 0xff;
+    mNewGamePlusTargetSlot = 0xff;
+}
+
+void dFile_select_c::applySkipIntroPreset() {
+    dSv_save_c* save = dComIfGs_getSaveData();
+
+    if (!mSkipIntroPending) {
+        save->getReserve().setIntroSkipped(false);
+        return;
+    }
+
+    static const u16 introEventBits[] = {
+        dSv_event_flag_c::F_0012,
+        dSv_event_flag_c::F_0026,
+        dSv_event_flag_c::F_0053,
+        dSv_event_flag_c::F_0055,
+        dSv_event_flag_c::F_0059,
+        dSv_event_flag_c::F_0094,
+        dSv_event_flag_c::F_0204,
+        dSv_event_flag_c::F_0205,
+        dSv_event_flag_c::F_0206,
+        dSv_event_flag_c::F_0211,
+        dSv_event_flag_c::F_0212,
+        dSv_event_flag_c::F_0222,
+        dSv_event_flag_c::F_0223,
+        dSv_event_flag_c::F_0226,
+        dSv_event_flag_c::F_0363,
+        dSv_event_flag_c::F_0364,
+        dSv_event_flag_c::F_0537,
+        dSv_event_flag_c::F_0540,
+        dSv_event_flag_c::F_0550,
+        dSv_event_flag_c::F_0565,
+        dSv_event_flag_c::F_0574,
+        dSv_event_flag_c::F_0575,
+        dSv_event_flag_c::F_0600,
+        dSv_event_flag_c::F_0601,
+        dSv_event_flag_c::F_0614,
+        dSv_event_flag_c::F_0625,
+        dSv_event_flag_c::F_0630,
+        dSv_event_flag_c::F_0700,
+        dSv_event_flag_c::F_0701,
+        dSv_event_flag_c::F_0702,
+        dSv_event_flag_c::M_011,
+        dSv_event_flag_c::M_012,
+        dSv_event_flag_c::M_013,
+        dSv_event_flag_c::M_014,
+        dSv_event_flag_c::M_015,
+        dSv_event_flag_c::M_016,
+        dSv_event_flag_c::M_019,
+        dSv_event_flag_c::M_020,
+        dSv_event_flag_c::M_067,
+        dSv_event_flag_c::M_068,
+        dSv_event_flag_c::M_072,
+        dSv_event_flag_c::M_095,
+    };
+
+    for (int i = 0; i < (int)(sizeof(introEventBits) / sizeof(introEventBits[0])); i++) {
+        dComIfGs_onEventBit(introEventBits[i]);
+    }
+
+    dComIfGs_onTransformLV(0);
+    dComIfGs_onDarkClearLV(0);
+    dComIfGs_setTransformStatus(TF_STATUS_HUMAN);
+    dComIfGs_setLightDropNum(FARON_VESSEL, 16);
+    dComIfGs_onLightDropGetFlag(FARON_VESSEL);
+
+    dComIfGs_onItemFirstBit(dItemNo_WEAR_KOKIRI_e);
+    dComIfGs_setCollectClothes(KOKIRI_CLOTHES_FLAG);
+    if (dComIfGs_getSelectEquipClothes() == dItemNo_WEAR_CASUAL_e ||
+        dComIfGs_getSelectEquipClothes() == dItemNo_NONE_e)
+    {
+        dComIfGs_setSelectEquipClothes(dItemNo_WEAR_KOKIRI_e);
+    }
+
+    dComIfGs_onItemFirstBit(dItemNo_SWORD_e);
+    if (!dComIfGs_isItemFirstBit(dItemNo_MASTER_SWORD_e) &&
+        dComIfGs_getSelectEquipSword() == dItemNo_NONE_e)
+    {
+        dComIfGs_setSelectEquipSword(dItemNo_SWORD_e);
+    }
+
+    dComIfGs_onItemFirstBit(dItemNo_SHIELD_e);
+    if (!dComIfGs_isItemFirstBit(dItemNo_HYLIA_SHIELD_e) &&
+        dComIfGs_getSelectEquipShield() == dItemNo_NONE_e)
+    {
+        dComIfGs_setSelectEquipShield(dItemNo_SHIELD_e);
+    }
+
+    ensureIntroSkipItem(SLOT_1, dItemNo_KANTERA_e);
+    ensureIntroSkipItem(SLOT_20, dItemNo_FISHING_ROD_1_e);
+    ensureIntroSkipItem(SLOT_23, dItemNo_PACHINKO_e);
+
+    if (!hasIntroSkipBottle()) {
+        dComIfGs_setItem(SLOT_11, dItemNo_HALF_MILK_BOTTLE_e);
+        dComIfGs_onItemFirstBit(dItemNo_HALF_MILK_BOTTLE_e);
+    }
+
+    if (dComIfGs_getMaxOil() < 21600) {
+        dComIfGs_setMaxOil(21600);
+    }
+
+    if (dComIfGs_getOil() < 21600) {
+        dComIfGs_setOil(21600);
+    }
+
+    dComIfGs_setPachinkoNum(dComIfGs_getPachinkoMax());
+    setIntroSkipSelectItemIfEmpty(SELECT_ITEM_X, SLOT_1);
+    setIntroSkipSelectItemIfEmpty(SELECT_ITEM_Y, SLOT_23);
+
+    if (dComIfGs_getBButtonItemKey() == dItemNo_NONE_e) {
+        dComIfGs_setBButtonItemKey(dItemNo_SWORD_e);
+    }
+
+    save->getPlayer().getPlayerReturnPlace().set("F_SP108", 1, 0);
+    save->getReserve().setIntroSkipped(true);
+    dComIfGs_setLineUpItem();
+    mSkipIntroPending = false;
+}
+#endif
 
 void dFile_select_c::makeRecInfo(u8 i_dataNo) {
     dSv_save_c* pSave = (dSv_save_c*)&mSaveData[i_dataNo];
@@ -1530,6 +2138,10 @@ void dFile_select_c::nameInput2() {
         break;
     case 2:
         dComIfGs_setHorseName(mpName->getInputStrPtr());
+        #if TARGET_PC
+        applyNewGamePlusCarryOver();
+        applySkipIntroPreset();
+        #endif
         mIsSelectEnd = true;
         mDataSelProc = DATASELPROC_NEXT_MODE_WAIT;
     }
@@ -1932,6 +2544,10 @@ void dFile_select_c::copyToSelPaneMove() {
 }
 
 void dFile_select_c::yesnoMenuMoveAnmInitSet(int param_1, int param_2) {
+    #if TARGET_PC
+    setYesNoLabels(false);
+    #endif
+
     if (!field_0x0108) {
         field_0x0268 = false;
         field_0x0269 = true;
@@ -3475,6 +4091,16 @@ void dFile_select_c::displayInit() {
     field_0x024a = false;
     field_0x0249 = false;
     field_0x024b = false;
+
+    #if TARGET_PC
+    mNewGamePlusSourceSlot = 0xff;
+    mNewGamePlusTargetSlot = 0xff;
+    mNewGamePlusPending = false;
+    mSkipIntroPending = false;
+    mNewGamePlusPad[0] = 0;
+    mNewGamePlusPad[1] = 0;
+    mNewGamePlusPad[2] = 0;
+    #endif
 
     mModoruTxtPane->setAlpha(0);
     mKetteiTxtPane->setAlpha(0);

@@ -406,7 +406,9 @@ void dScnName_c::changeGameScene() {
         #endif
         dComIfGp_offEnableNextStage();
 
-        if (dFs_c->isDataNew(dFs_c->getSelectNum())) {
+        if (dFs_c->isDataNew(dFs_c->getSelectNum()) &&
+            !dComIfGs_getSaveData()->getReserve().isIntroSkipped())
+        {
             dComIfGp_setNextStage("F_SP108", 21, 1, 13);
         }
         
