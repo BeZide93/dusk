@@ -1628,6 +1628,10 @@ public:
     BOOL checkLandAction(int);
     BOOL checkSlideAction();
     BOOL checkAutoJumpAction();
+    BOOL checkWiiUManualJumpAction();
+    BOOL checkWiiUManualJumpReady();
+    void setWiiUManualJumpDirection();
+    void applyWiiUManualJumpMovement();
     BOOL checkCutJumpInFly();
     BOOL checkFrontWallTypeAction();
     int checkItemActionInitStart();

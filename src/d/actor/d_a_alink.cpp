@@ -10813,7 +10813,85 @@ BOOL daAlink_c::checkSlideAction() {
     return false;
 }
 
+BOOL daAlink_c::checkWiiUManualJumpReady() {
+    if (!dusk::UseWiiUControllerStyle() || !mDoCPd_c::getTrigZL(PAD_1)) {
+        return false;
+    }
+
+    switch (mProcID) {
+    case PROC_WAIT:
+    case PROC_MOVE:
+    case PROC_ATN_MOVE:
+    case PROC_ATN_ACTOR_WAIT:
+    case PROC_ATN_ACTOR_MOVE:
+    case PROC_WAIT_TURN:
+    case PROC_MOVE_TURN:
+        break;
+    default:
+        return false;
+    }
+
+    return !checkWolf()
+        && mGndPolyAtt1 != 0xFF
+        && !checkFlyAtnWait()
+        && !checkModeFlg(0x70C12)
+        && mProcID != PROC_DOOR_OPEN
+        && mProcID != PROC_WARP
+        && !getSumouMode()
+        && mDemo.getDemoType() != daPy_demo_c::DEMO_TYPE_SPECIAL_e
+        && !checkMagneBootsFly()
+        && !checkMagneBootsOn()
+        && !checkNotJumpSinkLimit()
+        && !checkGrabAnime()
+        && mGrabItemAcKeep.getActor() == NULL
+        && mLinkAcch.ChkGroundHit();
+}
+
+void daAlink_c::setWiiUManualJumpDirection() {
+    if (checkInputOnR()) {
+        shape_angle.y = mMoveAngle;
+    }
+
+    current.angle.y = shape_angle.y;
+}
+
+void daAlink_c::applyWiiUManualJumpMovement() {
+    if (!checkInputOnR()) {
+        speedF = 0.0f;
+        mNormalSpeed = 0.0f;
+    }
+
+    mLinkAcch.ClrGroundHit();
+    setJumpMode();
+}
+
+BOOL daAlink_c::checkWiiUManualJumpAction() {
+    if (!checkWiiUManualJumpReady()) {
+        return false;
+    }
+
+    setWiiUManualJumpDirection();
+
+    if (mEquipItem == 0x103 && (mDoCPd_c::getHoldB(PAD_1) || mDoCPd_c::getTrigB(PAD_1))) {
+        if (procCutJumpInit(FALSE)) {
+            applyWiiUManualJumpMovement();
+            return true;
+        }
+        return false;
+    }
+
+    if (procAutoJumpInit(1)) {
+        applyWiiUManualJumpMovement();
+        return true;
+    }
+    return false;
+}
+
 BOOL daAlink_c::checkAutoJumpAction() {
+    if (checkWiiUManualJumpAction()) {
+        return 1;
+    }
+
     if (checkMagneBootsFly()) {
         return 1;
     }
@@ -16809,6 +16887,16 @@ int daAlink_c::procAutoJumpInit(int param_0) {
 
 int daAlink_c::procAutoJump() {
     int direction = getDirectionFromCurrentAngle();
+
+    if (dusk::UseWiiUControllerStyle() && mDoCPd_c::getHoldZL(PAD_1) &&
+        mDoCPd_c::getTrigB(PAD_1) && mEquipItem == 0x103)
+    {
+        setWiiUManualJumpDirection();
+        if (procCutJumpInit(TRUE)) {
+            applyWiiUManualJumpMovement();
+        }
+        return 1;
+    }
 
     #if VERSION == VERSION_SHIELD_DEBUG
     if (!checkStageName("F_SP115") && mGrabItemAcKeep.getActor() != NULL) {
