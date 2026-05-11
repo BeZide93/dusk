@@ -16,7 +16,13 @@ import android.view.WindowInsetsController;
 
 import org.libsdl.app.SDLActivity;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -229,5 +235,60 @@ public class DuskActivity extends SDLActivity {
 
         String lastSegment = uri.getLastPathSegment();
         return lastSegment != null ? lastSegment : "";
+    }
+
+    public byte[] readBytesForUri(String uriString) throws IOException {
+        if (uriString == null || uriString.isEmpty()) {
+            return new byte[0];
+        }
+
+        Uri uri = Uri.parse(uriString);
+        InputStream input;
+        if ("content".equals(uri.getScheme()) || "file".equals(uri.getScheme())) {
+            input = getContentResolver().openInputStream(uri);
+        } else {
+            input = new FileInputStream(uriString);
+        }
+
+        if (input == null) {
+            throw new IOException("Unable to open " + uriString);
+        }
+
+        try (InputStream in = input; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            return out.toByteArray();
+        }
+    }
+
+    public void writeBytesForUri(String uriString, byte[] data) throws IOException {
+        if (uriString == null || uriString.isEmpty()) {
+            throw new IOException("URI is empty");
+        }
+
+        Uri uri = Uri.parse(uriString);
+        OutputStream output;
+        if ("content".equals(uri.getScheme())) {
+            output = getContentResolver().openOutputStream(uri, "wt");
+        } else if ("file".equals(uri.getScheme())) {
+            String path = uri.getPath();
+            if (path == null || path.isEmpty()) {
+                throw new IOException("File URI has no path: " + uriString);
+            }
+            output = new FileOutputStream(path, false);
+        } else {
+            output = new FileOutputStream(uriString, false);
+        }
+
+        if (output == null) {
+            throw new IOException("Unable to open " + uriString);
+        }
+
+        try (OutputStream out = output) {
+            out.write(data);
+        }
     }
 }

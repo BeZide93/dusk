@@ -227,6 +227,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     protected static boolean mSDLMainFinished = false;
     protected static boolean mActivityCreated = false;
     private static SDLFileDialogState mFileDialogState = null;
+    private static String mNextFileDialogDefaultName = null;
     protected static boolean mDispatchingKeyEvent = false;
 
     public static SDLGenericMotionListener_API14 getMotionListener() {
@@ -2038,6 +2039,10 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         }
     }
 
+    public void setNextFileDialogDefaultName(String defaultName) {
+        mNextFileDialogDefaultName = defaultName;
+    }
+
     /**
      * This method is called by SDL using JNI.
      */
@@ -2045,6 +2050,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         if (mSingleton == null) {
             return false;
         }
+
+        String defaultName = mNextFileDialogDefaultName;
+        mNextFileDialogDefaultName = null;
 
         if (forWrite) {
             allowMultiple = false;
@@ -2075,6 +2083,9 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         Intent intent = new Intent(forWrite ? Intent.ACTION_CREATE_DOCUMENT : Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple);
+        if (forWrite && defaultName != null && !defaultName.isEmpty()) {
+            intent.putExtra(Intent.EXTRA_TITLE, defaultName);
+        }
         switch (mimes.size()) {
             case 0:
                 intent.setType("*/*");
