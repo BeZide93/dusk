@@ -621,7 +621,7 @@ dMeter2Draw_c::~dMeter2Draw_c() {
     JKR_DELETE(mpButtonCrossParent);
     mpButtonCrossParent = NULL;
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
         for (int j = 0; j < 3; j++) {
             if (mpItemNumTex[i][j] != NULL) {
                 JKR_DELETE(mpItemNumTex[i][j]);
@@ -819,18 +819,19 @@ void dMeter2Draw_c::draw() {
     drawKanteraScreen(1);
     drawKanteraScreen(2);
 
-    for (int i = 0; i < 2; i++) {
-        if (mpItemXY[i] != NULL) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
+        CPaneMgr* itemPane = i == SELECT_Z_e ? mpItemR : mpItemXY[i];
+        if (itemPane != NULL) {
             for (int j = 0; j < 3; j++) {
                 f32 temp_f30 = mItemParams[i].num_scale * 16.0f;
 
-                Vec vtx0 = mpItemXY[i]->getPanePtr()->getGlbVtx(0);
-                Vec vtx3 = mpItemXY[i]->getPanePtr()->getGlbVtx(3);
+                Vec vtx0 = itemPane->getPanePtr()->getGlbVtx(0);
+                Vec vtx3 = itemPane->getPanePtr()->getGlbVtx(3);
 
                 mpItemNumTex[i][j]->draw(mItemParams[i].num_pos_x +
                                              (((vtx0.x + vtx3.x) * 0.5f) + (temp_f30 * j)),
                                          mItemParams[i].num_pos_y +
-                                             (((vtx0.y + vtx3.y) * 0.5f) + mpItemXY[i]->getSizeY()),
+                                             (((vtx0.y + vtx3.y) * 0.5f) + itemPane->getSizeY()),
                                          temp_f30, temp_f30, false, false, false);
             }
         }
@@ -1411,10 +1412,11 @@ void dMeter2Draw_c::initButton() {
 
     ResTIMG* timg = (ResTIMG*)dComIfGp_getMain2DArchive()->getResource(
         'TIMG', dMeter2Info_getNumberTextureName(0));
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
         for (int j = 0; j < 3; j++) {
             mpItemNumTex[i][j] = JKR_NEW J2DPicture(timg);
             JUT_ASSERT(0, mpItemNumTex[i][j] != NULL);
+            mpItemNumTex[i][j]->setAlpha(0);
         }
     }
 
@@ -3474,14 +3476,23 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
     const f32 itemScale = wiiuStyle ? 1.0f :
         dusk::hud_layout::ButtonItemScale(dusk::hud_layout::Button::Z);
-    const f32 midnaOffsetY = wiiuStyle ? 44.0f * hudTransform.scale : 0.0f;
     if (wiiuStyle) {
         mpButtonMidona->show();
+        const f32 dpadScale = g_drawHIO.mButtonCrossScale * hudTransform.scale;
+        const f32 midnaScale = g_drawHIO.mMidnaIconScale * dpadScale;
+        Vec dpadCenter = mpButtonCrossParent->getGlobalVtxCenter(false, 0);
+        const f32 targetX = dpadCenter.x + g_drawHIO.mMidnaIconPosX - 178.0f;
+        const f32 targetY = dpadCenter.y + g_drawHIO.mMidnaIconPosY + 44.0f * dpadScale;
+
+        mpButtonMidona->scale(midnaScale, midnaScale);
+        mpButtonMidona->paneTrans(targetX - mpButtonMidona->getInitGlobalCenterPosX(),
+                                  targetY - mpButtonMidona->getInitGlobalCenterPosY());
+    } else {
+        mpButtonMidona->scale(g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale,
+                              g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale);
+        mpButtonMidona->paneTrans(g_drawHIO.mMidnaIconPosX + hudTransform.offsetX,
+                                  g_drawHIO.mMidnaIconPosY + hudTransform.offsetY);
     }
-    mpButtonMidona->scale(g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale,
-                          g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale);
-    mpButtonMidona->paneTrans(g_drawHIO.mMidnaIconPosX + hudTransform.offsetX,
-                              g_drawHIO.mMidnaIconPosY + hudTransform.offsetY + midnaOffsetY);
 
     if (mpButtonMidona->isVisible()) {
         f32 temp_f30 =
@@ -3573,7 +3584,7 @@ void dMeter2Draw_c::setButtonIconRItemAlpha(u32 param_0) {
         u8 buttonBaseAlpha = buttonAlpha * (f32)mpButtonXY[2]->getInitAlpha();
         const f32 parentAlpha = mpButtonParent->getAlphaRate();
 
-        if (param_0 & 0x1000000) {
+        if ((param_0 & 0x1000000) && !dusk::UseWiiUControllerStyle()) {
             itemAlpha = 0;
             itemBaseAlpha = 0;
             buttonBaseAlpha = 0;
@@ -3912,7 +3923,7 @@ void dMeter2Draw_c::setAlphaAnimeMax(CPaneMgrAlpha* i_pane, s16 i_max) {
 }
 
 void dMeter2Draw_c::setItemNum(u8 i_button, u8 i_num, u8 i_max) {
-    JUT_ASSERT(0, i_button < SELECT_MAX_e);
+    JUT_ASSERT(0, i_button < SELECT_ITEM_MAX_e);
 
     if (i_num > i_max) {
         i_num = i_max;
@@ -3966,10 +3977,11 @@ void dMeter2Draw_c::setItemNum(u8 i_button, u8 i_num, u8 i_max) {
 }
 
 void dMeter2Draw_c::drawItemNum(u8 i_button, f32 i_alpha) {
-    JUT_ASSERT(0, i_button < SELECT_MAX_e);
+    JUT_ASSERT(0, i_button < SELECT_ITEM_MAX_e);
 
     if (i_alpha == 1.0f) {
-        i_alpha = mpItemXY[i_button]->getAlphaRate();
+        i_alpha =
+            i_button == SELECT_Z_e ? mpItemR->getAlphaRate() : mpItemXY[i_button]->getAlphaRate();
     }
 
     for (int i = 0; i < 3; i++) {

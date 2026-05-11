@@ -30,6 +30,99 @@
 #include "dusk/settings.h"
 #endif
 
+static bool dMeter2_isBombAmmoItem(u8 i_itemNo) {
+    return i_itemNo == dItemNo_BOMB_BAG_LV1_e || i_itemNo == dItemNo_NORMAL_BOMB_e ||
+           i_itemNo == dItemNo_WATER_BOMB_e || i_itemNo == dItemNo_POKE_BOMB_e;
+}
+
+static bool dMeter2_isArrowAmmoItem(u8 i_itemNo) {
+    return i_itemNo == dItemNo_BOW_e || i_itemNo == dItemNo_LIGHT_ARROW_e ||
+           i_itemNo == dItemNo_ARROW_LV1_e || i_itemNo == dItemNo_ARROW_LV2_e ||
+           i_itemNo == dItemNo_ARROW_LV3_e || i_itemNo == dItemNo_HAWK_ARROW_e;
+}
+
+static bool dMeter2_isHudItemNumItem(u8 i_itemNo) {
+    return dMeter2_isBombAmmoItem(i_itemNo) || i_itemNo == dItemNo_BEE_CHILD_e ||
+           dMeter2_isArrowAmmoItem(i_itemNo) || i_itemNo == dItemNo_BOMB_ARROW_e ||
+           i_itemNo == dItemNo_PACHINKO_e;
+}
+
+static u8 dMeter2_getSelectItemNumForHUD(u8 i_slot, u8 i_itemNo) {
+    if (i_slot != dMeter2Draw_c::SELECT_Z_e) {
+        return dComIfGp_getSelectItemNum(i_slot);
+    }
+
+    const u8 slotNo = dComIfGs_getSelectItemIndex(i_slot);
+    if ((i_itemNo == dItemNo_NORMAL_BOMB_e || i_itemNo == dItemNo_WATER_BOMB_e ||
+         i_itemNo == dItemNo_POKE_BOMB_e || i_itemNo == dItemNo_BOMB_ARROW_e) &&
+        slotNo >= SLOT_15 && slotNo < SLOT_18)
+    {
+        return dComIfGs_getBombNum(slotNo - SLOT_15);
+    }
+
+    if (i_itemNo == dItemNo_PACHINKO_e) {
+        return dComIfGs_getPachinkoNum();
+    }
+
+    if (i_itemNo == dItemNo_BEE_CHILD_e && slotNo >= SLOT_11 && slotNo < SLOT_15) {
+        return dComIfGs_getBottleNum(slotNo - SLOT_11);
+    }
+
+    return 0;
+}
+
+static u8 dMeter2_getSelectItemMaxNumForHUD(u8 i_slot, u8 i_itemNo) {
+    if (i_slot != dMeter2Draw_c::SELECT_Z_e) {
+        return dComIfGp_getSelectItemMaxNum(i_slot);
+    }
+
+    if (i_itemNo == dItemNo_BOMB_BAG_LV1_e) {
+        return 1;
+    }
+
+    if (i_itemNo == dItemNo_NORMAL_BOMB_e || i_itemNo == dItemNo_WATER_BOMB_e ||
+        i_itemNo == dItemNo_POKE_BOMB_e || i_itemNo == dItemNo_BOMB_ARROW_e)
+    {
+        return dComIfGs_getBombMax(i_itemNo);
+    }
+
+    if (i_itemNo == dItemNo_PACHINKO_e) {
+        return dComIfGs_getPachinkoMax();
+    }
+
+    if (i_itemNo == dItemNo_BEE_CHILD_e) {
+        return dComIfGs_getBottleMax();
+    }
+
+    return 0;
+}
+
+static void dMeter2_setHudItemNum(dMeter2Draw_c* i_meterDraw, u8 i_slot, u8 i_itemNo,
+                                  u8 i_arrowNum, u8 i_pachinkoNum) {
+    if (!dMeter2_isHudItemNumItem(i_itemNo)) {
+        return;
+    }
+
+    if (dMeter2_isBombAmmoItem(i_itemNo) || i_itemNo == dItemNo_BEE_CHILD_e) {
+        i_meterDraw->setItemNum(i_slot, dMeter2_getSelectItemNumForHUD(i_slot, i_itemNo),
+                                dMeter2_getSelectItemMaxNumForHUD(i_slot, i_itemNo));
+    } else if (dMeter2_isArrowAmmoItem(i_itemNo)) {
+        i_meterDraw->setItemNum(i_slot, i_arrowNum, dComIfGs_getArrowMax());
+    } else if (i_itemNo == dItemNo_PACHINKO_e) {
+        i_meterDraw->setItemNum(i_slot, i_pachinkoNum, dComIfGs_getPachinkoMax());
+    } else if (i_itemNo == dItemNo_BOMB_ARROW_e) {
+        u8 itemNum = dMeter2_getSelectItemNumForHUD(i_slot, i_itemNo);
+        u8 itemMax = dMeter2_getSelectItemMaxNumForHUD(i_slot, i_itemNo);
+        if (itemNum > i_arrowNum) {
+            itemNum = i_arrowNum;
+        }
+        if (itemMax < dComIfGs_getArrowMax()) {
+            itemMax = dComIfGs_getArrowMax();
+        }
+        i_meterDraw->setItemNum(i_slot, itemNum, itemMax);
+    }
+}
+
 int dMeter2_c::_create() {
     stage_stag_info_class* stag_info = dComIfGp_getStageStagInfo();
     if (dStage_stagInfo_GetUpButton(stag_info) == 1) {
@@ -228,6 +321,10 @@ int dMeter2_c::_create() {
                 mpMeterDraw->setItemNum(i, item_num, item_max);
             }
         }
+    }
+    if (dusk::UseWiiUControllerStyle()) {
+        dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, dComIfGp_getSelectItem(2),
+                              mArrowNum, mPachinkoNum);
     }
 
     mpMap = NULL;
@@ -1778,6 +1875,8 @@ void dMeter2_c::moveButtonZ() {
         if (sWiiUZItemStatus != zItemStatus || draw_buttonZ) {
             sWiiUZItemStatus = zItemStatus;
             mpMeterDraw->drawButtonZItem(zItemStatus);
+            dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, zItemStatus,
+                                  mArrowNum, mPachinkoNum);
         }
 
         mpMeterDraw->setButtonIconMidonaAlpha(mStatus);
@@ -2664,6 +2763,11 @@ void dMeter2_c::moveBombNum() {
             mItemMaxNum[i] = dComIfGs_getSelectItemIndex(i);
         }
     }
+
+    if (dusk::UseWiiUControllerStyle()) {
+        dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, dComIfGp_getSelectItem(2),
+                              mArrowNum, mPachinkoNum);
+    }
 }
 
 void dMeter2_c::moveBottleNum() {
@@ -2679,6 +2783,11 @@ void dMeter2_c::moveBottleNum() {
                 }
             }
         }
+    }
+
+    if (dusk::UseWiiUControllerStyle()) {
+        dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, dComIfGp_getSelectItem(2),
+                              mArrowNum, mPachinkoNum);
     }
 }
 
@@ -2766,6 +2875,11 @@ void dMeter2_c::moveArrowNum() {
             }
         }
     }
+
+    if (dusk::UseWiiUControllerStyle()) {
+        dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, dComIfGp_getSelectItem(2),
+                              mArrowNum, mPachinkoNum);
+    }
 }
 
 void dMeter2_c::movePachinkoNum() {
@@ -2827,6 +2941,11 @@ void dMeter2_c::movePachinkoNum() {
         if (mItemStatus[i * 2] == dItemNo_PACHINKO_e) {
             mpMeterDraw->setItemNum(i, mPachinkoNum, dComIfGs_getPachinkoMax());
         }
+    }
+
+    if (dusk::UseWiiUControllerStyle()) {
+        dMeter2_setHudItemNum(mpMeterDraw, dMeter2Draw_c::SELECT_Z_e, dComIfGp_getSelectItem(2),
+                              mArrowNum, mPachinkoNum);
     }
 }
 
@@ -3026,6 +3145,15 @@ void dMeter2_c::alphaAnimeButton() {
         }
     }
 
+    if (dusk::UseWiiUControllerStyle()) {
+        const u8 rItem = dComIfGp_getSelectItem(2);
+        if (field_0x128 == 0 && dMeter2_isHudItemNumItem(rItem)) {
+            mpMeterDraw->drawItemNum(dMeter2Draw_c::SELECT_Z_e, 1.0f);
+        } else {
+            mpMeterDraw->drawItemNum(dMeter2Draw_c::SELECT_Z_e, 0.0f);
+        }
+    }
+
     mpMeterDraw->setAlphaButtonChange(false);
 }
 
@@ -3133,6 +3261,12 @@ int dMeter2_c::isArrowEquip() {
             return i + 1;
         }
     }
+    if (dusk::UseWiiUControllerStyle()) {
+        const u8 rItem = dComIfGp_getSelectItem(2);
+        if (dMeter2_isArrowAmmoItem(rItem) || rItem == dItemNo_BOMB_ARROW_e) {
+            return dMeter2Draw_c::SELECT_Z_e + 1;
+        }
+    }
     return 0;
 }
 
@@ -3141,6 +3275,10 @@ int dMeter2_c::isPachinkoEquip() {
         if (mItemStatus[i * 2] == dItemNo_PACHINKO_e) {
             return i + 1;
         }
+    }
+
+    if (dusk::UseWiiUControllerStyle() && dComIfGp_getSelectItem(2) == dItemNo_PACHINKO_e) {
+        return dMeter2Draw_c::SELECT_Z_e + 1;
     }
 
     return 0;

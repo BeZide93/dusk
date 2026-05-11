@@ -334,7 +334,13 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             mItemSlotParam2[i] = (mpItemBuf[i][0]->height / 48.0f * (texScale / 100.0f));
         }
     }
-    mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
+    if (dMenuRing_wiiuControllerStyle() && !mPlayerIsWolf) {
+        mpTextParent[0]->show();
+        mpTextParent[0]->setAlphaRate(1.0f);
+        mpScreen->search(MULTI_CHAR('r_btn_n'))->show();
+    } else {
+        mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
+    }
     if (mPlayerIsWolf) {
         mpScreen->search(MULTI_CHAR('yx_te_s1'))->hide();
         mpScreen->search(MULTI_CHAR('yx_te_s2'))->hide();

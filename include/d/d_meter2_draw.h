@@ -19,6 +19,7 @@ public:
         SELECT_Y_e,
         SELECT_Z_e,
         SELECT_MAX_e = 2,
+        SELECT_ITEM_MAX_e = 3,
     };
 
     struct item_params {
@@ -163,7 +164,7 @@ private:
     /* 0x078 */ J2DScreen* mpScreen;
     /* 0x07C */ J2DScreen* mpKanteraScreen;
     /* 0x080 */ J2DScreen* mpPikariScreen;
-    /* 0x084 */ J2DPicture* mpItemNumTex[2][3];
+    /* 0x084 */ J2DPicture* mpItemNumTex[SELECT_ITEM_MAX_e][3];
     /* 0x09C */ CPaneMgr* field_0x9c[3];
     /* 0x0A8 */ int field_0xa8;
     /* 0x0AC */ dKantera_icon_c* mpKanteraMeter[2];

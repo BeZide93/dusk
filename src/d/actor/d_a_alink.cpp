@@ -79,6 +79,10 @@ static int daAlink_meterUseButtonForSelectItem(u8 i_idx) {
     }
 }
 
+static bool daAlink_isLegacyZSelectItemSlot(int i_slot) {
+    return i_slot == 2 && !dusk::UseWiiUControllerStyle();
+}
+
 BOOL daAlink_c::getE3Zhint() {
     return false;
 }
@@ -12205,7 +12209,9 @@ BOOL daAlink_c::checkItemChangeFromButton() {
                        mEquipItem != 0x102 && (!checkCanoeRide() || !checkFisingRodLure()))
             {
                 if (!checkEventRun() || strcmp(dComIfGp_getEventManager().getRunEventName(), "ANGER") != 0) {
-                    if (strcmp(dComIfGp_getEventManager().getRunEventName(), "ANGER2") != 0 && checkItemSetButton(mEquipItem) == 2) {
+                    if (strcmp(dComIfGp_getEventManager().getRunEventName(), "ANGER2") != 0 &&
+                        daAlink_isLegacyZSelectItemSlot(checkItemSetButton(mEquipItem)))
+                    {
                         allUnequip(1);
                     }
                 }
@@ -14618,7 +14624,9 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                 return ITEM_PROC_BOTTLE_DRINK;
             }
 
-            if (checkOilBottleItem(sel_item) && checkItemSetButton(dItemNo_KANTERA_e) != 2) {
+            if (checkOilBottleItem(sel_item) &&
+                !daAlink_isLegacyZSelectItemSlot(checkItemSetButton(dItemNo_KANTERA_e)))
+            {
                 return ITEM_PROC_KANDELAAR_POUR;
             }
         } else if (sel_item == dItemNo_HVY_BOOTS_e) {
@@ -14663,7 +14671,7 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                     return ITEM_PROC_SPINNER_READY;
                 } else if (checkDungeonWarpItem(sel_item)) {
                     return ITEM_PROC_DUNGEON_WARP_READY;
-                } else if (checkItemSetButton(0x108) != 2 &&
+                } else if (!daAlink_isLegacyZSelectItemSlot(checkItemSetButton(0x108)) &&
                            (sel_item == dItemNo_WORM_e || sel_item == dItemNo_BEE_CHILD_e))
                 {
                     int itemNo = dComIfGp_getSelectItem(checkItemSetButton(0x108));
@@ -14687,7 +14695,8 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                     return ITEM_PROC_NOT_USE_ITEM;
                 } else if (sel_item == dItemNo_HORSE_FLUTE_e) {
                     return ITEM_PROC_GRASS_WHISTLE;
-                } else if (checkOilBottleItem(sel_item) && checkItemSetButton(0x48) != 2) {
+                } else if (checkOilBottleItem(sel_item) &&
+                           !daAlink_isLegacyZSelectItemSlot(checkItemSetButton(0x48))) {
                     return ITEM_PROC_KANDELAAR_POUR;
                 } else if (sel_item == dItemNo_HAWK_EYE_e) {
                     if (acceptSubjectModeChange()) {
@@ -17800,7 +17809,7 @@ int daAlink_c::execute() {
 
     if (checkNoResetFlg2(FLG2_UNK_1) != FALSE &&
         mEquipItem != dItemNo_KANTERA_e &&
-        checkItemSetButton(dItemNo_KANTERA_e) == 2) {
+        daAlink_isLegacyZSelectItemSlot(checkItemSetButton(dItemNo_KANTERA_e))) {
         offKandelaarModel();
     }
 
@@ -18189,7 +18198,7 @@ int daAlink_c::execute() {
 
         if (checkEquipHeavyBoots()) {
             int itemButton = checkItemSetButton(dItemNo_HVY_BOOTS_e);
-            if (itemButton == 2 || checkNotHeavyBootsStage()) {
+            if (daAlink_isLegacyZSelectItemSlot(itemButton) || checkNotHeavyBootsStage()) {
                 if (!dComIfGp_checkPlayerStatus1(0, 0x10000) || !checkHookshotRoofLv7Boss()) {
                     setHeavyBoots(0);
                 }
