@@ -789,11 +789,15 @@ void mDoGph_gInf_c::updateSafeAreaBounds() {
     const f32 topInset = std::max(0.0f, safeTop - viewportTop) * (m_heightF / viewportHeight);
     const f32 rightInset = std::max(0.0f, viewportRight - safeRight) * (m_widthF / viewportWidth);
     const f32 bottomInset = std::max(0.0f, viewportBottom - safeBottom) * (m_heightF / viewportHeight);
+    // Keep the logical HUD/projection center stable when Android swaps cutout/gesture insets
+    // between landscape and reverse landscape.
+    const f32 horizontalInset = std::max(leftInset, rightInset);
+    const f32 verticalInset = std::max(topInset, bottomInset);
 
-    const f32 safeMinXF = m_minXF + leftInset;
-    const f32 safeMinYF = m_minYF + topInset;
-    const f32 safeMaxXF = m_maxXF - rightInset;
-    const f32 safeMaxYF = m_maxYF - bottomInset;
+    const f32 safeMinXF = m_minXF + horizontalInset;
+    const f32 safeMinYF = m_minYF + verticalInset;
+    const f32 safeMaxXF = m_maxXF - horizontalInset;
+    const f32 safeMaxYF = m_maxYF - verticalInset;
     const f32 safeWidthF = safeMaxXF - safeMinXF;
     const f32 safeHeightF = safeMaxYF - safeMinYF;
 

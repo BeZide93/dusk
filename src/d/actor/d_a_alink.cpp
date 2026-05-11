@@ -19582,13 +19582,6 @@ int daAlink_c::draw() {
     if (mSight.getDrawFlg() && !checkEventRun()) {
         #if PLATFORM_GCN
         mSight.setSight();
-        #if TARGET_PC
-        if (dusk::UseCinemaAim() &&
-            (checkBowAndSlingItem(mEquipItem) || checkHookshotItem(mEquipItem)))
-        {
-            mSight.mProjMtx[0][3] += 10.0f;
-        }
-        #endif
         #endif
     }
 
