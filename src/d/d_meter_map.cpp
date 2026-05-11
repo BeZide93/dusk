@@ -612,7 +612,14 @@ void dMeterMap_c::draw() {
             dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::Minimap);
         f32 sizeX = mSizeW * hudTransform.scale;
         f32 sizeY = mSizeH * hudTransform.scale;
-        f32 drawPosX = mDrawPosX + hudTransform.offsetX;
+        f32 drawPosX = mDrawPosX;
+        if (dusk::getSettings().game.hudMinimapSlideDirection.getValue() ==
+            dusk::MinimapSlideDirection::RightToLeft)
+        {
+            const f32 insidePosX = mDrawPosX - (static_cast<f32>(mSlidePositionOffset) * 2.0f);
+            drawPosX = insidePosX - (mDrawPosX - insidePosX);
+        }
+        drawPosX += hudTransform.offsetX;
         f32 drawPosY = mDrawPosY + hudTransform.offsetY;
 
         u8 alpha = mMapAlpha;

@@ -172,6 +172,8 @@ UserSettings g_userSettings = {
         .hudMinimapOffsetX {"game.hudMinimapOffsetX", 0.0f},
         .hudMinimapOffsetY {"game.hudMinimapOffsetY", 0.0f},
         .hudMinimapScale {"game.hudMinimapScale", 1.0f},
+        .hudMinimapSlideDirection {"game.hudMinimapSlideDirection",
+                                   MinimapSlideDirection::LeftToRight},
 
         // Tools
         .speedrunMode {"game.speedrunMode", false},
@@ -247,6 +249,16 @@ bool UseWiiUControllerStyle() noexcept {
 #else
     return false;
 #endif
+}
+
+const char* MinimapSlideDirectionName(MinimapSlideDirection direction) noexcept {
+    switch (direction) {
+    case MinimapSlideDirection::RightToLeft:
+        return "Right -> Left";
+    case MinimapSlideDirection::LeftToRight:
+    default:
+        return "Left -> Right";
+    }
 }
 
 void registerSettings() {
@@ -396,6 +408,7 @@ void registerSettings() {
     Register(g_userSettings.game.hudMinimapOffsetX);
     Register(g_userSettings.game.hudMinimapOffsetY);
     Register(g_userSettings.game.hudMinimapScale);
+    Register(g_userSettings.game.hudMinimapSlideDirection);
 
     Register(g_userSettings.backend.isoPath);
     Register(g_userSettings.backend.isoVerification);

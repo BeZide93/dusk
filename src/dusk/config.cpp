@@ -160,6 +160,7 @@ namespace dusk::config {
     template class ConfigImpl<dusk::AimMode>;
     template class ConfigImpl<dusk::ControllerOverlayLayout>;
     template class ConfigImpl<dusk::ControllerStyle>;
+    template class ConfigImpl<dusk::MinimapSlideDirection>;
 }
 
 void dusk::config::Register(ConfigVarBase& configVar) {

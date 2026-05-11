@@ -49,6 +49,11 @@ enum class ControllerStyle : u8 {
     WiiU = 1,
 };
 
+enum class MinimapSlideDirection : u8 {
+    LeftToRight = 0,
+    RightToLeft = 1,
+};
+
 namespace config {
 template <>
 struct ConfigEnumRange<BloomMode> {
@@ -90,6 +95,12 @@ template <>
 struct ConfigEnumRange<ControllerStyle> {
     static constexpr auto min = ControllerStyle::GameCube;
     static constexpr auto max = ControllerStyle::WiiU;
+};
+
+template <>
+struct ConfigEnumRange<MinimapSlideDirection> {
+    static constexpr auto min = MinimapSlideDirection::LeftToRight;
+    static constexpr auto max = MinimapSlideDirection::RightToLeft;
 };
 }
 
@@ -263,6 +274,7 @@ struct UserSettings {
         ConfigVar<float> hudMinimapOffsetX;
         ConfigVar<float> hudMinimapOffsetY;
         ConfigVar<float> hudMinimapScale;
+        ConfigVar<MinimapSlideDirection> hudMinimapSlideDirection;
 
         // Tools
         ConfigVar<bool> speedrunMode;
@@ -290,6 +302,7 @@ bool UseThirdPersonAim() noexcept;
 bool UseCinemaAim() noexcept;
 const char* ControllerStyleName(ControllerStyle style) noexcept;
 bool UseWiiUControllerStyle() noexcept;
+const char* MinimapSlideDirectionName(MinimapSlideDirection direction) noexcept;
 
 void registerSettings();
 

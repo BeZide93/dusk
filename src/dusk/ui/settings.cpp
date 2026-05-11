@@ -120,6 +120,11 @@ constexpr std::array kHudSideAnchors = {
     hud_layout::SideAnchor::Right,
 };
 
+constexpr std::array kMinimapSlideDirections = {
+    MinimapSlideDirection::LeftToRight,
+    MinimapSlideDirection::RightToLeft,
+};
+
 bool try_parse_backend(std::string_view backend, AuroraBackend& outBackend) {
     if (backend == "auto") {
         outBackend = BACKEND_AUTO;
@@ -319,6 +324,10 @@ bool hud_element_is_button(int index) {
     return std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1) <= 4;
 }
 
+bool hud_element_is_minimap(int index) {
+    return hud_element_id(index) == hud_layout::Element::Minimap;
+}
+
 hud_layout::Button hud_element_button(int index) {
     switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
     case 1:
@@ -498,6 +507,10 @@ bool hud_element_modified(int index) {
     auto& offsetX = hud_element_offset_x(index);
     auto& offsetY = hud_element_offset_y(index);
     auto& scale = hud_element_scale(index);
+    const bool minimapSlideModified =
+        hud_element_is_minimap(index) &&
+        getSettings().game.hudMinimapSlideDirection.getValue() !=
+            getSettings().game.hudMinimapSlideDirection.getDefaultValue();
     const bool itemAnchorModified =
         hud_element_has_item_anchor(index) &&
         hud_element_item_anchor(index).getValue() !=
@@ -516,7 +529,8 @@ bool hud_element_modified(int index) {
             hud_element_text_scale(index).getDefaultValue();
     return offsetX.getValue() != offsetX.getDefaultValue() ||
            offsetY.getValue() != offsetY.getDefaultValue() ||
-           scale.getValue() != scale.getDefaultValue() || itemAnchorModified ||
+           scale.getValue() != scale.getDefaultValue() || minimapSlideModified ||
+           itemAnchorModified ||
            textAnchorModified || itemScaleModified || textScaleModified;
 }
 
@@ -536,6 +550,10 @@ void reset_hud_element(int index) {
     offsetX.setValue(offsetX.getDefaultValue());
     offsetY.setValue(offsetY.getDefaultValue());
     scale.setValue(scale.getDefaultValue());
+    if (hud_element_is_minimap(index)) {
+        auto& slideDirection = getSettings().game.hudMinimapSlideDirection;
+        slideDirection.setValue(slideDirection.getDefaultValue());
+    }
     if (hud_element_has_item_anchor(index)) {
         auto& itemAnchor = hud_element_item_anchor(index);
         itemAnchor.setValue(itemAnchor.getDefaultValue());
@@ -661,12 +679,59 @@ void set_side_anchor_from_json(ConfigVar<int>& var, const json& object, const ch
     }
 }
 
+MinimapSlideDirection normalize_minimap_slide_direction(int direction) {
+    const int min = static_cast<int>(MinimapSlideDirection::LeftToRight);
+    const int max = static_cast<int>(MinimapSlideDirection::RightToLeft);
+    return static_cast<MinimapSlideDirection>(std::clamp(direction, min, max));
+}
+
+bool try_read_minimap_slide_direction(const json& value, MinimapSlideDirection& direction) {
+    if (value.is_number_integer()) {
+        direction = normalize_minimap_slide_direction(value.get<int>());
+        return true;
+    }
+
+    if (!value.is_string()) {
+        return false;
+    }
+
+    const std::string raw = value.get<std::string>();
+    for (const auto candidate : kMinimapSlideDirections) {
+        if (raw == MinimapSlideDirectionName(candidate)) {
+            direction = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+void set_minimap_slide_direction_from_json(const json& object, const char* key) {
+    if (!object.is_object()) {
+        return;
+    }
+
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        return;
+    }
+
+    auto& var = getSettings().game.hudMinimapSlideDirection;
+    auto direction = var.getValue();
+    if (try_read_minimap_slide_direction(*found, direction)) {
+        var.setValue(direction);
+    }
+}
+
 json hud_element_to_json(int index) {
     json element = {
         {"x", hud_element_offset_x(index).getValue()},
         {"y", hud_element_offset_y(index).getValue()},
         {"scale", hud_element_scale(index).getValue()},
     };
+    if (hud_element_is_minimap(index)) {
+        element["slideDirection"] =
+            MinimapSlideDirectionName(getSettings().game.hudMinimapSlideDirection.getValue());
+    }
     if (hud_element_has_item_anchor(index)) {
         element["itemAnchor"] =
             hud_layout::ItemAnchorName(hud_element_item_anchor_value(index));
@@ -703,6 +768,9 @@ void import_hud_element_json(const json& elements, int index) {
     }
     if (hud_element_has_text_scale(index)) {
         set_float_from_json(hud_element_text_scale(index), *found, "textScale", 0.01f, 99.99f);
+    }
+    if (hud_element_is_minimap(index)) {
+        set_minimap_slide_direction_from_json(*found, "slideDirection");
     }
 }
 
@@ -768,7 +836,7 @@ json export_hud_layout_json() {
     }
 
     return {
-        {"version", 5},
+        {"version", 6},
         {"background", getSettings().game.hudButtonBackground.getValue()},
         {"elements", std::move(elements)},
     };
@@ -2261,6 +2329,52 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Scales the selected in-game HUD element.");
         leftPane.register_control(
             leftPane.add_select_button({
+                .key = "HUD Minimap Slide",
+                .getValue =
+                    [] {
+                        if (!hud_element_is_minimap(hud_element_index())) {
+                            return Rml::String{"N/A"};
+                        }
+                        return Rml::String{MinimapSlideDirectionName(
+                            getSettings().game.hudMinimapSlideDirection.getValue())};
+                    },
+                .isDisabled = [] { return !hud_element_is_minimap(hud_element_index()); },
+                .isModified =
+                    [] {
+                        if (!hud_element_is_minimap(hud_element_index())) {
+                            return false;
+                        }
+                        auto& slideDirection = getSettings().game.hudMinimapSlideDirection;
+                        return slideDirection.getValue() != slideDirection.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                if (!hud_element_is_minimap(hud_element_index())) {
+                    pane.add_text("Minimap Slide is available for the Minimap HUD element.");
+                    return;
+                }
+
+                auto& slideDirection = getSettings().game.hudMinimapSlideDirection;
+                for (const auto direction : kMinimapSlideDirections) {
+                    pane
+                        .add_button({
+                            .text = Rml::String{MinimapSlideDirectionName(direction)},
+                            .isSelected =
+                                [&slideDirection, direction] {
+                                    return slideDirection.getValue() == direction;
+                                },
+                        })
+                        .on_pressed([&slideDirection, direction] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            slideDirection.setValue(direction);
+                            config::Save();
+                        });
+                }
+                pane.add_text("Chooses which side the minimap slides in from.");
+            });
+        leftPane.register_control(
+            leftPane.add_select_button({
                 .key = "HUD Item Anchor",
                 .getValue =
                     [] {
@@ -2391,8 +2505,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Exports HUD background, element positions, scales, and anchors to "
-                              "a selected JSON file.");
+                pane.add_text("Exports HUD background, element positions, scales, anchors, and "
+                              "slide directions to a selected JSON file.");
             });
         leftPane.register_control(
             leftPane.add_button("Import HUD Layout").on_pressed([] {
@@ -2401,8 +2515,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Imports HUD background, element positions, scales, and anchors "
-                              "from a JSON file.");
+                pane.add_text("Imports HUD background, element positions, scales, anchors, and "
+                              "slide directions from a JSON file.");
             });
 
         leftPane.add_section("Game");

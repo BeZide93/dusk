@@ -317,6 +317,8 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::Rupees);
     hash = hash_element(hash, Element::DPad);
     hash = hash_element(hash, Element::Minimap);
+    hash = hash_int(
+        hash, static_cast<int>(getSettings().game.hudMinimapSlideDirection.getValue()));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::A)));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::B)));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::X)));
