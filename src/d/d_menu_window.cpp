@@ -25,6 +25,18 @@
 #include "f_op/f_op_msg_mng.h"
 #include "f_op/f_op_overlap_mng.h"
 #include "m_Do/m_Do_controller_pad.h"
+#include "dusk/settings.h"
+
+static bool dMw_isItemRingTrigger() {
+    if (dusk::UseWiiUControllerStyle()) {
+        return dMw_UP_TRIGGER();
+    }
+    return dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER();
+}
+
+static bool dMw_isItemRingDownOrigin() {
+    return !dusk::UseWiiUControllerStyle() && dMw_DOWN_TRIGGER();
+}
 
 class dDlst_MENU_CAPTURE_c : public dDlst_base_c {
 public:
@@ -646,7 +658,7 @@ void dMw_c::key_wait_proc() {
                 mMenuProc = DMAP_OPEN;
                 dMw_dmap_create();
             }
-        } else if ((((dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER()) && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
+        } else if (((dMw_isItemRingTrigger() && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
                    dMeter2Info_isWindowAccept(2) &&
                    (dMeter2Info_getMapStatus() == 0 || dMeter2Info_getMapStatus() == 1) &&
                    dMeter2Info_isItemOpenCheck() &&
@@ -658,7 +670,7 @@ void dMw_c::key_wait_proc() {
                 dMeter2Info_getMeterClass()->emphasisButtonDelete();
             }
 
-            if (dMw_DOWN_TRIGGER()) {
+            if (dMw_isItemRingDownOrigin()) {
                 field_0x14B = 1;
                 dMw_ring_create(2);
             } else {

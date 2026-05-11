@@ -84,6 +84,7 @@ public:
     void drawButtonB(u8, bool, f32, f32, f32, f32, f32, bool);
     void drawButtonR(u8, u8, bool, bool);
     void drawButtonZ(u8);
+    void drawButtonZItem(u8);
     void drawButton3D(u8);
     void drawButtonC(u8, bool);
     void drawButtonS(u8);
@@ -107,11 +108,13 @@ public:
     void setButtonIconAAlpha(u8, u32, bool);
     void setButtonIconBAlpha(u8, u32, bool);
     void setButtonIconMidonaAlpha(u32);
+    void setButtonIconRItemAlpha(u32);
     void setButtonIconAlpha(int, u8, u32, bool);
     ResTIMG* getNumberTexture(int);
     char* getActionString(u8, u8, u8*);
     void changeTextureItemB(u8);
     void changeTextureItemXY(int, u8);
+    void changeTextureItemR(u8);
     void setAlphaAnimeMin(CPaneMgrAlpha*, s16);
     void setAlphaAnimeMax(CPaneMgrAlpha*, s16);
     void setItemNum(u8, u8, u8);
@@ -218,6 +221,7 @@ private:
     /* 0x4BC */ u8 field_0x4bc[0x28];
     /* 0x4E4 */ ResTIMG* mpItemBTex[2][2];
     /* 0x4F4 */ ResTIMG* mpItemXYTex[2][2][2];
+    ResTIMG* mpItemRTex[2][2];
     /* 0x514 */ J2DPicture* mpItemBPane;
     /* 0x518 */ J2DPicture* mpItemXYPane[3];
     /* 0x524 */ int field_0x524[2][2];
@@ -303,6 +307,7 @@ private:
     /* 0x768 */ u8 field_0x768[3];
     /* 0x76B */ u8 field_0x76b;
     /* 0x76C */ u8 field_0x76c[2];
+    u8 field_0x76cR;
     /* 0x76E */ u8 field_0x76e;
     /* 0x76F */ u8 mButtonBItem;
     /* 0x770 */ u8 field_0x770;

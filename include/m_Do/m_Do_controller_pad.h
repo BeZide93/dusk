@@ -27,12 +27,14 @@ public:
     static u32 getTrigRight(u32 pad) { return getTrig(pad) & PAD_BUTTON_RIGHT; }
     static u32 getTrigL(u32 pad) { return getTrig(pad) & PAD_TRIGGER_L; }
     static u32 getTrigR(u32 pad) { return getTrig(pad) & PAD_TRIGGER_R; }
+    static u32 getTrigZL(u32 pad) { return getTrig(pad) & PAD_TRIGGER_ZL; }
     static u32 getTrigA(u32 pad) { return getTrig(pad) & PAD_BUTTON_A; }
     static u32 getTrigB(u32 pad) { return getTrig(pad) & PAD_BUTTON_B; }
     static u32 getTrigZ(u32 pad) { return getTrig(pad) & PAD_TRIGGER_Z; }
     static u32 getTrigY(u32 pad) { return getTrig(pad) & PAD_BUTTON_Y; }
     static u32 getTrigX(u32 pad) { return getTrig(pad) & PAD_BUTTON_X; }
     static u32 getTrigStart(u32 pad) { return getTrig(pad) & PAD_BUTTON_START; }
+    static u32 getTrigMinus(u32 pad) { return getTrig(pad) & PAD_BUTTON_MINUS; }
     static u32 getHold(u32 pad) { return getCpadInfo(pad).mButtonFlags; }
     static u32 getHoldLockL(u32 pad) { return getCpadInfo(pad).mHoldLockL; }
     static u32 getHoldLockR(u32 pad) { return getCpadInfo(pad).mHoldLockR; }
@@ -42,12 +44,14 @@ public:
     static u32 getHoldRight(u32 pad) { return getHold(pad) & PAD_BUTTON_RIGHT; }
     static u32 getHoldL(u32 pad) { return getHold(pad) & PAD_TRIGGER_L; }
     static u32 getHoldR(u32 pad) { return getHold(pad) & PAD_TRIGGER_R; }
+    static u32 getHoldZL(u32 pad) { return getHold(pad) & PAD_TRIGGER_ZL; }
     static u32 getHoldA(u32 pad) { return getHold(pad) & PAD_BUTTON_A; }
     static u32 getHoldB(u32 pad) { return getHold(pad) & PAD_BUTTON_B; }
     static u32 getHoldZ(u32 pad) { return getHold(pad) & PAD_TRIGGER_Z; }
     static u32 getHoldY(u32 pad) { return getHold(pad) & PAD_BUTTON_Y; }
     static u32 getHoldX(u32 pad) { return getHold(pad) & PAD_BUTTON_X; }
     static u32 getHoldStart(u32 pad) { return getHold(pad) & PAD_BUTTON_START; }
+    static u32 getHoldMinus(u32 pad) { return getHold(pad) & PAD_BUTTON_MINUS; }
     static f32 getStickX(u32 pad) { return getCpadInfo(pad).mMainStickPosX; }
     static f32 getStickY(u32 pad) { return getCpadInfo(pad).mMainStickPosY; }
     static f32 getStickX3D(u32 pad) { return getCpadInfo(pad).mMainStickPosX; }

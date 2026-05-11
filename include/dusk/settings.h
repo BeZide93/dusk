@@ -38,6 +38,11 @@ enum class ControllerOverlayLayout : u8 {
     XBox = 2,
 };
 
+enum class ControllerStyle : u8 {
+    GameCube = 0,
+    WiiU = 1,
+};
+
 namespace config {
 template <>
 struct ConfigEnumRange<BloomMode> {
@@ -67,6 +72,12 @@ template <>
 struct ConfigEnumRange<ControllerOverlayLayout> {
     static constexpr auto min = ControllerOverlayLayout::GameCube;
     static constexpr auto max = ControllerOverlayLayout::XBox;
+};
+
+template <>
+struct ConfigEnumRange<ControllerStyle> {
+    static constexpr auto min = ControllerStyle::GameCube;
+    static constexpr auto max = ControllerStyle::WiiU;
 };
 }
 
@@ -162,6 +173,7 @@ struct UserSettings {
         ConfigVar<bool> debugFlyCam;
         ConfigVar<bool> debugFlyCamLockEvents;
         ConfigVar<bool> allowBackgroundInput;
+        ConfigVar<ControllerStyle> controllerStyle;
         ConfigVar<bool> enableTouchControls;
         ConfigVar<ControllerOverlayLayout> touchControlsPreset;
         ConfigVar<float> touchControlsScale;
@@ -257,6 +269,8 @@ struct UserSettings {
 };
 
 UserSettings& getSettings();
+const char* ControllerStyleName(ControllerStyle style) noexcept;
+bool UseWiiUControllerStyle() noexcept;
 
 void registerSettings();
 

@@ -5,6 +5,8 @@
 #include "pane.hpp"
 #include "number_button.hpp"
 
+#include "dusk/settings.h"
+
 #include <SDL3/SDL_gamepad.h>
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_mouse.h>
@@ -193,7 +195,27 @@ bool is_dpad_button(PADButton button) {
 
 bool is_action_button(PADButton button) {
     return button == PAD_BUTTON_A || button == PAD_BUTTON_B || button == PAD_BUTTON_X ||
-           button == PAD_BUTTON_Y || button == PAD_BUTTON_START || button == PAD_TRIGGER_Z;
+           button == PAD_BUTTON_Y || button == PAD_BUTTON_START || button == PAD_BUTTON_MINUS ||
+           button == PAD_TRIGGER_Z;
+}
+
+const char* controller_button_name(PADButton button) {
+    if (UseWiiUControllerStyle()) {
+        switch (button) {
+        case PAD_BUTTON_START:
+            return "+";
+        case PAD_BUTTON_MINUS:
+            return "-";
+        case PAD_TRIGGER_Z:
+            return "R";
+        case PAD_TRIGGER_R:
+            return "ZR";
+        default:
+            break;
+        }
+    }
+
+    return PADGetButtonName(button);
 }
 
 bool input_neutral(int port) {
@@ -466,7 +488,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             auto addKeyButton = [&](PADButton button) {
                 pane.add_select_button(
                         {
-                            .key = PADGetButtonName(button),
+                            .key = controller_button_name(button),
                             .getValue =
                                 [this, port, button] {
                                     if (mPendingKeyButton == static_cast<int>(button)) {
@@ -500,6 +522,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             addKeyButton(PAD_BUTTON_X);
             addKeyButton(PAD_BUTTON_Y);
             addKeyButton(PAD_BUTTON_START);
+            addKeyButton(PAD_BUTTON_MINUS);
             addKeyButton(PAD_TRIGGER_Z);
 
             pane.add_section("D-Pad");
@@ -526,7 +549,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             }
 
             pane.add_select_button({
-                                       .key = PADGetButtonName(mapping.padButton),
+                                       .key = controller_button_name(mapping.padButton),
                                        .getValue =
                                            [this, &mapping, gamepad] {
                                                if (mPendingButtonMapping == &mapping) {
@@ -552,7 +575,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             }
 
             pane.add_select_button({
-                                       .key = PADGetButtonName(mapping.padButton),
+                                       .key = controller_button_name(mapping.padButton),
                                        .getValue =
                                            [this, &mapping, gamepad] {
                                                if (mPendingButtonMapping == &mapping) {
@@ -576,7 +599,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             auto addKeyButton = [&](PADButton button) {
                 pane.add_select_button(
                         {
-                            .key = PADGetButtonName(button),
+                            .key = controller_button_name(button),
                             .getValue =
                                 [this, port, button] {
                                     if (mPendingKeyButton == static_cast<int>(button)) {
@@ -642,6 +665,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             pane.add_section("Digital");
             addKeyButton(PAD_TRIGGER_L);
             addKeyButton(PAD_TRIGGER_R);
+            addKeyButton(PAD_TRIGGER_ZL);
             break;
         }
 
@@ -686,11 +710,13 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
         if (buttons != nullptr) {
             for (u32 i = 0; i < buttonCount; ++i) {
                 PADButtonMapping& mapping = buttons[i];
-                if (mapping.padButton != PAD_TRIGGER_L && mapping.padButton != PAD_TRIGGER_R) {
+                if (mapping.padButton != PAD_TRIGGER_L && mapping.padButton != PAD_TRIGGER_R &&
+                    mapping.padButton != PAD_TRIGGER_ZL)
+                {
                     continue;
                 }
                 pane.add_select_button({
-                                           .key = PADGetButtonName(mapping.padButton),
+                                           .key = controller_button_name(mapping.padButton),
                                            .getValue =
                                                [this, &mapping, gamepad] {
                                                    if (mPendingButtonMapping == &mapping) {

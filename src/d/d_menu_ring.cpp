@@ -25,6 +25,7 @@
 #include "d/d_msg_string.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
+#include "dusk/settings.h"
 #include <cstring>
 
 #include <cstdio>
@@ -32,6 +33,14 @@
 #if TARGET_PC
 #include "dusk/game_clock.h"
 #endif
+
+static bool dMenuRing_wiiuControllerStyle() {
+    return dusk::UseWiiUControllerStyle();
+}
+
+static bool dMenuRing_closeTrigger() {
+    return dMw_UP_TRIGGER() || (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER());
+}
 
 typedef void (dMenu_Ring_c::*initFunc)();
 static initFunc stick_init[] = {
@@ -244,7 +253,13 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         if (dComIfGs_getSelectItemIndex(1) == dComIfGs_getLineUpItem(i)) {
             mYButtonSlot = i;
         }
-        if (dComIfGs_getSelectItemIndex(2) == dComIfGs_getWolfAbility(i)) {
+        if (dMenuRing_wiiuControllerStyle() &&
+            dComIfGs_getSelectItemIndex(2) == dComIfGs_getLineUpItem(i))
+        {
+            field_0x6ac = i;
+        } else if (!dMenuRing_wiiuControllerStyle() &&
+                   dComIfGs_getSelectItemIndex(2) == dComIfGs_getWolfAbility(i))
+        {
             field_0x6ac = i;
         }
     }
@@ -259,7 +274,7 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             }
         }
         field_0x6be[i] = 0;
-        if (i == 2) {
+        if (i == 2 && !dMenuRing_wiiuControllerStyle()) {
             setSelectItem(i, 0);
         } else {
             setSelectItem(i, 0x43);
@@ -760,13 +775,13 @@ bool dMenu_Ring_c::isOpen() {
 bool dMenu_Ring_c::isMoveEnd() {
     bool ret = 0;
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN) {
-        if (dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER() || dMw_B_TRIGGER() ||
+        if (dMenuRing_closeTrigger() || dMw_B_TRIGGER() ||
             dMeter2Info_getWarpStatus() == 2 || dMeter2Info_getWarpStatus() == 1 ||
             dMeter2Info_isTouchKeyCheck(0xe))
         {
             if (dMw_UP_TRIGGER()) {
                 mRingOrigin = 0;
-            } else if (dMw_DOWN_TRIGGER()) {
+            } else if (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER()) {
                 mRingOrigin = 2;
             } else {
                 mRingOrigin = 0xff;
@@ -1058,6 +1073,26 @@ void dMenu_Ring_c::setItem() {
                 mixItemIndex1 = dItemNo_NONE_e;
             }
         }
+    } else if (field_0x6b3 == 2) {
+        field_0x6ac = mCurrentSlot;
+        uVar3 = mItemSlots[field_0x6ac];
+
+        if (uVar1 == uVar3) {
+            uVar1 = dItemNo_NONE_e;
+            mXButtonSlot = dItemNo_NONE_e;
+            mixItemIndex0 = dItemNo_NONE_e;
+        }
+        if (uVar2 == uVar3) {
+            uVar2 = dItemNo_NONE_e;
+            mYButtonSlot = dItemNo_NONE_e;
+            mixItemIndex1 = dItemNo_NONE_e;
+        }
+        if (mixItemIndex0 == uVar3) {
+            mixItemIndex0 = dItemNo_NONE_e;
+        }
+        if (mixItemIndex1 == uVar3) {
+            mixItemIndex1 = dItemNo_NONE_e;
+        }
     }
     field_0x6b4[0] = uVar1;
     field_0x6b4[1] = uVar2;
@@ -1073,7 +1108,7 @@ void dMenu_Ring_c::setItem() {
 
 void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
     for (int i = 0; i < 4; i++) {
-        if (i == 2) {
+        if (i == 2 && !dMenuRing_wiiuControllerStyle()) {
             setSelectItem(i, field_0x6b4[i]);
         } else if (i == field_0x6cd) {
             setSelectItem(i, getItem(field_0x6cb, 0));
@@ -1117,6 +1152,16 @@ void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
             field_0x674[1] = 1;
 #if TARGET_PC
             mSelectItemSlideElapsed[1] = 0.0f;
+#endif
+        }
+    } else if (field_0x6b3 == 2) {
+        field_0x538[0] = g_ringHIO.mUnselectItemScale;
+        field_0x538[1] = g_ringHIO.mUnselectItemScale;
+        field_0x538[2] = g_ringHIO.mSelectItemScale;
+        if (field_0x6b4[2] != dComIfGs_getSelectItemIndex(2)) {
+            field_0x674[2] = 1;
+#if TARGET_PC
+            mSelectItemSlideElapsed[2] = 0.0f;
 #endif
         }
     }
@@ -1215,11 +1260,22 @@ void dMenu_Ring_c::setNameString(u32 i_stringID) {
 void dMenu_Ring_c::setActiveCursor() {
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN && mpItemExplain->getStatus() == 0) {
-        if (mDoCPd_c::getTrigR(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+        const bool wiiuStyle = dMenuRing_wiiuControllerStyle();
+        if (!wiiuStyle && mDoCPd_c::getTrigR(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
             }
             setMixItem();
+        } else if (wiiuStyle && mDoCPd_c::getTrigZ(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+            for (int i = 0; i < MAX_SELECT_ITEM; i++) {
+                setSelectItemForce(i);
+            }
+            field_0x6b3 = 2;
+            setItem();
+            if (mpItemExplain->getStatus() == 0) {
+                setStatus(STATUS_WAIT);
+                (this->*stick_init[mStatus])();
+            }
         } else if (mDoCPd_c::getTrigX(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
@@ -1244,7 +1300,9 @@ void dMenu_Ring_c::setActiveCursor() {
                     (this->*stick_init[mStatus])();
                 }
             }
-        } else if (mDoCPd_c::getTrigX(PAD_1) || mDoCPd_c::getTrigY(PAD_1)) {
+        } else if (mDoCPd_c::getTrigX(PAD_1) || mDoCPd_c::getTrigY(PAD_1) ||
+                   (wiiuStyle && mDoCPd_c::getTrigZ(PAD_1)))
+        {
             // If the player is a wolf or somehow manages to access an item slot with no item, error
             Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
         }

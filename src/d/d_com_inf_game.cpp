@@ -22,6 +22,7 @@
 #include "m_Do/m_Do_Reset.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
+#include "dusk/settings.h"
 #include <cstdio>
 #include <cstring>
 
@@ -1952,7 +1953,7 @@ u8 dComIfGs_getMixItemIndex(int i_no) {
 }
 
 void dComIfGp_setSelectItem(int i_selItemIdx) {
-    if (i_selItemIdx == SELECT_ITEM_DOWN) {
+    if (i_selItemIdx == SELECT_ITEM_DOWN && !dusk::UseWiiUControllerStyle()) {
         if (dComIfGs_getSelectItemIndex(i_selItemIdx) != 0xFF) {
             u8 selItem_slotNo = dComIfGs_getSelectItemIndex(i_selItemIdx);
             g_dComIfG_gameInfo.play.setSelectItem(i_selItemIdx, selItem_slotNo);

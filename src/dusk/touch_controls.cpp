@@ -37,6 +37,8 @@ enum class ControlId {
     R,
     Z,
     Start,
+    Minus,
+    ZL,
     DpadUp,
     DpadDown,
     DpadLeft,
@@ -76,6 +78,8 @@ StickState sCStick;
 u32 sHeldButtons = 0;
 u32 sLastMergedButtons = 0;
 bool sLoaded = false;
+ControllerOverlayLayout sLoadedPreset = ControllerOverlayLayout::GameCube;
+ControllerStyle sLoadedStyle = ControllerStyle::GameCube;
 
 std::filesystem::path layout_path() {
     if (ConfigPath.empty()) {
@@ -106,6 +110,10 @@ const char* id_name(ControlId id) noexcept {
         return "z";
     case ControlId::Start:
         return "start";
+    case ControlId::Minus:
+        return "minus";
+    case ControlId::ZL:
+        return "zl";
     case ControlId::DpadUp:
         return "dpad_up";
     case ControlId::DpadDown:
@@ -131,6 +139,8 @@ bool parse_id(std::string_view name, ControlId& out) noexcept {
              ControlId::R,
              ControlId::Z,
              ControlId::Start,
+             ControlId::Minus,
+             ControlId::ZL,
              ControlId::DpadUp,
              ControlId::DpadDown,
              ControlId::DpadLeft,
@@ -163,6 +173,10 @@ u32 button_mask(ControlId id) noexcept {
         return PAD_TRIGGER_Z;
     case ControlId::Start:
         return PAD_BUTTON_START;
+    case ControlId::Minus:
+        return PAD_BUTTON_MINUS;
+    case ControlId::ZL:
+        return PAD_TRIGGER_ZL;
     case ControlId::DpadUp:
         return PAD_BUTTON_UP;
     case ControlId::DpadDown:
@@ -231,6 +245,49 @@ std::vector<TouchControl> default_layout(ControllerOverlayLayout preset) {
             {ControlId::DpadRight, "Rt", 0.33f, 0.81f, 22.0f, 0.95f, false},
         };
     }
+}
+
+const char* styled_label(ControlId id, const char* fallback) noexcept {
+    if (!UseWiiUControllerStyle()) {
+        return fallback;
+    }
+
+    switch (id) {
+    case ControlId::Start:
+        return "+";
+    case ControlId::Minus:
+        return "-";
+    case ControlId::Z:
+        return "R";
+    case ControlId::R:
+        return "ZR";
+    default:
+        return fallback;
+    }
+}
+
+bool has_control(const std::vector<TouchControl>& controls, ControlId id) noexcept {
+    return std::any_of(controls.begin(), controls.end(),
+        [id](const TouchControl& control) { return control.id == id; });
+}
+
+std::vector<TouchControl> styled_default_layout(ControllerOverlayLayout preset) {
+    auto controls = default_layout(preset);
+
+    for (auto& control : controls) {
+        control.label = styled_label(control.id, control.label);
+    }
+
+    if (UseWiiUControllerStyle()) {
+        if (!has_control(controls, ControlId::ZL)) {
+            controls.push_back({ControlId::ZL, "ZL", 0.08f, 0.31f, 30.0f, 1.0f, false});
+        }
+        if (!has_control(controls, ControlId::Minus)) {
+            controls.push_back({ControlId::Minus, "-", 0.47f, 0.82f, 26.0f, 1.0f, false});
+        }
+    }
+
+    return controls;
 }
 
 ImVec2 display_size() noexcept {
@@ -423,12 +480,16 @@ bool apply_layout_json(const json& root) noexcept {
 }
 
 void ensure_loaded() noexcept {
-    if (sLoaded) {
+    const auto preset = getSettings().game.touchControlsPreset.getValue();
+    const auto style = getSettings().game.controllerStyle.getValue();
+    if (sLoaded && sLoadedPreset == preset && sLoadedStyle == style) {
         return;
     }
 
-    sControls = default_layout(getSettings().game.touchControlsPreset.getValue());
+    sControls = styled_default_layout(preset);
     sLoaded = true;
+    sLoadedPreset = preset;
+    sLoadedStyle = style;
 
     const auto path = layout_path();
     if (path.empty()) {
@@ -633,8 +694,10 @@ void ResetInputState() noexcept {
 }
 
 void ApplyPreset(ControllerOverlayLayout preset) noexcept {
-    sControls = default_layout(preset);
+    sControls = styled_default_layout(preset);
     sLoaded = true;
+    sLoadedPreset = preset;
+    sLoadedStyle = getSettings().game.controllerStyle.getValue();
     ResetInputState();
     SaveLayout();
 }
@@ -659,7 +722,9 @@ nlohmann::json ExportLayout() {
 }
 
 bool ImportLayout(const nlohmann::json& root) noexcept {
-    sControls = default_layout(getSettings().game.touchControlsPreset.getValue());
+    sLoadedPreset = getSettings().game.touchControlsPreset.getValue();
+    sLoadedStyle = getSettings().game.controllerStyle.getValue();
+    sControls = styled_default_layout(sLoadedPreset);
     sLoaded = true;
     const bool applied = apply_layout_json(root);
     ResetInputState();

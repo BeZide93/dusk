@@ -62,6 +62,23 @@ static int daAlink_Execute(daAlink_c* i_this);
 static int daAlink_Draw(daAlink_c* i_this);
 static fopAc_ac_c* daAlink_searchTagKandelaar(fopAc_ac_c* i_actor, void* i_data);
 
+static u8 daAlink_selectItemButtonCount() {
+    return dusk::UseWiiUControllerStyle() ? 3 : 2;
+}
+
+static int daAlink_meterUseButtonForSelectItem(u8 i_idx) {
+    switch (i_idx) {
+    case 0:
+        return METER2_USEBUTTON_X;
+    case 1:
+        return METER2_USEBUTTON_Y;
+    case 2:
+        return METER2_USEBUTTON_Z;
+    default:
+        return 0;
+    }
+}
+
 BOOL daAlink_c::getE3Zhint() {
     return false;
 }
@@ -9363,6 +9380,10 @@ BOOL daAlink_c::spActionTrigger() {
 }
 
 BOOL daAlink_c::midnaTalkTrigger() const {
+    if (dusk::UseWiiUControllerStyle()) {
+        return mDoCPd_c::getTrigDown(PAD_1);
+    }
+
     return mItemTrigger & BTN_Z;
 }
 
@@ -11288,8 +11309,9 @@ BOOL daAlink_c::checkUpperItemActionFly() {
 void daAlink_c::checkItemButtonChange() {
     if (mProcID != PROC_CANOE_PADDLE_PUT && mEquipItem != dItemNo_NONE_e && !checkEquipAnime()) {
         u8 temp_r0;
-        for (u8 i = 0; i < 2; i++) {
-            temp_r0 = (i + 1) % 2;
+        const u8 buttonCount = daAlink_selectItemButtonCount();
+        for (u8 i = 0; i < buttonCount; i++) {
+            temp_r0 = (i + 1) % buttonCount;
             if (mEquipItem == dComIfGp_getSelectItem(i) &&
                 (mEquipItem != dComIfGp_getSelectItem(temp_r0) || mSelectItemId != temp_r0))
             {
@@ -12098,7 +12120,7 @@ void daAlink_c::allUnequip(BOOL param_0) {
     if (checkNoResetFlg2(FLG2_UNK_1) && param_0 && !checkCanoeRide() &&
         mEquipItem != dItemNo_KANTERA_e)
     {
-        for (u8 i = 0; i < 2; i++) {
+        for (u8 i = 0; i < daAlink_selectItemButtonCount(); i++) {
             if (dComIfGp_getSelectItem(i) == dItemNo_KANTERA_e) {
                 mSelectItemId = i;
             }
@@ -12150,7 +12172,7 @@ BOOL daAlink_c::checkItemChangeFromButton() {
             itemEquip(0x105);
         } else {
             u8 i;
-            for (i = 0; i < 2; i++) {
+            for (i = 0; i < daAlink_selectItemButtonCount(); i++) {
                 int proc_type = checkNewItemChange(i);
                 if (proc_type != 0 && itemTriggerCheck(1 << i)) {
                     BOOL var_r27 = changeItemTriggerKeepProc(i, proc_type);
@@ -12171,7 +12193,7 @@ BOOL daAlink_c::checkItemChangeFromButton() {
             } else if (mEquipItem == dItemNo_NONE_e && mThrowBoomerangAcKeep.getActor() == NULL &&
                        !checkCanoeRide() && checkNoUpperAnime() && checkNoResetFlg2(FLG2_UNK_1))
             {
-                for (i = 0; i < 2; i++) {
+                for (i = 0; i < daAlink_selectItemButtonCount(); i++) {
                     if (dComIfGp_getSelectItem(i) == dItemNo_KANTERA_e) {
                         mSelectItemId = i;
                     }
@@ -14377,7 +14399,7 @@ BOOL daAlink_c::checkGroupItem(int i_itemNo, int i_selItem) const {
 }
 
 int daAlink_c::checkSetItemTrigger(int i_itemNo) {
-    for (u8 i = 0; i < 2; i++) {
+    for (u8 i = 0; i < daAlink_selectItemButtonCount(); i++) {
         if (checkGroupItem(i_itemNo, dComIfGp_getSelectItem(i)) && itemTriggerCheck(1 << i)) {
             if (i_itemNo != dItemNo_HVY_BOOTS_e) {
                 mSelectItemId = i;
@@ -14390,7 +14412,7 @@ int daAlink_c::checkSetItemTrigger(int i_itemNo) {
 }
 
 int daAlink_c::checkItemSetButton(int i_itemNo) {
-    for (u8 i = 0; i < 2; i++) {
+    for (u8 i = 0; i < daAlink_selectItemButtonCount(); i++) {
         if (checkGroupItem(i_itemNo, dComIfGp_getSelectItem(i))) {
             return i;
         }
@@ -18699,9 +18721,9 @@ int daAlink_c::execute() {
                 }
             }
 
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0; i < daAlink_selectItemButtonCount(); i++) {
                 if (!(mUseButtonFlags & (1 << i)) && !(field_0x2faf & (1 << i))) {
-                    dMeter2Info_offUseButton(METER2_USEBUTTON_X << i);
+                    dMeter2Info_offUseButton(daAlink_meterUseButtonForSelectItem(i));
                 }
             }
 

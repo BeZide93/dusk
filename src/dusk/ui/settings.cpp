@@ -85,6 +85,11 @@ constexpr std::array kControllerOverlayLayouts = {
     ControllerOverlayLayout::XBox,
 };
 
+constexpr std::array kControllerStyles = {
+    ControllerStyle::GameCube,
+    ControllerStyle::WiiU,
+};
+
 constexpr std::array kHudElementNames = {
     "A",
     "B",
@@ -1263,7 +1268,33 @@ SelectButton& config_layout_select(Pane& leftPane, Pane& rightPane,
                     });
             }
             pane.add_rml(Rml::String{"<br/>"} + helpText);
-        });
+    });
+    return button;
+}
+
+SelectButton& config_controller_style_select(Pane& leftPane, Pane& rightPane) {
+    auto& var = getSettings().game.controllerStyle;
+    auto& button = leftPane.add_select_button({
+        .key = "Controller Style",
+        .getValue = [&var] { return Rml::String{ControllerStyleName(var.getValue())}; },
+        .isModified = [&var] { return var.getValue() != var.getDefaultValue(); },
+    });
+    leftPane.register_control(button, rightPane, [&var](Pane& pane) {
+        pane.clear();
+        for (const auto style : kControllerStyles) {
+            pane
+                .add_button({
+                    .text = Rml::String{ControllerStyleName(style)},
+                    .isSelected = [&var, style] { return var.getValue() == style; },
+                })
+                .on_pressed([&var, style] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    var.setValue(style);
+                    config::Save();
+                });
+        }
+        pane.add_text("Changes controller labels and Wii U style item/Midna button behavior.");
+    });
     return button;
 }
 
@@ -1614,6 +1645,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         };
 
         leftPane.add_section("Controller");
+        config_controller_style_select(leftPane, rightPane);
         leftPane.register_control(leftPane.add_button("Configure Controller").on_pressed([this] {
             push(std::make_unique<ControllerConfigWindow>());
         }),

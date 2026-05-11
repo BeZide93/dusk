@@ -512,6 +512,13 @@ dMeter2Draw_c::~dMeter2Draw_c() {
 
     for (int i = 0; i < 2; i++) {
         for (int j = 0; j < 2; j++) {
+            heap->free(mpItemRTex[i][j]);
+            mpItemRTex[i][j] = NULL;
+        }
+    }
+
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
             for (int k = 0; k < 2; k++) {
                 heap->free(mpItemXYTex[i][j][k]);
                 mpItemXYTex[i][j][k] = NULL;
@@ -1208,6 +1215,8 @@ void dMeter2Draw_c::initButton() {
         for (int j = 0; j < 2; j++) {
             mpItemBTex[i][j] = (ResTIMG*)heap->alloc(0xC00, 0x20);
             JUT_ASSERT(0, mpItemBTex[i][j] != NULL);
+            mpItemRTex[i][j] = (ResTIMG*)heap->alloc(0xC00, 0x20);
+            JUT_ASSERT(0, mpItemRTex[i][j] != NULL);
         }
     }
 
@@ -1231,6 +1240,7 @@ void dMeter2Draw_c::initButton() {
     field_0x728 = 1.0f;
     field_0x734 = 1.0f;
     field_0x76b = 0;
+    field_0x76cR = 0;
     mButtonBItem = 0;
 
     dComIfGs_setBButtonItemKey(0xFF);
@@ -1438,7 +1448,11 @@ void dMeter2Draw_c::initButton() {
     drawButtonA(dComIfGp_getDoStatus(), 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, false, false);
     drawButtonB(dComIfGp_getAStatus(), true, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, false);
     drawButtonR(dComIfGs_getCollectSmell(), dComIfGp_getRStatus(), true, false);
-    drawButtonZ(dComIfGp_getZStatus());
+    if (dusk::UseWiiUControllerStyle()) {
+        drawButtonZItem(dComIfGp_getSelectItem(2));
+    } else {
+        drawButtonZ(dComIfGp_getZStatus());
+    }
     drawButton3D(dComIfGp_get3DStatus());
     drawButtonC(dComIfGp_getCStickStatus(), true);
     drawButtonS(dComIfGp_getSButtonStatus());
@@ -2637,6 +2651,10 @@ void dMeter2Draw_c::drawButtonB(u8 i_action, bool param_1, f32 i_posX, f32 i_pos
 }
 
 void dMeter2Draw_c::drawButtonR(u8 unused0, u8 i_action, bool unused1, bool unused2) {
+    if (dusk::UseWiiUControllerStyle()) {
+        return;
+    }
+
     mpScreen->search(MULTI_CHAR('item_r_n'))->hide();
     mpTextXY[2]->show();
 
@@ -2693,6 +2711,42 @@ void dMeter2Draw_c::drawButtonZ(u8 i_action) {
                        g_drawHIO.mButtonZFontScale * hudScale * textScale);
     mpTextXY[2]->paneTrans(g_drawHIO.mButtonZFontPosX + hudTransform.offsetX,
                            g_drawHIO.mButtonZFontPosY + hudTransform.offsetY);
+}
+
+void dMeter2Draw_c::drawButtonZItem(u8 i_itemNo) {
+    mpTextXY[2]->hide();
+
+    const auto itemPane = mpScreen->search(MULTI_CHAR('item_r_n'));
+    if (i_itemNo == dItemNo_NONE_e || i_itemNo == 0) {
+        itemPane->hide();
+        mpLightXY[2]->hide();
+    } else {
+        itemPane->show();
+        mpLightXY[2]->show();
+        changeTextureItemR(i_itemNo);
+        setItemParamZ(i_itemNo);
+    }
+
+    mpItemR->getPanePtr()->rotate(mpItemR->getSizeX() * 0.5f, mpItemR->getSizeY() * 0.5f,
+                                  ROTATE_Z, mItemParams[SELECT_Z_e].rotation);
+
+    const auto hudTransform = dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
+    const f32 hudScale = hudTransform.scale;
+    const f32 itemScale = dusk::hud_layout::ButtonItemScale(dusk::hud_layout::Button::Z);
+
+    mpButtonXY[2]->scale(g_drawHIO.mButtonZScale * hudScale, g_drawHIO.mButtonZScale * hudScale);
+    mpButtonXY[2]->paneTrans(g_drawHIO.mButtonZPosX + hudTransform.offsetX,
+                             g_drawHIO.mButtonZPosY + hudTransform.offsetY);
+
+    mpItemR->scale(g_drawHIO.mButtonZItemScale * hudScale * itemScale,
+                   g_drawHIO.mButtonZItemScale * hudScale * itemScale);
+    mpItemR->paneTrans(g_drawHIO.mButtonZItemPosX + field_0x6ac[2] + hudTransform.offsetX,
+                       g_drawHIO.mButtonZItemPosY + field_0x6b8[2] + hudTransform.offsetY);
+
+    mpLightXY[2]->scale(g_drawHIO.mButtonZItemBaseScale * hudScale * itemScale,
+                        g_drawHIO.mButtonZItemBaseScale * hudScale * itemScale);
+    mpLightXY[2]->paneTrans(g_drawHIO.mButtonZItemBasePosX + hudTransform.offsetX,
+                            g_drawHIO.mButtonZItemBasePosY + hudTransform.offsetY);
 }
 
 void dMeter2Draw_c::drawButton3D(u8 i_action) {
@@ -3414,12 +3468,20 @@ void dMeter2Draw_c::setButtonIconBAlpha(u8 unused0, u32 unused1, bool param_2) {
 }
 
 void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
-    const auto hudTransform = dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
-    const f32 itemScale = dusk::hud_layout::ButtonItemScale(dusk::hud_layout::Button::Z);
+    const bool wiiuStyle = dusk::UseWiiUControllerStyle();
+    const auto hudTransform = wiiuStyle ?
+        dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::DPad) :
+        dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
+    const f32 itemScale = wiiuStyle ? 1.0f :
+        dusk::hud_layout::ButtonItemScale(dusk::hud_layout::Button::Z);
+    const f32 midnaOffsetY = wiiuStyle ? 44.0f * hudTransform.scale : 0.0f;
+    if (wiiuStyle) {
+        mpButtonMidona->show();
+    }
     mpButtonMidona->scale(g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale,
                           g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale);
     mpButtonMidona->paneTrans(g_drawHIO.mMidnaIconPosX + hudTransform.offsetX,
-                              g_drawHIO.mMidnaIconPosY + hudTransform.offsetY);
+                              g_drawHIO.mMidnaIconPosY + hudTransform.offsetY + midnaOffsetY);
 
     if (mpButtonMidona->isVisible()) {
         f32 temp_f30 =
@@ -3475,6 +3537,10 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         mButtonZAlpha = 0.0f;
     }
 
+    if (wiiuStyle) {
+        return;
+    }
+
     f32 var_f29_2 =
         (g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha) *
          (f32)mpButtonXY[2]->getInitAlpha()) /
@@ -3495,6 +3561,32 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
     }
 
     mpButtonXY[2]->setAlpha(255.0f * field_0x724 * temp_f30_2);
+}
+
+void dMeter2Draw_c::setButtonIconRItemAlpha(u32 param_0) {
+    if (mpItemR->isVisible() || mpLightXY[2]->isVisible() || mpButtonXY[2]->isVisible()) {
+        f32 buttonAlpha =
+            g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha);
+        u8 itemAlpha = mpItemR->getInitAlpha();
+        u8 itemBaseAlpha =
+            g_drawHIO.mButtonZItemBaseAlpha * (buttonAlpha * (f32)mpLightXY[2]->getInitAlpha());
+        u8 buttonBaseAlpha = buttonAlpha * (f32)mpButtonXY[2]->getInitAlpha();
+        const f32 parentAlpha = mpButtonParent->getAlphaRate();
+
+        if (param_0 & 0x1000000) {
+            itemAlpha = 0;
+            itemBaseAlpha = 0;
+            buttonBaseAlpha = 0;
+        } else if (!dMeter2Info_isUseButton(METER2_USEBUTTON_Z)) {
+            itemAlpha = g_drawHIO.mButtonXYItemDimAlpha;
+            itemBaseAlpha = g_drawHIO.mButtonXYItemDimAlpha;
+            buttonBaseAlpha = g_drawHIO.mButtonXYBaseDimAlpha;
+        }
+
+        mpItemR->setAlpha((f32)itemAlpha * parentAlpha);
+        mpLightXY[2]->setAlpha((f32)itemBaseAlpha * parentAlpha);
+        mpButtonXY[2]->setAlpha((f32)buttonBaseAlpha * parentAlpha);
+    }
 }
 
 void dMeter2Draw_c::setButtonIconAlpha(int i_no, u8 unused0, u32 unused1, bool unused2) {
@@ -3737,6 +3829,45 @@ void dMeter2Draw_c::changeTextureItemXY(int i_no, u8 i_itemNo) {
     }
 
     mpItemXYPane[i_no]->resize(field_0x6c4[i_no], field_0x6d0[i_no]);
+}
+
+void dMeter2Draw_c::changeTextureItemR(u8 i_itemNo) {
+    if (i_itemNo == dItemNo_LIGHT_ARROW_e) {
+        i_itemNo = dItemNo_BOW_e;
+    }
+
+    if (field_0x76cR == 0) {
+        field_0x76cR = 1;
+    } else {
+        field_0x76cR = 0;
+    }
+
+    if (dMeter2Info_readItemTexture(i_itemNo, mpItemRTex[field_0x76cR][0],
+                                    (J2DPicture*)mpItemR->getPanePtr(),
+                                    mpItemRTex[field_0x76cR][1], mpItemXYPane[2],
+                                    NULL, NULL, NULL, NULL, -1) <= 1)
+    {
+        mpItemXYPane[2]->hide();
+    } else {
+        mpItemXYPane[2]->show();
+    }
+
+    f32 scale;
+    if (g_drawHIO.mItemScaleAdjustON == true) {
+        scale = g_drawHIO.mItemScalePercent / 100.0f;
+    } else {
+        scale = dItem_data::getTexScale(i_itemNo) / 100.0f;
+    }
+
+    field_0x6c4[2] = scale * ((mpItemRTex[field_0x76cR][0]->width * mpItemR->getInitSizeX()) / 48.0f);
+    field_0x6d0[2] =
+        scale * ((mpItemRTex[field_0x76cR][0]->height * mpItemR->getInitSizeY()) / 48.0f);
+    field_0x6ac[2] = (mpItemR->getInitSizeX() - field_0x6c4[2]) * 0.5f;
+    field_0x6b8[2] = (mpItemR->getInitSizeY() - field_0x6d0[2]) * 0.5f;
+    mpItemR->resize(field_0x6c4[2], field_0x6d0[2]);
+    mpItemR->paneTrans(mItemParams[SELECT_Z_e].pos_x + field_0x6ac[2],
+                       mItemParams[SELECT_Z_e].pos_y + field_0x6b8[2]);
+    mpItemXYPane[2]->resize(field_0x6c4[2], field_0x6d0[2]);
 }
 
 void dMeter2Draw_c::setAlphaAnimeMin(CPaneMgrAlpha* i_pane, s16 i_min) {

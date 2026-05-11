@@ -94,6 +94,7 @@ UserSettings g_userSettings = {
         .debugFlyCam {"game.debugFlyCam", false},
         .debugFlyCamLockEvents {"game.debugFlyCamLockEvents", true},
         .allowBackgroundInput {"game.allowBackgroundInput", true},
+        .controllerStyle {"game.controllerStyle", ControllerStyle::GameCube},
         .enableTouchControls {"game.enableTouchControls", kDefaultTouchControlsEnabled},
         .touchControlsPreset {"game.touchControlsPreset", ControllerOverlayLayout::GameCube},
         .touchControlsScale {"game.touchControlsScale", 1.0f},
@@ -192,6 +193,24 @@ UserSettings& getSettings() {
     return g_userSettings;
 }
 
+const char* ControllerStyleName(ControllerStyle style) noexcept {
+    switch (style) {
+    case ControllerStyle::WiiU:
+        return "Wii U";
+    case ControllerStyle::GameCube:
+    default:
+        return "GameCube";
+    }
+}
+
+bool UseWiiUControllerStyle() noexcept {
+#if TARGET_PC
+    return getSettings().game.controllerStyle.getValue() == ControllerStyle::WiiU;
+#else
+    return false;
+#endif
+}
+
 void registerSettings() {
     // Video
     Register(g_userSettings.video.enableFullscreen);
@@ -283,6 +302,7 @@ void registerSettings() {
     Register(g_userSettings.game.debugFlyCam);
     Register(g_userSettings.game.debugFlyCamLockEvents);
     Register(g_userSettings.game.allowBackgroundInput);
+    Register(g_userSettings.game.controllerStyle);
     Register(g_userSettings.game.enableTouchControls);
     Register(g_userSettings.game.touchControlsPreset);
     Register(g_userSettings.game.touchControlsScale);

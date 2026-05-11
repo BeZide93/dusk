@@ -154,6 +154,9 @@ int dMeter2_c::_create() {
     for (int i = 0; i < 2; i++) {
         dComIfGp_setSelectItem(i);
     }
+    if (dusk::UseWiiUControllerStyle()) {
+        dComIfGp_setSelectItem(2);
+    }
 
     mItemStatus[X_ITEM] = dComIfGp_getSelectItem(0);
     mItemStatus[Y_ITEM] = dComIfGp_getSelectItem(1);
@@ -1685,6 +1688,12 @@ void dMeter2_c::moveButtonZ() {
         sButtonZLayoutStamp = hudLayoutStamp;
         draw_buttonZ = true;
     }
+    static bool sButtonZWiiUStyle = false;
+    const bool wiiuStyle = dusk::UseWiiUControllerStyle();
+    if (sButtonZWiiUStyle != wiiuStyle) {
+        sButtonZWiiUStyle = wiiuStyle;
+        draw_buttonZ = true;
+    }
 
     if (field_0x324 != g_drawHIO.mButtonZScale) {
         field_0x324 = g_drawHIO.mButtonZScale;
@@ -1758,7 +1767,34 @@ void dMeter2_c::moveButtonZ() {
             dComIfGp_setZStatus(mZStatus, 1);
         }
 
-        mpMeterDraw->drawButtonZ(mZStatus);
+        if (!wiiuStyle) {
+            mpMeterDraw->drawButtonZ(mZStatus);
+        }
+    }
+
+    static u8 sWiiUZItemStatus = 0xFF;
+    if (wiiuStyle) {
+        const u8 zItemStatus = dComIfGp_getSelectItem(2);
+        if (sWiiUZItemStatus != zItemStatus || draw_buttonZ) {
+            sWiiUZItemStatus = zItemStatus;
+            mpMeterDraw->drawButtonZItem(zItemStatus);
+        }
+
+        mpMeterDraw->setButtonIconMidonaAlpha(mStatus);
+        mpMeterDraw->setButtonIconRItemAlpha(mStatus);
+        dComIfGp_setZStatus(0, 0);
+
+        if (dComIfGp_getBottleStatusForce() != 0) {
+            dComIfGp_setBottleStatus(dComIfGp_getBottleStatusForce(),
+                                     dComIfGp_getBottleSetFlagForce());
+            dComIfGp_setBottleStatusForce(0, 0);
+        }
+
+        if (mBottleStatus != dComIfGp_getBottleStatus()) {
+            mBottleStatus = dComIfGp_getBottleStatus();
+            mpMeterDraw->drawButtonBin(mBottleStatus);
+        }
+        return;
     }
 
     mpMeterDraw->setButtonIconMidonaAlpha(mStatus);
