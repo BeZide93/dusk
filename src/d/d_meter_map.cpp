@@ -16,6 +16,7 @@
 #include "f_op/f_op_overlap_mng.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "d/d_camera.h"
+#include "dusk/hud_layout.hpp"
 #include <cstring>
 
 #if (PLATFORM_WII || PLATFORM_SHIELD)
@@ -607,10 +608,12 @@ void dMeterMap_c::draw() {
     ) {
         J2DGrafContext* graf = dComIfGp_getCurrentGrafPort();
         graf->setup2D();
-        f32 sizeX = mSizeW;
-        f32 sizeY = mSizeH;
-        f32 drawPosX = mDrawPosX;
-        f32 drawPosY = mDrawPosY;
+        const auto hudTransform =
+            dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::Minimap);
+        f32 sizeX = mSizeW * hudTransform.scale;
+        f32 sizeY = mSizeH * hudTransform.scale;
+        f32 drawPosX = mDrawPosX + hudTransform.offsetX;
+        f32 drawPosY = mDrawPosY + hudTransform.offsetY;
 
         u8 alpha = mMapAlpha;
         #if DEBUG

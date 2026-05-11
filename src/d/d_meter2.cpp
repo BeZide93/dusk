@@ -568,6 +568,13 @@ void dMeter2_c::moveLife() {
     s16 life_count = 0;
     bool draw_life = false;
 
+    static u32 sLifeLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLifeLayoutStamp != hudLayoutStamp) {
+        sLifeLayoutStamp = hudLayoutStamp;
+        draw_life = true;
+    }
+
     if (dComIfGp_getItemMaxLifeCount() != 0) {
         s16 max_count = dComIfGs_getMaxLife() + dComIfGp_getItemMaxLifeCount();
         if (max_count > 100) {
@@ -1030,6 +1037,13 @@ void dMeter2_c::moveRupee() {
     temp_r5 = dComIfGs_getRupeeMax();
     s16 r29 = 0;
     bool draw_rupee = false;
+
+    static u32 sRupeeLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sRupeeLayoutStamp != hudLayoutStamp) {
+        sRupeeLayoutStamp = hudLayoutStamp;
+        draw_rupee = true;
+    }
 
     if (dComIfGp_getItemRupeeCount() != 0) {
         r29 = dComIfGs_getRupee() + dComIfGp_getItemRupeeCount();
@@ -2136,6 +2150,13 @@ void dMeter2_c::moveButtonCross() {
 
     draw_cross = false;
     var_f31 = 0.0f;
+
+    static u32 sButtonCrossLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sButtonCrossLayoutStamp != hudLayoutStamp) {
+        sButtonCrossLayoutStamp = hudLayoutStamp;
+        draw_cross = true;
+    }
 
     if (mButtonCrossOFFPosX != g_drawHIO.mButtonCrossOFFPosX) {
         mButtonCrossOFFPosX = g_drawHIO.mButtonCrossOFFPosX;

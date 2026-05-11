@@ -85,12 +85,28 @@ constexpr std::array kControllerOverlayLayouts = {
     ControllerOverlayLayout::XBox,
 };
 
-constexpr std::array kHudButtonNames = {
+constexpr std::array kHudElementNames = {
     "A",
     "B",
     "X",
     "Y",
     "Z",
+    "Hearts",
+    "Rupees",
+    "D-Pad",
+    "Minimap",
+};
+
+constexpr std::array kHudItemAnchors = {
+    hud_layout::ItemAnchor::Left,
+    hud_layout::ItemAnchor::Right,
+    hud_layout::ItemAnchor::Top,
+    hud_layout::ItemAnchor::Bottom,
+};
+
+constexpr std::array kHudSideAnchors = {
+    hud_layout::SideAnchor::Left,
+    hud_layout::SideAnchor::Right,
 };
 
 bool try_parse_backend(std::string_view backend, AuroraBackend& outBackend) {
@@ -254,19 +270,63 @@ int rounded_float_setting(ConfigVar<float>& var) {
     return static_cast<int>(std::round(var.getValue()));
 }
 
-int hud_button_index() {
+int hud_element_index() {
     return std::clamp(getSettings().game.hudButtonEditTarget.getValue(), 0,
-        static_cast<int>(kHudButtonNames.size()) - 1);
+        static_cast<int>(kHudElementNames.size()) - 1);
 }
 
-const char* hud_button_name(int index) {
-    return kHudButtonNames[static_cast<size_t>(std::clamp(
-        index, 0, static_cast<int>(kHudButtonNames.size()) - 1))];
+const char* hud_element_name(int index) {
+    return kHudElementNames[static_cast<size_t>(std::clamp(
+        index, 0, static_cast<int>(kHudElementNames.size()) - 1))];
 }
 
-ConfigVar<float>& hud_button_offset_x(int index) {
+hud_layout::Element hud_element_id(int index) {
+    switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
+    case 1:
+        return hud_layout::Element::B;
+    case 2:
+        return hud_layout::Element::X;
+    case 3:
+        return hud_layout::Element::Y;
+    case 4:
+        return hud_layout::Element::Z;
+    case 5:
+        return hud_layout::Element::Hearts;
+    case 6:
+        return hud_layout::Element::Rupees;
+    case 7:
+        return hud_layout::Element::DPad;
+    case 8:
+        return hud_layout::Element::Minimap;
+    case 0:
+    default:
+        return hud_layout::Element::A;
+    }
+}
+
+bool hud_element_is_button(int index) {
+    return std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1) <= 4;
+}
+
+hud_layout::Button hud_element_button(int index) {
+    switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
+    case 1:
+        return hud_layout::Button::B;
+    case 2:
+        return hud_layout::Button::X;
+    case 3:
+        return hud_layout::Button::Y;
+    case 4:
+        return hud_layout::Button::Z;
+    case 0:
+    default:
+        return hud_layout::Button::A;
+    }
+}
+
+ConfigVar<float>& hud_element_offset_x(int index) {
     auto& game = getSettings().game;
-    switch (std::clamp(index, 0, static_cast<int>(kHudButtonNames.size()) - 1)) {
+    switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
     case 1:
         return game.hudButtonBOffsetX;
     case 2:
@@ -275,15 +335,23 @@ ConfigVar<float>& hud_button_offset_x(int index) {
         return game.hudButtonYOffsetX;
     case 4:
         return game.hudButtonZOffsetX;
+    case 5:
+        return game.hudHeartsOffsetX;
+    case 6:
+        return game.hudRupeesOffsetX;
+    case 7:
+        return game.hudDPadOffsetX;
+    case 8:
+        return game.hudMinimapOffsetX;
     case 0:
     default:
         return game.hudButtonAOffsetX;
     }
 }
 
-ConfigVar<float>& hud_button_offset_y(int index) {
+ConfigVar<float>& hud_element_offset_y(int index) {
     auto& game = getSettings().game;
-    switch (std::clamp(index, 0, static_cast<int>(kHudButtonNames.size()) - 1)) {
+    switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
     case 1:
         return game.hudButtonBOffsetY;
     case 2:
@@ -292,15 +360,23 @@ ConfigVar<float>& hud_button_offset_y(int index) {
         return game.hudButtonYOffsetY;
     case 4:
         return game.hudButtonZOffsetY;
+    case 5:
+        return game.hudHeartsOffsetY;
+    case 6:
+        return game.hudRupeesOffsetY;
+    case 7:
+        return game.hudDPadOffsetY;
+    case 8:
+        return game.hudMinimapOffsetY;
     case 0:
     default:
         return game.hudButtonAOffsetY;
     }
 }
 
-ConfigVar<float>& hud_button_scale(int index) {
+ConfigVar<float>& hud_element_scale(int index) {
     auto& game = getSettings().game;
-    switch (std::clamp(index, 0, static_cast<int>(kHudButtonNames.size()) - 1)) {
+    switch (std::clamp(index, 0, static_cast<int>(kHudElementNames.size()) - 1)) {
     case 1:
         return game.hudButtonBScale;
     case 2:
@@ -309,42 +385,167 @@ ConfigVar<float>& hud_button_scale(int index) {
         return game.hudButtonYScale;
     case 4:
         return game.hudButtonZScale;
+    case 5:
+        return game.hudHeartsScale;
+    case 6:
+        return game.hudRupeesScale;
+    case 7:
+        return game.hudDPadScale;
+    case 8:
+        return game.hudMinimapScale;
     case 0:
     default:
         return game.hudButtonAScale;
     }
 }
 
-bool hud_button_modified(int index) {
-    auto& offsetX = hud_button_offset_x(index);
-    auto& offsetY = hud_button_offset_y(index);
-    auto& scale = hud_button_scale(index);
+bool hud_element_has_item_anchor(int index) {
+    return hud_element_is_button(index) && hud_layout::HasItemAnchor(hud_element_button(index));
+}
+
+ConfigVar<int>& hud_element_item_anchor(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBItemAnchor;
+    case hud_layout::Button::Y:
+        return game.hudButtonYItemAnchor;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXItemAnchor;
+    }
+}
+
+hud_layout::ItemAnchor hud_element_item_anchor_value(int index) {
+    return hud_layout::NormalizeItemAnchor(hud_element_item_anchor(index).getValue());
+}
+
+bool hud_element_has_text_anchor(int index) {
+    return hud_element_is_button(index) && hud_layout::HasTextAnchor(hud_element_button(index));
+}
+
+ConfigVar<int>& hud_element_text_anchor(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBTextAnchor;
+    case hud_layout::Button::X:
+        return game.hudButtonXTextAnchor;
+    case hud_layout::Button::Y:
+        return game.hudButtonYTextAnchor;
+    case hud_layout::Button::A:
+    default:
+        return game.hudButtonATextAnchor;
+    }
+}
+
+hud_layout::SideAnchor hud_element_text_anchor_value(int index) {
+    return hud_layout::NormalizeSideAnchor(hud_element_text_anchor(index).getValue());
+}
+
+bool hud_element_has_item_scale(int index) {
+    return hud_element_is_button(index) && hud_layout::HasItemScale(hud_element_button(index));
+}
+
+ConfigVar<float>& hud_element_item_scale(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBItemScale;
+    case hud_layout::Button::Y:
+        return game.hudButtonYItemScale;
+    case hud_layout::Button::Z:
+        return game.hudButtonZItemScale;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXItemScale;
+    }
+}
+
+bool hud_element_has_text_scale(int index) {
+    return hud_element_is_button(index) && hud_layout::HasTextScale(hud_element_button(index));
+}
+
+ConfigVar<float>& hud_element_text_scale(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBTextScale;
+    case hud_layout::Button::X:
+        return game.hudButtonXTextScale;
+    case hud_layout::Button::Y:
+        return game.hudButtonYTextScale;
+    case hud_layout::Button::Z:
+        return game.hudButtonZTextScale;
+    case hud_layout::Button::A:
+    default:
+        return game.hudButtonATextScale;
+    }
+}
+
+bool hud_element_modified(int index) {
+    auto& offsetX = hud_element_offset_x(index);
+    auto& offsetY = hud_element_offset_y(index);
+    auto& scale = hud_element_scale(index);
+    const bool itemAnchorModified =
+        hud_element_has_item_anchor(index) &&
+        hud_element_item_anchor(index).getValue() !=
+            hud_element_item_anchor(index).getDefaultValue();
+    const bool textAnchorModified =
+        hud_element_has_text_anchor(index) &&
+        hud_element_text_anchor(index).getValue() !=
+            hud_element_text_anchor(index).getDefaultValue();
+    const bool itemScaleModified =
+        hud_element_has_item_scale(index) &&
+        hud_element_item_scale(index).getValue() !=
+            hud_element_item_scale(index).getDefaultValue();
+    const bool textScaleModified =
+        hud_element_has_text_scale(index) &&
+        hud_element_text_scale(index).getValue() !=
+            hud_element_text_scale(index).getDefaultValue();
     return offsetX.getValue() != offsetX.getDefaultValue() ||
            offsetY.getValue() != offsetY.getDefaultValue() ||
-           scale.getValue() != scale.getDefaultValue();
+           scale.getValue() != scale.getDefaultValue() || itemAnchorModified ||
+           textAnchorModified || itemScaleModified || textScaleModified;
 }
 
 bool hud_layout_modified() {
-    for (size_t i = 0; i < kHudButtonNames.size(); ++i) {
-        if (hud_button_modified(static_cast<int>(i))) {
+    for (size_t i = 0; i < kHudElementNames.size(); ++i) {
+        if (hud_element_modified(static_cast<int>(i))) {
             return true;
         }
     }
     return false;
 }
 
-void reset_hud_button(int index) {
-    auto& offsetX = hud_button_offset_x(index);
-    auto& offsetY = hud_button_offset_y(index);
-    auto& scale = hud_button_scale(index);
+void reset_hud_element(int index) {
+    auto& offsetX = hud_element_offset_x(index);
+    auto& offsetY = hud_element_offset_y(index);
+    auto& scale = hud_element_scale(index);
     offsetX.setValue(offsetX.getDefaultValue());
     offsetY.setValue(offsetY.getDefaultValue());
     scale.setValue(scale.getDefaultValue());
+    if (hud_element_has_item_anchor(index)) {
+        auto& itemAnchor = hud_element_item_anchor(index);
+        itemAnchor.setValue(itemAnchor.getDefaultValue());
+    }
+    if (hud_element_has_item_scale(index)) {
+        auto& itemScale = hud_element_item_scale(index);
+        itemScale.setValue(itemScale.getDefaultValue());
+    }
+    if (hud_element_has_text_anchor(index)) {
+        auto& textAnchor = hud_element_text_anchor(index);
+        textAnchor.setValue(textAnchor.getDefaultValue());
+    }
+    if (hud_element_has_text_scale(index)) {
+        auto& textScale = hud_element_text_scale(index);
+        textScale.setValue(textScale.getDefaultValue());
+    }
 }
 
 void reset_hud_layout() {
-    for (size_t i = 0; i < kHudButtonNames.size(); ++i) {
-        reset_hud_button(static_cast<int>(i));
+    for (size_t i = 0; i < kHudElementNames.size(); ++i) {
+        reset_hud_element(static_cast<int>(i));
     }
 }
 
@@ -377,22 +578,121 @@ void set_float_from_json(
     var.setValue(std::clamp(json_value_or(object, key, var.getValue()), min, max));
 }
 
-json hud_button_to_json(int index) {
-    return {
-        {"x", hud_button_offset_x(index).getValue()},
-        {"y", hud_button_offset_y(index).getValue()},
-        {"scale", hud_button_scale(index).getValue()},
-    };
+bool try_read_item_anchor(const json& value, int& anchor) {
+    if (value.is_number_integer()) {
+        anchor = static_cast<int>(hud_layout::NormalizeItemAnchor(value.get<int>()));
+        return true;
+    }
+
+    if (!value.is_string()) {
+        return false;
+    }
+
+    const std::string raw = value.get<std::string>();
+    for (const auto candidate : kHudItemAnchors) {
+        if (raw == hud_layout::ItemAnchorName(candidate)) {
+            anchor = static_cast<int>(candidate);
+            return true;
+        }
+    }
+    return false;
 }
 
-void import_hud_button_json(const json& buttons, int index) {
-    const auto found = buttons.find(hud_button_name(index));
-    if (found == buttons.end() || !found->is_object()) {
+void set_item_anchor_from_json(ConfigVar<int>& var, const json& object, const char* key) {
+    if (!object.is_object()) {
         return;
     }
-    set_float_from_json(hud_button_offset_x(index), *found, "x", -300.0f, 300.0f);
-    set_float_from_json(hud_button_offset_y(index), *found, "y", -300.0f, 300.0f);
-    set_float_from_json(hud_button_scale(index), *found, "scale", 0.4f, 2.2f);
+
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        return;
+    }
+
+    int anchor = var.getValue();
+    if (try_read_item_anchor(*found, anchor)) {
+        var.setValue(anchor);
+    }
+}
+
+bool try_read_side_anchor(const json& value, int& anchor) {
+    if (value.is_number_integer()) {
+        anchor = static_cast<int>(hud_layout::NormalizeSideAnchor(value.get<int>()));
+        return true;
+    }
+
+    if (!value.is_string()) {
+        return false;
+    }
+
+    const std::string raw = value.get<std::string>();
+    for (const auto candidate : kHudSideAnchors) {
+        if (raw == hud_layout::SideAnchorName(candidate)) {
+            anchor = static_cast<int>(candidate);
+            return true;
+        }
+    }
+    return false;
+}
+
+void set_side_anchor_from_json(ConfigVar<int>& var, const json& object, const char* key) {
+    if (!object.is_object()) {
+        return;
+    }
+
+    const auto found = object.find(key);
+    if (found == object.end()) {
+        return;
+    }
+
+    int anchor = var.getValue();
+    if (try_read_side_anchor(*found, anchor)) {
+        var.setValue(anchor);
+    }
+}
+
+json hud_element_to_json(int index) {
+    json element = {
+        {"x", hud_element_offset_x(index).getValue()},
+        {"y", hud_element_offset_y(index).getValue()},
+        {"scale", hud_element_scale(index).getValue()},
+    };
+    if (hud_element_has_item_anchor(index)) {
+        element["itemAnchor"] =
+            hud_layout::ItemAnchorName(hud_element_item_anchor_value(index));
+    }
+    if (hud_element_has_item_scale(index)) {
+        element["itemScale"] = hud_element_item_scale(index).getValue();
+    }
+    if (hud_element_has_text_anchor(index)) {
+        element["textAnchor"] =
+            hud_layout::SideAnchorName(hud_element_text_anchor_value(index));
+    }
+    if (hud_element_has_text_scale(index)) {
+        element["textScale"] = hud_element_text_scale(index).getValue();
+    }
+    return element;
+}
+
+void import_hud_element_json(const json& elements, int index) {
+    const auto found = elements.find(hud_element_name(index));
+    if (found == elements.end() || !found->is_object()) {
+        return;
+    }
+    set_float_from_json(hud_element_offset_x(index), *found, "x", -9999.0f, 9999.0f);
+    set_float_from_json(hud_element_offset_y(index), *found, "y", -9999.0f, 9999.0f);
+    set_float_from_json(hud_element_scale(index), *found, "scale", 0.01f, 99.99f);
+    if (hud_element_has_item_anchor(index)) {
+        set_item_anchor_from_json(hud_element_item_anchor(index), *found, "itemAnchor");
+    }
+    if (hud_element_has_item_scale(index)) {
+        set_float_from_json(hud_element_item_scale(index), *found, "itemScale", 0.01f, 99.99f);
+    }
+    if (hud_element_has_text_anchor(index)) {
+        set_side_anchor_from_json(hud_element_text_anchor(index), *found, "textAnchor");
+    }
+    if (hud_element_has_text_scale(index)) {
+        set_float_from_json(hud_element_text_scale(index), *found, "textScale", 0.01f, 99.99f);
+    }
 }
 
 json export_touch_controls_json() {
@@ -450,16 +750,16 @@ bool import_touch_controls_json(const json& root) {
 }
 
 json export_hud_layout_json() {
-    json buttons = json::object();
-    for (size_t i = 0; i < kHudButtonNames.size(); ++i) {
-        buttons[hud_button_name(static_cast<int>(i))] =
-            hud_button_to_json(static_cast<int>(i));
+    json elements = json::object();
+    for (size_t i = 0; i < kHudElementNames.size(); ++i) {
+        elements[hud_element_name(static_cast<int>(i))] =
+            hud_element_to_json(static_cast<int>(i));
     }
 
     return {
-        {"version", 1},
+        {"version", 5},
         {"background", getSettings().game.hudButtonBackground.getValue()},
-        {"buttons", std::move(buttons)},
+        {"elements", std::move(elements)},
     };
 }
 
@@ -477,7 +777,9 @@ bool import_hud_layout_json(const json& root) {
         hud = &*nestedHud;
     }
 
-    if (!hud->contains("background") && !hud->contains("buttons")) {
+    if (!hud->contains("background") && !hud->contains("buttons") &&
+        !hud->contains("elements"))
+    {
         return false;
     }
 
@@ -486,8 +788,15 @@ bool import_hud_layout_json(const json& root) {
         json_value_or(*hud, "background", game.hudButtonBackground.getValue()));
     const auto buttons = hud->find("buttons");
     if (buttons != hud->end() && buttons->is_object()) {
-        for (size_t i = 0; i < kHudButtonNames.size(); ++i) {
-            import_hud_button_json(*buttons, static_cast<int>(i));
+        for (size_t i = 0; i < 5; ++i) {
+            import_hud_element_json(*buttons, static_cast<int>(i));
+        }
+    }
+
+    const auto elements = hud->find("elements");
+    if (elements != hud->end() && elements->is_object()) {
+        for (size_t i = 0; i < kHudElementNames.size(); ++i) {
+            import_hud_element_json(*elements, static_cast<int>(i));
         }
     }
     return true;
@@ -868,8 +1177,8 @@ SelectButton& config_hud_pixel_select(Pane& leftPane, Pane& rightPane, Rml::Stri
             auto& var = selectVar();
             return var.getValue() != var.getDefaultValue();
         },
-        .min = -300,
-        .max = 300,
+        .min = -9999,
+        .max = 9999,
         .step = 1,
         .suffix = " px",
     });
@@ -881,21 +1190,39 @@ SelectButton& config_hud_pixel_select(Pane& leftPane, Pane& rightPane, Rml::Stri
 }
 
 SelectButton& config_hud_percent_select(Pane& leftPane, Pane& rightPane, Rml::String key,
-    std::function<ConfigVar<float>&()> selectVar, Rml::String helpText) {
+    std::function<ConfigVar<float>&()> selectVar, Rml::String helpText,
+    std::function<bool()> isDisabled = {}) {
+    auto disabled = std::move(isDisabled);
+    auto disabledForValue = disabled;
+    auto disabledForSet = disabled;
+    auto disabledForModified = disabled;
     auto& button = leftPane.add_child<NumberButton>(NumberButton::Props{
         .key = std::move(key),
-        .getValue = [selectVar] { return float_setting_percent(selectVar()); },
+        .getValue =
+            [selectVar, disabledForValue] {
+                if (disabledForValue && disabledForValue()) {
+                    return 100;
+                }
+                return float_setting_percent(selectVar());
+            },
         .setValue =
-            [selectVar](int value) {
-                selectVar().setValue(std::clamp(value, 40, 220) / 100.0f);
+            [selectVar, disabledForSet](int value) {
+                if (disabledForSet && disabledForSet()) {
+                    return;
+                }
+                selectVar().setValue(std::clamp(value, 1, 9999) / 100.0f);
                 config::Save();
             },
-        .isModified = [selectVar] {
+        .isDisabled = std::move(disabled),
+        .isModified = [selectVar, disabledForModified] {
+            if (disabledForModified && disabledForModified()) {
+                return false;
+            }
             auto& var = selectVar();
             return var.getValue() != var.getDefaultValue();
         },
-        .min = 40,
-        .max = 220,
+        .min = 1,
+        .max = 9999,
         .step = 5,
         .suffix = "%",
     });
@@ -1820,23 +2147,23 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Input Viewer Scale", "Scales the input viewer overlay.", 60, 160, 5);
         config_bool_select(leftPane, rightPane, getSettings().game.hudButtonBackground,
             {
-                .key = "HUD Button Background",
+                .key = "HUD Backing Texture",
                 .helpText = "Shows the decorative backing behind the in-game HUD buttons.",
             });
         leftPane.register_control(
             leftPane.add_select_button({
-                .key = "HUD Button",
-                .getValue = [] { return Rml::String{hud_button_name(hud_button_index())}; },
+                .key = "HUD Element",
+                .getValue = [] { return Rml::String{hud_element_name(hud_element_index())}; },
                 .isModified = [] { return hud_layout_modified(); },
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                for (size_t i = 0; i < kHudButtonNames.size(); ++i) {
+                for (size_t i = 0; i < kHudElementNames.size(); ++i) {
                     pane
                         .add_button({
-                            .text = Rml::String{hud_button_name(static_cast<int>(i))},
+                            .text = Rml::String{hud_element_name(static_cast<int>(i))},
                             .isSelected =
-                                [i] { return hud_button_index() == static_cast<int>(i); },
+                                [i] { return hud_element_index() == static_cast<int>(i); },
                         })
                         .on_pressed([i] {
                             mDoAud_seStartMenu(kSoundItemChange);
@@ -1844,27 +2171,131 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                             config::Save();
                         });
                 }
-                pane.add_rml("<br/>Choose which in-game HUD button the X, Y, and Scale controls "
-                             "edit.");
+                pane.add_rml("<br/>Choose which in-game HUD element the position, scale, "
+                             "item, and text controls edit.");
             });
-        config_hud_pixel_select(leftPane, rightPane, "HUD Button X",
-            []() -> ConfigVar<float>& { return hud_button_offset_x(hud_button_index()); },
-            "Moves the selected in-game HUD button horizontally.");
-        config_hud_pixel_select(leftPane, rightPane, "HUD Button Y",
-            []() -> ConfigVar<float>& { return hud_button_offset_y(hud_button_index()); },
-            "Moves the selected in-game HUD button vertically.");
-        config_hud_percent_select(leftPane, rightPane, "HUD Button Scale",
-            []() -> ConfigVar<float>& { return hud_button_scale(hud_button_index()); },
-            "Scales the selected in-game HUD button.");
+        config_hud_pixel_select(leftPane, rightPane, "HUD Element X",
+            []() -> ConfigVar<float>& { return hud_element_offset_x(hud_element_index()); },
+            "Moves the selected in-game HUD element horizontally.");
+        config_hud_pixel_select(leftPane, rightPane, "HUD Element Y",
+            []() -> ConfigVar<float>& { return hud_element_offset_y(hud_element_index()); },
+            "Moves the selected in-game HUD element vertically.");
+        config_hud_percent_select(leftPane, rightPane, "HUD Element Scale",
+            []() -> ConfigVar<float>& { return hud_element_scale(hud_element_index()); },
+            "Scales the selected in-game HUD element.");
         leftPane.register_control(
-            leftPane.add_button("Reset HUD Button").on_pressed([] {
+            leftPane.add_select_button({
+                .key = "HUD Item Anchor",
+                .getValue =
+                    [] {
+                        if (!hud_element_has_item_anchor(hud_element_index())) {
+                            return Rml::String{"N/A"};
+                        }
+                        return Rml::String{
+                            hud_layout::ItemAnchorName(hud_element_item_anchor_value(
+                                hud_element_index()))};
+                    },
+                .isDisabled = [] { return !hud_element_has_item_anchor(hud_element_index()); },
+                .isModified =
+                    [] {
+                        if (!hud_element_has_item_anchor(hud_element_index())) {
+                            return false;
+                        }
+                        auto& itemAnchor = hud_element_item_anchor(hud_element_index());
+                        return itemAnchor.getValue() != itemAnchor.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                if (!hud_element_has_item_anchor(hud_element_index())) {
+                    pane.add_text("Item Anchor is available for the B, X, and Y HUD buttons.");
+                    return;
+                }
+
+                for (const auto anchor : kHudItemAnchors) {
+                    pane
+                        .add_button({
+                            .text = Rml::String{hud_layout::ItemAnchorName(anchor)},
+                            .isSelected =
+                                [anchor] { return hud_element_item_anchor_value(
+                                                   hud_element_index()) == anchor; },
+                        })
+                        .on_pressed([anchor] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            hud_element_item_anchor(hud_element_index())
+                                .setValue(static_cast<int>(anchor));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Places the assigned item icon left, right, above, or below the "
+                    "selected HUD button.");
+            });
+        config_hud_percent_select(leftPane, rightPane, "HUD Item Scale",
+            []() -> ConfigVar<float>& { return hud_element_item_scale(hud_element_index()); },
+            "Scales the item icon attached to the selected HUD button.",
+            [] { return !hud_element_has_item_scale(hud_element_index()); });
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "HUD Text Anchor",
+                .getValue =
+                    [] {
+                        if (!hud_element_has_text_anchor(hud_element_index())) {
+                            return Rml::String{"N/A"};
+                        }
+                        return Rml::String{
+                            hud_layout::SideAnchorName(hud_element_text_anchor_value(
+                                hud_element_index()))};
+                    },
+                .isDisabled = [] { return !hud_element_has_text_anchor(hud_element_index()); },
+                .isModified =
+                    [] {
+                        if (!hud_element_has_text_anchor(hud_element_index())) {
+                            return false;
+                        }
+                        auto& textAnchor = hud_element_text_anchor(hud_element_index());
+                        return textAnchor.getValue() != textAnchor.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                if (!hud_element_has_text_anchor(hud_element_index())) {
+                    pane.add_text("Text Anchor is available for the A, B, X, and Y HUD buttons.");
+                    return;
+                }
+
+                for (const auto anchor : kHudSideAnchors) {
+                    pane
+                        .add_button({
+                            .text = Rml::String{hud_layout::SideAnchorName(anchor)},
+                            .isSelected =
+                                [anchor] { return hud_element_text_anchor_value(
+                                                   hud_element_index()) == anchor; },
+                        })
+                        .on_pressed([anchor] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            hud_element_text_anchor(hud_element_index())
+                                .setValue(static_cast<int>(anchor));
+                            config::Save();
+                        });
+                }
+                pane.add_rml("<br/>Places the action text on the left or right side of the "
+                             "selected HUD button.");
+            });
+        config_hud_percent_select(leftPane, rightPane, "HUD Text Scale",
+            []() -> ConfigVar<float>& { return hud_element_text_scale(hud_element_index()); },
+            "Scales the text attached to the selected HUD button.",
+            [] { return !hud_element_has_text_scale(hud_element_index()); });
+        leftPane.register_control(
+            leftPane.add_button("Reset HUD Element").on_pressed([] {
                 mDoAud_seStartMenu(kSoundItemChange);
-                reset_hud_button(hud_button_index());
+                reset_hud_element(hud_element_index());
                 config::Save();
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Resets X, Y, and Scale for the selected in-game HUD button.");
+                pane.add_text("Resets position, element scale, item settings, and text settings "
+                              "for the selected in-game HUD element.");
             });
         leftPane.register_control(
             leftPane.add_button("Reset HUD Layout").on_pressed([] {
@@ -1874,7 +2305,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Resets custom X, Y, and Scale values for all in-game HUD buttons.");
+                pane.add_text("Resets custom position, scale, item, and text values for all "
+                              "in-game HUD elements.");
             });
         leftPane.register_control(
             leftPane.add_button("Export HUD Layout").on_pressed([] {
@@ -1883,7 +2315,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Exports HUD background and button positions to a selected JSON file.");
+                pane.add_text("Exports HUD background, element positions, scales, and anchors to "
+                              "a selected JSON file.");
             });
         leftPane.register_control(
             leftPane.add_button("Import HUD Layout").on_pressed([] {
@@ -1892,7 +2325,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Imports HUD background and button positions from a JSON file.");
+                pane.add_text("Imports HUD background, element positions, scales, and anchors "
+                              "from a JSON file.");
             });
 
         leftPane.add_section("Game");
