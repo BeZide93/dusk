@@ -3,6 +3,7 @@
 #include "aurora/gfx.h"
 #include "bool_button.hpp"
 #include "controller_config.hpp"
+#include "d/d_com_inf_game.h"
 #include "dusk/audio/DuskAudioSystem.h"
 #include "dusk/audio/DuskDsp.hpp"
 #include "dusk/config.hpp"
@@ -56,6 +57,23 @@ constexpr std::array kCardFileTypes = {
 };
 
 constexpr int kCardRawImageType = 0;
+
+int currentNewGamePlusCount() {
+    return dComIfGs_getSaveData()->getReserve().getNewGamePlusCount();
+}
+
+bool damageMultiplierLockedToNewGamePlus() {
+    return currentNewGamePlusCount() != 0;
+}
+
+int currentDamageMultiplier() {
+    const int newGamePlusCount = currentNewGamePlusCount();
+    if (newGamePlusCount != 0) {
+        return newGamePlusCount;
+    }
+
+    return getSettings().game.damageMultiplier.getValue();
+}
 
 constexpr SDL_DialogFileFilter kCardImageSaveFilters[] = {
     {"GameCube Memory Card", "raw"},
@@ -2015,16 +2033,23 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         leftPane.register_control(
             leftPane.add_child<NumberButton>(NumberButton::Props{
                 .key = "Damage Multiplier",
-                .getValue = [] { return getSettings().game.damageMultiplier.getValue(); },
+                .getValue = [] { return currentDamageMultiplier(); },
                 .setValue =
                     [](int value) {
+                        if (damageMultiplierLockedToNewGamePlus()) {
+                            return;
+                        }
                         getSettings().game.damageMultiplier.setValue(value);
                         config::Save();
                     },
-                .isDisabled = [] { return getSettings().game.speedrunMode; },
+                .isDisabled =
+                    [] {
+                        return getSettings().game.speedrunMode ||
+                               damageMultiplierLockedToNewGamePlus();
+                    },
                 .isModified =
                     [] {
-                        return getSettings().game.damageMultiplier.getValue() !=
+                        return currentDamageMultiplier() !=
                                getSettings().game.damageMultiplier.getDefaultValue();
                     },
                 .min = 1,
@@ -2033,7 +2058,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Multiplies incoming damage.");
+                pane.add_text(
+                    "Multiplies incoming damage. New Game+ saves use their + count.");
             });
         addSpeedrunDisabledOption(
             "Instant Death", getSettings().game.instantDeath, "Any hit will instantly kill you.");
