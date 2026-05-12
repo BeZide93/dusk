@@ -18867,6 +18867,8 @@ int daAlink_c::execute() {
             for (int i = 0; i < daAlink_selectItemButtonCount(); i++) {
                 if (!(mUseButtonFlags & (1 << i)) && !(field_0x2faf & (1 << i))) {
                     dMeter2Info_offUseButton(daAlink_meterUseButtonForSelectItem(i));
+                } else if (i == 2 && dusk::UseWiiUControllerStyle()) {
+                    dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
                 }
             }
 

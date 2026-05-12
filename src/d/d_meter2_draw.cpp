@@ -30,6 +30,20 @@ f32 hud_button_background_alpha(f32 alpha) {
     return dusk::getSettings().game.hudButtonBackground.getValue() ? alpha : 0.0f;
 }
 
+u8 hud_clamp_alpha(f32 alpha) {
+    if (alpha <= 0.0f) {
+        return 0;
+    }
+    if (alpha >= 255.0f) {
+        return 255;
+    }
+    return static_cast<u8>(alpha);
+}
+
+u8 hud_opaque_alpha(f32 rate = 1.0f) {
+    return hud_clamp_alpha(255.0f * rate);
+}
+
 J2DPicture* as_picture(J2DPane* pane) {
     if (pane == NULL || pane->getTypeID() != 18) {
         return NULL;
@@ -3553,9 +3567,7 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
     }
 
     f32 var_f29_2 =
-        (g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha) *
-         (f32)mpButtonXY[2]->getInitAlpha()) /
-        255.0f;
+        g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha);
     f32 temp_f30_2 = mpButtonParent->getAlphaRate();
     if (param_0 & 0x1000000) {
         var_f29_2 = 0.0f;
@@ -3571,32 +3583,33 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         }
     }
 
-    mpButtonXY[2]->setAlpha(255.0f * field_0x724 * temp_f30_2);
+    mpButtonXY[2]->setAlpha(hud_clamp_alpha(255.0f * field_0x724 * temp_f30_2));
 }
 
 void dMeter2Draw_c::setButtonIconRItemAlpha(u32 param_0) {
     if (mpItemR->isVisible() || mpLightXY[2]->isVisible() || mpButtonXY[2]->isVisible()) {
         f32 buttonAlpha =
             g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha);
-        u8 itemAlpha = mpItemR->getInitAlpha();
+        u8 itemAlpha = hud_opaque_alpha();
         u8 itemBaseAlpha =
             g_drawHIO.mButtonZItemBaseAlpha * (buttonAlpha * (f32)mpLightXY[2]->getInitAlpha());
-        u8 buttonBaseAlpha = buttonAlpha * (f32)mpButtonXY[2]->getInitAlpha();
+        u8 buttonBaseAlpha = hud_opaque_alpha(buttonAlpha);
         const f32 parentAlpha = mpButtonParent->getAlphaRate();
+        const bool itemUsable = dMeter2Info_isUseButton(METER2_USEBUTTON_Z);
 
         if ((param_0 & 0x1000000) && !dusk::UseWiiUControllerStyle()) {
             itemAlpha = 0;
             itemBaseAlpha = 0;
             buttonBaseAlpha = 0;
-        } else if (!dMeter2Info_isUseButton(METER2_USEBUTTON_Z)) {
+        } else if (!itemUsable) {
             itemAlpha = g_drawHIO.mButtonXYItemDimAlpha;
             itemBaseAlpha = g_drawHIO.mButtonXYItemDimAlpha;
             buttonBaseAlpha = g_drawHIO.mButtonXYBaseDimAlpha;
         }
 
-        mpItemR->setAlpha((f32)itemAlpha * parentAlpha);
-        mpLightXY[2]->setAlpha((f32)itemBaseAlpha * parentAlpha);
-        mpButtonXY[2]->setAlpha((f32)buttonBaseAlpha * parentAlpha);
+        mpItemR->setAlpha(hud_clamp_alpha((f32)itemAlpha * parentAlpha));
+        mpLightXY[2]->setAlpha(hud_button_background_alpha((f32)itemBaseAlpha) * parentAlpha);
+        mpButtonXY[2]->setAlpha(hud_clamp_alpha((f32)buttonBaseAlpha * parentAlpha));
     }
 }
 
