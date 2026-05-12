@@ -853,9 +853,8 @@ void dFile_select_c::headerTxtSetRaw(const char* i_text, u8 i_type, u8 param_3) 
     textBox->setFontSize(fontsize[i_type], fontsize[i_type]);
     textBox->setLineSpace(linespace[i_type]);
     textBox->setCharSpace(charspace[i_type]);
-    strncpy(mHeaderStringPtr[dispIdx], i_text, 511);
-    mHeaderStringPtr[dispIdx][511] = '\0';
-    textBox->setString(mHeaderStringPtr[dispIdx]);
+    textBox->setString(512, i_text);
+    mHeaderStringPtr[dispIdx] = textBox->getStringPtr();
 
     if (param_3 == 0) {
         mHeaderTxtPane[mHeaderTxtDispIdx]->alphaAnimeStart(0);
