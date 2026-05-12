@@ -891,6 +891,8 @@ public:
     void init();
     bool isNewGamePlus() const;
     void setNewGamePlus(bool enabled);
+    u8 getNewGamePlusCount() const;
+    void setNewGamePlusCount(u8 count);
     bool isIntroSkipped() const;
     void setIntroSkipped(bool enabled);
 

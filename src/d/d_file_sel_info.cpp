@@ -110,9 +110,16 @@ int dFile_info_c::setSaveData(dSv_save_c* i_savedata, BOOL i_validChksum, u8 i_d
             }
         } else {
             setHeartCnt(i_savedata);
-            strcpy(mPlayerName, player_name);
             setSaveDate(i_savedata);
             setPlayTime(i_savedata);
+
+            u8 newGamePlusCount = i_savedata->getReserve().getNewGamePlusCount();
+            if (newGamePlusCount != 0) {
+                sprintf(mPlayerName, "%s +%u", player_name, newGamePlusCount);
+            } else {
+                strcpy(mPlayerName, player_name);
+            }
+            strcpy(mSaveStatus, "");
             result = 0;
         }
     } else {

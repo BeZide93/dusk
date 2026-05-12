@@ -1532,12 +1532,39 @@ bool dSv_reserve_c::isNewGamePlus() const {
 
 void dSv_reserve_c::setNewGamePlus(bool enabled) {
     static const char magic[] = "DUSKNGP1";
+    static const int countOffset = 8;
 
     if (enabled) {
         memcpy(unk, magic, sizeof(magic) - 1);
+        if (unk[countOffset] == 0) {
+            unk[countOffset] = 1;
+        }
     } else {
         memset(unk, 0, sizeof(magic) - 1);
+        unk[countOffset] = 0;
     }
+}
+
+u8 dSv_reserve_c::getNewGamePlusCount() const {
+    static const int countOffset = 8;
+
+    if (!isNewGamePlus()) {
+        return 0;
+    }
+
+    return unk[countOffset] == 0 ? 1 : unk[countOffset];
+}
+
+void dSv_reserve_c::setNewGamePlusCount(u8 count) {
+    static const int countOffset = 8;
+
+    if (count == 0) {
+        setNewGamePlus(false);
+        return;
+    }
+
+    setNewGamePlus(true);
+    unk[countOffset] = count;
 }
 
 bool dSv_reserve_c::isIntroSkipped() const {

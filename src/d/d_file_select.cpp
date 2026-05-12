@@ -1505,7 +1505,12 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
 
     dstPlayer.getPlayerInfo().setPlayerName(playerName);
     dstPlayer.getPlayerInfo().setHorseName(horseName);
-    dstSave->getReserve().setNewGamePlus(true);
+
+    u8 newGamePlusCount = srcSave->getReserve().getNewGamePlusCount();
+    if (newGamePlusCount < 0xff) {
+        newGamePlusCount++;
+    }
+    dstSave->getReserve().setNewGamePlusCount(newGamePlusCount);
     dComIfGs_setLineUpItem();
 
     mNewGamePlusPending = false;
