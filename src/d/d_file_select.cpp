@@ -1436,6 +1436,16 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
         return;
     }
 
+    static const u16 hiddenSkillFlags[] = {
+        dSv_event_flag_c::F_0339,
+        dSv_event_flag_c::F_0338,
+        dSv_event_flag_c::F_0340,
+        dSv_event_flag_c::F_0341,
+        dSv_event_flag_c::F_0342,
+        dSv_event_flag_c::F_0343,
+        dSv_event_flag_c::F_0344,
+    };
+
     dSv_save_c* srcSave = (dSv_save_c*)&mSaveData[mNewGamePlusSourceSlot];
     dSv_save_c* dstSave = dComIfGs_getSaveData();
     dSv_player_c& srcPlayer = srcSave->getPlayer();
@@ -1465,7 +1475,11 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
     }
 
     for (int i = 0; i < MAX_EQUIPMENT; i++) {
-        dstStatus.setSelectEquip(i, srcStatus.getSelectEquip(i));
+        if (i == COLLECT_SMELL) {
+            dstStatus.setSelectEquip(i, dItemNo_NONE_e);
+        } else {
+            dstStatus.setSelectEquip(i, srcStatus.getSelectEquip(i));
+        }
     }
 
     dstPlayer.getItem() = srcPlayer.getItem();
@@ -1477,6 +1491,16 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
     for (int i = 0; i < 4; i++) {
         dstPlayer.getCollect().offCollectCrystal(i);
         dstPlayer.getCollect().offCollectMirror(i);
+    }
+
+    dSv_event_c& srcEvent = srcSave->getEvent();
+    dSv_event_c& dstEvent = dstSave->getEvent();
+    for (int i = 0; i < (int)(sizeof(hiddenSkillFlags) / sizeof(hiddenSkillFlags[0])); i++) {
+        if (srcEvent.isEventBit(hiddenSkillFlags[i])) {
+            dstEvent.onEventBit(hiddenSkillFlags[i]);
+        } else {
+            dstEvent.offEventBit(hiddenSkillFlags[i]);
+        }
     }
 
     dstPlayer.getPlayerInfo().setPlayerName(playerName);
