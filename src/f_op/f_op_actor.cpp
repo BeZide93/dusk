@@ -8,6 +8,7 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_suspend.h"
 #include "d/d_com_inf_actor.h"
+#include "d/d_com_inf_game.h"
 #include "d/d_demo.h"
 #include "d/d_s_play.h"
 #include "f_ap/f_ap_game.h"
@@ -397,6 +398,39 @@ static int fopAc_IsDelete(void* i_this) {
     return ret;
 }
 
+#if TARGET_PC
+static s16 scaleNewGamePlusEnemyHealthValue(s16 i_health) {
+    if (i_health <= 0) {
+        return i_health;
+    }
+
+    u8 newGamePlusCount = dComIfGs_getSaveData()->getReserve().getNewGamePlusCount();
+    if (newGamePlusCount == 0) {
+        return i_health;
+    }
+
+    if (newGamePlusCount > 9) {
+        newGamePlusCount = 9;
+    }
+
+    int scaledHealth = (static_cast<int>(i_health) * (20 + newGamePlusCount) + 9) / 10;
+    if (scaledHealth > 0x7fff) {
+        scaledHealth = 0x7fff;
+    }
+
+    return static_cast<s16>(scaledHealth);
+}
+
+static void applyNewGamePlusEnemyHealthScale(fopAc_ac_c* i_actor) {
+    if (i_actor->group != fopAc_ENEMY_e) {
+        return;
+    }
+
+    i_actor->health = scaleNewGamePlusEnemyHealthValue(i_actor->health);
+    i_actor->field_0x560 = scaleNewGamePlusEnemyHealthValue(i_actor->field_0x560);
+}
+#endif
+
 static int fopAc_Delete(void* i_this) {
     fopAc_ac_c* actor = (fopAc_ac_c*)i_this;
     int ret = FALSE;
@@ -541,6 +575,10 @@ static int fopAc_Create(void* i_this) {
     #endif
 
     if (ret == cPhs_COMPLEATE_e) {
+        #if TARGET_PC
+        applyNewGamePlusEnemyHealthScale(actor);
+        #endif
+
         fopDwTg_ToDrawQ(&actor->draw_tag, fpcM_DrawPriority(actor));
     } else if (ret == cPhs_ERROR_e) {
         fopAcM_OnCondition(actor, 0x10);
