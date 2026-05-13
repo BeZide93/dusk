@@ -21,7 +21,6 @@ namespace dusk {
 		void ShowProcessManager();
 		void ShowHeapOverlay();
 		void ShowStubLog();
-		void ShowMapLoader();
         void ShowBloomWindow();
         void ShowPlayerInfo();
         void ShowAudioDebug();
@@ -43,22 +42,9 @@ namespace dusk {
 
 		bool m_showStubLog = false;
 
-		bool m_showMapLoader = false;
-
         bool m_showBloomWindow = false;
 
         bool m_showAudioDebug = false;
-		struct {
-			int mapIdx = -1;
-			int regionIdx = -1;
-			int roomNoIdx = 0;
-			int pointNoIdx = 0;
-			int roomNo = -1;
-			int pointNo = -1;
-			int spawnId = 0;
-			int layer = -1;
-			bool showInternalNames = false;
-		} m_mapLoaderInfo;
 
 		bool m_showPlayerInfo = false;
 		int m_playerInfoOverlayCorner = 1; // top-right
@@ -69,8 +55,6 @@ namespace dusk {
         bool m_showStateShare = false;
         ImGuiStateShare m_stateShare;
 
-        bool m_showInputViewer = false;
-        bool m_showInputViewerGyro = false;
         bool m_showActorSpawner = false;
         int m_inputOverlayCorner = 3;
         std::string m_controllerName;

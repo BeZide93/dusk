@@ -1411,6 +1411,7 @@ set(DOLPHIN_FILES
 )
 
 set(DUSK_FILES
+        include/dusk/action_bindings.h
         include/dusk/endian_gx.hpp
         include/dusk/config.hpp
         include/dusk/dvd_asset.hpp
@@ -1420,6 +1421,8 @@ set(DUSK_FILES
         src/dusk/asserts.cpp
         src/dusk/config.cpp
         src/dusk/crash_reporting.cpp
+        src/dusk/data.cpp
+        src/dusk/data.hpp
         src/dusk/endian.cpp
         src/dusk/extras.c
         src/dusk/file_select.cpp
@@ -1437,6 +1440,7 @@ set(DUSK_FILES
         src/dusk/layout.cpp
         src/dusk/logging.cpp
         src/dusk/settings.cpp
+        src/dusk/speedrun.cpp
         src/dusk/stubs.cpp
         src/dusk/touch_controls.cpp
         src/dusk/touch_controls.hpp
@@ -1448,8 +1452,6 @@ set(DUSK_FILES
         src/dusk/imgui/ImGuiConsole.cpp
         src/dusk/imgui/ImGuiEngine.cpp
         src/dusk/imgui/ImGuiEngine.hpp
-        src/dusk/imgui/ImGuiMenuGame.cpp
-        src/dusk/imgui/ImGuiMenuGame.hpp
         src/dusk/imgui/ImGuiBloomWindow.cpp
         src/dusk/imgui/ImGuiBloomWindow.hpp
         src/dusk/imgui/ImGuiMenuTools.cpp
@@ -1460,7 +1462,6 @@ set(DUSK_FILES
         src/dusk/imgui/ImGuiHeapOverlay.cpp
         src/dusk/imgui/ImGuiControllerOverlay.cpp
         src/dusk/imgui/ImGuiStubLog.cpp
-        src/dusk/imgui/ImGuiMapLoader.cpp
         src/dusk/imgui/ImGuiSaveEditor.cpp
         src/dusk/imgui/ImGuiStateShare.hpp
         src/dusk/imgui/ImGuiStateShare.cpp
@@ -1511,6 +1512,8 @@ set(DUSK_FILES
         src/dusk/ui/tab_bar.hpp
         src/dusk/ui/ui.cpp
         src/dusk/ui/ui.hpp
+        src/dusk/ui/warp.cpp
+        src/dusk/ui/warp.hpp
         src/dusk/ui/window.cpp
         src/dusk/ui/window.hpp
         src/dusk/achievements.cpp
@@ -1525,6 +1528,7 @@ set(DUSK_FILES
         src/dusk/discord.hpp
         src/dusk/discord_presence.cpp
         src/dusk/version.cpp
+        src/dusk/action_bindings.cpp
 )
 
 set(DUSK_HTTP_BACKEND_FILES

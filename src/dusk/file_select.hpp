@@ -16,6 +16,8 @@ void ShowFileSelect(FileCallback callback, void* userdata, SDL_Window* window,
     bool allow_many);
 void ShowFileSave(FileCallback callback, void* userdata, SDL_Window* window,
     const SDL_DialogFileFilter* filters, int nfilters, const char* default_location);
+void ShowFolderSelect(
+    FileCallback callback, void* userdata, SDL_Window* window, const char* default_location);
 
 std::string display_name_for_path(std::string_view path);
 std::string read_file_select_text(std::string_view path);
