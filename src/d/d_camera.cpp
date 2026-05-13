@@ -330,6 +330,7 @@ inline static bool useDuskThirdPersonItemAim(u32 pad) {
     return dusk::UseThirdPersonAim() &&
            (check_owner_action(pad, 0x1040) ||
             check_owner_action(pad, 0x80000) ||
+            check_owner_action(pad, 0x80) ||
             check_owner_action(pad, 0x4000) ||
             check_owner_action(pad, 0x400));
 }

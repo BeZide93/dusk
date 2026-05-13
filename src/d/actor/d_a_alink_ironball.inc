@@ -926,6 +926,11 @@ int daAlink_c::procIronBallSubjectInit() {
         setIronBallBaseAnime();
     }
 
+#if TARGET_PC
+    if (dusk::UseCinemaAim()) {
+        setBodyAngleToCameraViewYaw();
+    }
+#endif
     current.angle.y = shape_angle.y;
     dComIfGp_setPlayerStatus0(0, 0x400);
     return 1;

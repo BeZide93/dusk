@@ -1483,6 +1483,11 @@ int daAlink_c::procHookshotSubjectInit() {
     }
 
     dComIfGp_setPlayerStatus0(0, 0x4000);
+#if TARGET_PC
+    if (dusk::UseCinemaAim()) {
+        setBodyAngleToCameraViewYaw();
+    }
+#endif
     current.angle.y = shape_angle.y;
     setHookshotReadyMaterial();
     return 1;

@@ -589,6 +589,11 @@ int daAlink_c::procBowSubjectInit() {
     setSingleAnimeBaseSpeed(ANM_ATN_WAIT_RIGHT, 0.0f,
                             mpHIO->mItem.mBow.m.mStartInterpolation);
     mNormalSpeed = 0.0f;
+#if TARGET_PC
+    if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseCinemaAim()) {
+        setBodyAngleToCameraViewYaw();
+    }
+#endif
     setBowOrSlingStatus();
     return 1;
 }

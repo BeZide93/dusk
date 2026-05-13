@@ -382,6 +382,11 @@ int daAlink_c::procBoomerangSubjectInit() {
     setSingleAnimeBaseSpeed(ANM_ATN_WAIT_RIGHT, 0.0f,
                             mpHIO->mItem.mBoomerang.m.mStartInterpolation);
     dComIfGp_setPlayerStatus0(0, 0x80000);
+#if TARGET_PC
+    if (dusk::UseCinemaAim()) {
+        setBodyAngleToCameraViewYaw();
+    }
+#endif
     current.angle.y = shape_angle.y;
 
     return 1;

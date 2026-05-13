@@ -204,6 +204,19 @@ BOOL daAlink_c::setBodyAngleToCameraCStick() {
 #endif
 }
 
+BOOL daAlink_c::setBodyAngleToCameraViewYaw() {
+    camera_process_class* camera = dComIfGp_getCamera(field_0x317c);
+    cXyz direction = *fopCamM_GetCenter_p(camera) - *fopCamM_GetEye_p(camera);
+    f32 horizontal = JMAFastSqrt(SQUARE(direction.x) + SQUARE(direction.z));
+    if (horizontal <= 0.001f) {
+        return FALSE;
+    }
+
+    shape_angle.y = cM_atan2s(direction.x, direction.z);
+    field_0x310c = shape_angle.y;
+    return TRUE;
+}
+
 BOOL daAlink_c::setBodyAngleToCameraView() {
     camera_process_class* camera = dComIfGp_getCamera(field_0x317c);
     cXyz direction = *fopCamM_GetCenter_p(camera) - *fopCamM_GetEye_p(camera);

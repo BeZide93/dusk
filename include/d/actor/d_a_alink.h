@@ -1831,6 +1831,7 @@ public:
     s16 checkBodyAngleX(s16 i_angle);
     BOOL setBodyAngleToCamera();
     BOOL setBodyAngleToCameraCStick();
+    BOOL setBodyAngleToCameraViewYaw();
     BOOL setBodyAngleToCameraView();
     void setSubjectMode();
     BOOL subjectCancelTrigger();

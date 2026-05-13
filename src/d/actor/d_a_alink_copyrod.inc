@@ -242,7 +242,9 @@ int daAlink_c::checkNextActionCopyRod() {
         }
     }
 
-    if (!checkAttentionLock() && mFastShotTime == 0) {
+    if (!checkAttentionLock() && mFastShotTime == 0
+        IF_DUSK(&& !dusk::UseThirdPersonAim()))
+    {
         return procCopyRodSubjectInit();
     }
 
@@ -265,6 +267,13 @@ void daAlink_c::setCopyRodSight() {
 }
 
 int daAlink_c::procCopyRodSubjectInit() {
+#if TARGET_PC
+    if (dusk::UseThirdPersonAim())
+    {
+        return procCopyRodMoveInit();
+    }
+#endif
+
     if (!commonProcInitNotSameProc(PROC_COPY_ROD_SUBJECT)) {
         return 0;
     }
@@ -274,11 +283,23 @@ int daAlink_c::procCopyRodSubjectInit() {
     setSingleAnimeBaseSpeed(ANM_ATN_WAIT_RIGHT, 0.0f, mpHIO->mItem.mBoomerang.m.mStartInterpolation);
 
     dComIfGp_setPlayerStatus0(0, 0x80);
+#if TARGET_PC
+    if (dusk::UseCinemaAim()) {
+        setBodyAngleToCameraViewYaw();
+    }
+#endif
     current.angle.y = shape_angle.y;
     return 1;
 }
 
 int daAlink_c::procCopyRodSubject() {
+#if TARGET_PC
+    if (dusk::UseThirdPersonAim())
+    {
+        return procCopyRodMoveInit();
+    }
+#endif
+
     if (!checkItemActorPointer()) {
         return 1;
     }
@@ -289,7 +310,43 @@ int daAlink_c::procCopyRodSubject() {
 
     setShapeAngleToAtnActor(0);
 
+#if TARGET_PC
+    if (dusk::getSettings().game.enableAimMovement &&
+        !dusk::UseThirdPersonAim() &&
+        !dusk::UseCinemaAim())
+    {
+        f32 stick_value = mStickValue;
+        f32 move_value = mMoveValue;
+        s16 stick_angle = mStickAngle;
+        s16 move_angle = mMoveAngle;
+        s16 shape_angle_y = shape_angle.y;
+        setAimCStickMovementData();
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        mStickValue = stick_value;
+        mMoveValue = move_value;
+        mStickAngle = stick_angle;
+        mMoveAngle = move_angle;
+    }
+
+    if (dusk::getSettings().game.enableAimMovement &&
+        dusk::UseCinemaAim())
+    {
+        s16 shape_angle_y = shape_angle.y;
+        setSpeedAndAngleAtn();
+        shape_angle.y = shape_angle_y;
+        setCinemaAimMoveAnime(3, false, false);
+    }
+#endif
+
     if (!checkNextAction(0)) {
+#if TARGET_PC
+        if (dusk::UseCinemaAim()) {
+            if (setBodyAngleToCameraCStick()) {
+                setCopyRodSight();
+            }
+        } else
+#endif
         if (setBodyAngleToCamera()) {
             setCopyRodSight();
         }
@@ -324,6 +381,12 @@ int daAlink_c::procCopyRodMove() {
     if (!checkNextAction(0)) {
         f32 morf = -1.0f;
 
+#if TARGET_PC
+        if (dusk::getSettings().game.enableAimMovement) {
+            setSpeedAndAngleAtn();
+        }
+#endif
+
         if (checkZeroSpeedF()) {
             onModeFlg(1);
 
@@ -336,6 +399,12 @@ int daAlink_c::procCopyRodMove() {
         }
 
         setBlendAtnMoveAnime(morf);
+#if TARGET_PC
+        if (dusk::UseThirdPersonAim() && setBodyAngleToCameraView())
+        {
+            setCopyRodSight();
+        } else
+#endif
         setBodyAngleXReadyAnime(0);
     }
 
