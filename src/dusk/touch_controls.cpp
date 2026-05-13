@@ -271,6 +271,24 @@ bool has_control(const std::vector<TouchControl>& controls, ControlId id) noexce
         [id](const TouchControl& control) { return control.id == id; });
 }
 
+void swap_control_geometry(std::vector<TouchControl>& controls, ControlId lhs, ControlId rhs) noexcept {
+    auto find = [&controls](ControlId id) {
+        return std::find_if(controls.begin(), controls.end(),
+            [id](const TouchControl& control) { return control.id == id; });
+    };
+
+    auto lhsControl = find(lhs);
+    auto rhsControl = find(rhs);
+    if (lhsControl == controls.end() || rhsControl == controls.end()) {
+        return;
+    }
+
+    std::swap(lhsControl->x, rhsControl->x);
+    std::swap(lhsControl->y, rhsControl->y);
+    std::swap(lhsControl->radius, rhsControl->radius);
+    std::swap(lhsControl->scale, rhsControl->scale);
+}
+
 std::vector<TouchControl> styled_default_layout(ControllerOverlayLayout preset) {
     auto controls = default_layout(preset);
 
@@ -285,6 +303,7 @@ std::vector<TouchControl> styled_default_layout(ControllerOverlayLayout preset) 
         if (!has_control(controls, ControlId::Minus)) {
             controls.push_back({ControlId::Minus, "-", 0.47f, 0.82f, 26.0f, 1.0f, false});
         }
+        swap_control_geometry(controls, ControlId::Z, ControlId::R);
     }
 
     return controls;

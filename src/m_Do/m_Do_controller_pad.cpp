@@ -12,11 +12,110 @@
 #include "m_Do/m_Do_Reset.h"
 #include "m_Do/m_Do_main.h"
 #include "tracy/Tracy.hpp"
+#include <SDL3/SDL_gamepad.h>
 
 JUTGamePad* mDoCPd_c::m_gamePad[4];
 
 interface_of_controller_pad mDoCPd_c::m_cpadInfo[4];
 interface_of_controller_pad mDoCPd_c::m_debugCpadInfo[4];
+
+namespace {
+bool sWiiUPhysicalLHeld[4] = {};
+bool sWiiUPhysicalZLHeld[4] = {};
+bool sWiiUMappedZLHeld[4] = {};
+
+void resetWiiUPhysicalShoulderState(u32 port) {
+    if (port < 4) {
+        sWiiUPhysicalLHeld[port] = false;
+        sWiiUPhysicalZLHeld[port] = false;
+        sWiiUMappedZLHeld[port] = false;
+    }
+}
+
+bool mappedButtonHeld(u32 port, PADButton button) {
+    const s32 index = PADGetIndexForPort(port);
+    if (index < 0) {
+        return false;
+    }
+
+    SDL_Gamepad* gamepad = PADGetSDLGamepadForIndex(static_cast<u32>(index));
+    if (gamepad == nullptr) {
+        return false;
+    }
+
+    u32 count = 0;
+    PADButtonMapping* mappings = PADGetButtonMappings(port, &count);
+    if (mappings == nullptr) {
+        return false;
+    }
+
+    for (u32 i = 0; i < count; ++i) {
+        if (mappings[i].padButton != button ||
+            mappings[i].nativeButton == PAD_NATIVE_BUTTON_INVALID)
+        {
+            continue;
+        }
+        return SDL_GetGamepadButton(
+                   gamepad, static_cast<SDL_GamepadButton>(mappings[i].nativeButton)) != 0;
+    }
+
+    return false;
+}
+
+bool useModernShoulderLayout(u32 port) {
+    const PADControllerType type = PADGetControllerType(port);
+    return type != PAD_TYPE_GAMECUBE && type != PAD_TYPE_NSO_GAMECUBE;
+}
+
+void remapWiiUPhysicalShoulders(interface_of_controller_pad* interface, u32 port) {
+    #if TARGET_PC
+    if (port >= 4 || PADGetIndexForPort(port) < 0 || !useModernShoulderLayout(port)) {
+        resetWiiUPhysicalShoulderState(port);
+        return;
+    }
+
+    const bool useWiiUStyle = dusk::UseWiiUControllerStyle();
+    const bool physicalLHeld = mappedButtonHeld(port, PAD_TRIGGER_L);
+    const bool physicalLPressed = physicalLHeld && !sWiiUPhysicalLHeld[port];
+    sWiiUPhysicalLHeld[port] = physicalLHeld;
+
+    const bool mappedZLHeld = useWiiUStyle && mappedButtonHeld(port, PAD_TRIGGER_ZL);
+    const bool mappedZLPressed = mappedZLHeld && !sWiiUMappedZLHeld[port];
+    sWiiUMappedZLHeld[port] = mappedZLHeld;
+
+    bool physicalZLHeld = false;
+    bool physicalZLPressed = false;
+    if (useWiiUStyle) {
+        physicalZLHeld = sWiiUPhysicalZLHeld[port];
+        if (interface->mTriggerLeft > fapGmHIO_getLROnValue()) {
+            physicalZLHeld = true;
+        } else if (interface->mTriggerLeft < fapGmHIO_getLROffValue()) {
+            physicalZLHeld = false;
+        }
+        physicalZLPressed = physicalZLHeld && !sWiiUPhysicalZLHeld[port];
+    }
+    sWiiUPhysicalZLHeld[port] = physicalZLHeld;
+
+    interface->mButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
+    interface->mPressedButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
+    interface->mTriggerLeft = 0.0f;
+
+    if (physicalLHeld) {
+        interface->mButtonFlags |= PAD_TRIGGER_L;
+        interface->mTriggerLeft = 1.0f;
+    }
+    if (physicalLPressed) {
+        interface->mPressedButtonFlags |= PAD_TRIGGER_L;
+    }
+    if (physicalZLHeld || mappedZLHeld) {
+        interface->mButtonFlags |= PAD_TRIGGER_ZL;
+    }
+    if (physicalZLPressed || mappedZLPressed) {
+        interface->mPressedButtonFlags |= PAD_TRIGGER_ZL;
+    }
+    #endif
+}
+}  // namespace
 
 void mDoCPd_c::create() {
     #if PLATFORM_GCN || PLATFORM_SHIELD
@@ -87,8 +186,10 @@ void mDoCPd_c::read() {
     for (u32 i = 0; i < 4; i++) {
         if (*pad == NULL) {
             cLib_memSet(interface, 0, sizeof(interface_of_controller_pad));
+            resetWiiUPhysicalShoulderState(i);
         } else {
             convert(interface, *pad);
+            remapWiiUPhysicalShoulders(interface, i);
         }
         if (i == PAD_1) {
             dusk::touch_controls::MergeToPad(*interface);

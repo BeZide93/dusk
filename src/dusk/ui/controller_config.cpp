@@ -207,9 +207,7 @@ const char* controller_button_name(PADButton button) {
         case PAD_BUTTON_MINUS:
             return "-";
         case PAD_TRIGGER_Z:
-            return "R";
-        case PAD_TRIGGER_R:
-            return "ZR";
+            return "Z (R)";
         default:
             break;
         }
@@ -665,7 +663,6 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             pane.add_section("Digital");
             addKeyButton(PAD_TRIGGER_L);
             addKeyButton(PAD_TRIGGER_R);
-            addKeyButton(PAD_TRIGGER_ZL);
             break;
         }
 
@@ -710,9 +707,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
         if (buttons != nullptr) {
             for (u32 i = 0; i < buttonCount; ++i) {
                 PADButtonMapping& mapping = buttons[i];
-                if (mapping.padButton != PAD_TRIGGER_L && mapping.padButton != PAD_TRIGGER_R &&
-                    mapping.padButton != PAD_TRIGGER_ZL)
-                {
+                if (mapping.padButton != PAD_TRIGGER_L && mapping.padButton != PAD_TRIGGER_R) {
                     continue;
                 }
                 pane.add_select_button({
