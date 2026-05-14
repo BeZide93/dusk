@@ -833,6 +833,15 @@ void dFile_select_c::setYesNoLabels(bool i_newGamePlusLabels) {
     }
 }
 
+void dFile_select_c::setStartNewGamePlusLabels() {
+    static const char* labels[2] = {"Start", "New Game+"};
+
+    for (int i = 0; i < 2; i++) {
+        J2DTextBox* textBox = (J2DTextBox*)mYnSelTxtPane[i]->getPanePtr();
+        textBox->setString(labels[i]);
+    }
+}
+
 void dFile_select_c::headerTxtSetRaw(const char* i_text, u8 i_type, u8 param_3) {
     u8 dispIdx = mHeaderTxtDispIdx ^ 1;
     if (param_3 != 0) {
@@ -864,7 +873,8 @@ void dFile_select_c::headerTxtSetRaw(const char* i_text, u8 i_type, u8 param_3) 
 }
 
 bool dFile_select_c::isValidNewGamePlusSource(u8 i_slot, u8 i_targetSlot) {
-    return i_slot < 3 && i_slot != i_targetSlot && !mIsNoData[i_slot] && mIsDataNew[i_slot] == 0;
+    UNUSED(i_targetSlot);
+    return i_slot < 3 && !mIsNoData[i_slot] && mIsDataNew[i_slot] == 0;
 }
 
 u8 dFile_select_c::findNewGamePlusSource(u8 i_targetSlot) {
@@ -875,6 +885,27 @@ u8 dFile_select_c::findNewGamePlusSource(u8 i_targetSlot) {
     }
 
     return 0xff;
+}
+
+bool dFile_select_c::shouldOfferNewGamePlusOverwrite() {
+    return !mIsNoData[mSelectNum] && mIsDataNew[mSelectNum] == 0;
+}
+
+void dFile_select_c::startNewGamePlusOverwritePrompt() {
+    mNewGamePlusSourceSlot = mSelectNum;
+    mNewGamePlusTargetSlot = mSelectNum;
+    mNewGamePlusPending = false;
+    mNewGamePlusOverwritePrompt = true;
+
+    field_0x0268 = 0;
+    field_0x0269 = 1;
+    dComIfGs_setDataNum(mSelectNum);
+    mSelIcon->setAlphaRate(0.0f);
+    headerTxtSetRaw("Select file action", 1, 0);
+    menuMoveAnmInitSet(0x329, 799);
+    yesnoMenuMoveAnmInitSet(0x473, 0x47d);
+    setStartNewGamePlusLabels();
+    mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_IN;
 }
 
 static bool isIntroSkipBottleItem(u8 i_itemNo) {
@@ -921,6 +952,9 @@ static void setIntroSkipSelectItemIfEmpty(int i_selectNo, u8 i_slotNo) {
 }
 
 void dFile_select_c::startSkipIntroPrompt() {
+    mSkipIntroPending = false;
+    field_0x0268 = 0;
+    field_0x0269 = 1;
     dComIfGs_setDataNum(mSelectNum);
     headerTxtSetRaw("Skip intro?", 1, 0);
     yesnoMenuMoveAnmInitSet(0x473, 0x47d);
@@ -936,6 +970,12 @@ void dFile_select_c::startNewGameNameInput() {
 #endif
 
     dComIfGs_setDataNum(mSelectNum);
+    #if TARGET_PC
+    if (mNewGamePlusPending && mNewGamePlusSourceSlot == mNewGamePlusTargetSlot) {
+        dComIfGs_getSaveData()->init();
+    }
+    #endif
+
     mSelIcon->setAlphaRate(0.0f);
     mDoAud_seStart(Z2SE_SY_NEW_FILE, NULL, 0, 0);
     headerTxtSet(0x385, 1, 0);
@@ -986,6 +1026,7 @@ void dFile_select_c::dataSelectStart() {
         mNewGamePlusSourceSlot = 0xff;
         mNewGamePlusTargetSlot = mSelectNum;
         mNewGamePlusPending = false;
+        mNewGamePlusOverwritePrompt = false;
         mSkipIntroPending = false;
 
         if (findNewGamePlusSource(mNewGamePlusTargetSlot) != 0xff) {
@@ -1175,8 +1216,13 @@ void dFile_select_c::newGamePlusModeIn() {
     bool isHeaderTxtChange = headerTxtChangeAnm();
     bool isYnMenuMove = yesnoMenuMoveAnm();
     bool isModoruTxtDisp = modoruTxtDispAnm();
+    bool isMenuMove = true;
 
-    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+    if (mNewGamePlusOverwritePrompt) {
+        isMenuMove = menuMoveAnm();
+    }
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp && isMenuMove) {
         yesnoCursorShow();
         mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_SELECT;
     }
@@ -1191,18 +1237,43 @@ void dFile_select_c::newGamePlusModeSelect() {
         yesnoMenuMoveAnmInitSet(0x47d, 0x473);
 
         if (field_0x0268 == 0) {
+            if (mNewGamePlusOverwritePrompt) {
+                mNewGamePlusOverwritePrompt = false;
+                mNewGamePlusPending = false;
+                mNewGamePlusSourceSlot = 0xff;
+                mNewGamePlusTargetSlot = 0xff;
+                dComIfGs_setCardToMemory((u8*)mSaveData, mSelectNum);
+                dComIfGs_setDataNum(mSelectNum);
+                mIsSelectEnd = true;
+                mDataSelProc = DATASELPROC_NEXT_MODE_WAIT;
+                return;
+            }
+
             mNewGamePlusPending = false;
             mNewGamePlusSourceSlot = 0xff;
             mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_NAME;
         } else {
-            mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_SOURCE;
+            if (mNewGamePlusOverwritePrompt) {
+                mNewGamePlusSourceSlot = mSelectNum;
+                mNewGamePlusTargetSlot = mSelectNum;
+                mNewGamePlusPending = true;
+                mNewGamePlusOverwritePrompt = false;
+                mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_NAME;
+            } else {
+                mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CLOSE_TO_SOURCE;
+            }
         }
     } else if (mDoCPd_c::getTrigB(PAD_1)) {
         mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
         mSelIcon->setAlphaRate(0.0f);
-        headerTxtSet(0x43, 1, 0);
         yesnoMenuMoveAnmInitSet(0x47d, 0x473);
         modoruTxtDispAnmInit(0);
+        if (mNewGamePlusOverwritePrompt) {
+            headerTxtSet(msgTbl[mSelectNum], 1, 0);
+            menuMoveAnmInitSet(799, 0x329);
+        } else {
+            headerTxtSet(0x43, 1, 0);
+        }
         mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_CANCEL;
     } else if (stick->checkRightTrigger()) {
         if (field_0x0268 != 0) {
@@ -1262,10 +1333,27 @@ void dFile_select_c::newGamePlusModeCancel() {
     bool isHeaderTxtChange = headerTxtChangeAnm();
     bool isYnMenuMove = yesnoMenuMoveAnm();
     bool isModoruTxtDisp = modoruTxtDispAnm();
+    bool isMenuMove = true;
 
-    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
-        selFileCursorShow();
-        mDataSelProc = DATASELPROC_DATA_SELECT;
+    if (mNewGamePlusOverwritePrompt) {
+        isMenuMove = menuMoveAnm();
+    }
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp && isMenuMove) {
+        bool wasOverwritePrompt = mNewGamePlusOverwritePrompt;
+        mNewGamePlusOverwritePrompt = false;
+        mNewGamePlusPending = false;
+        mNewGamePlusSourceSlot = 0xff;
+        mNewGamePlusTargetSlot = 0xff;
+        setYesNoLabels(false);
+
+        if (wasOverwritePrompt) {
+            menuCursorShow();
+            mDataSelProc = DATASELPROC_MENU_SELECT;
+        } else {
+            selFileCursorShow();
+            mDataSelProc = DATASELPROC_DATA_SELECT;
+        }
     }
 }
 
@@ -1436,6 +1524,9 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
         return;
     }
 
+    u8 targetSlot = mNewGamePlusTargetSlot;
+    bool isOverwriteNewGamePlus = mNewGamePlusSourceSlot == mNewGamePlusTargetSlot;
+
     static const u16 hiddenSkillFlags[] = {
         dSv_event_flag_c::F_0339,
         dSv_event_flag_c::F_0338,
@@ -1512,6 +1603,10 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
     }
     dstSave->getReserve().setNewGamePlusCount(newGamePlusCount);
     dComIfGs_setLineUpItem();
+
+    if (isOverwriteNewGamePlus && targetSlot < 3) {
+        mIsDataNew[targetSlot] = true;
+    }
 
     mNewGamePlusPending = false;
     mNewGamePlusSourceSlot = 0xff;
@@ -1834,6 +1929,13 @@ void dFile_select_c::menuSelectStart() {
     #endif
 
     if (mSelectMenuNum == 1) {
+        #if TARGET_PC
+        if (shouldOfferNewGamePlusOverwrite()) {
+            startNewGamePlusOverwritePrompt();
+            return;
+        }
+        #endif
+
         dComIfGs_setCardToMemory((u8*)mSaveData, mSelectNum);
         mIsSelectEnd = true;
         mDataSelProc = DATASELPROC_NEXT_MODE_WAIT;
@@ -4125,9 +4227,9 @@ void dFile_select_c::displayInit() {
     mNewGamePlusTargetSlot = 0xff;
     mNewGamePlusPending = false;
     mSkipIntroPending = false;
+    mNewGamePlusOverwritePrompt = false;
     mNewGamePlusPad[0] = 0;
     mNewGamePlusPad[1] = 0;
-    mNewGamePlusPad[2] = 0;
     #endif
 
     mModoruTxtPane->setAlpha(0);
