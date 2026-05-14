@@ -154,6 +154,148 @@ void use_round_hud_button_layers(CPaneMgr* button, CPaneMgr* roundSource) {
     apply_round_hud_button_base(button->getPanePtr(), texture);
 }
 
+bool pane_init_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right, f32& bottom) {
+    if (pane == NULL) {
+        return false;
+    }
+
+    left = pane->getInitGlobalPosX();
+    top = pane->getInitGlobalPosY();
+    right = left + pane->getInitSizeX();
+    bottom = top + pane->getInitSizeY();
+    return true;
+}
+
+bool add_pane_init_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right,
+                                 f32& bottom, bool& hasBounds) {
+    f32 paneLeft;
+    f32 paneTop;
+    f32 paneRight;
+    f32 paneBottom;
+    if (!pane_init_global_bounds(pane, paneLeft, paneTop, paneRight, paneBottom)) {
+        return false;
+    }
+
+    if (!hasBounds) {
+        left = paneLeft;
+        top = paneTop;
+        right = paneRight;
+        bottom = paneBottom;
+        hasBounds = true;
+        return true;
+    }
+
+    if (paneLeft < left) {
+        left = paneLeft;
+    }
+    if (paneRight > right) {
+        right = paneRight;
+    }
+    if (paneTop < top) {
+        top = paneTop;
+    }
+    if (paneBottom > bottom) {
+        bottom = paneBottom;
+    }
+
+    return true;
+}
+
+bool pane_current_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right, f32& bottom) {
+    if (pane == NULL) {
+        return false;
+    }
+
+    Mtx mtx;
+    for (u8 i = 0; i < 4; i++) {
+        Vec vtx = pane->getGlobalVtx(&mtx, i, false, 0);
+        if (i == 0) {
+            left = right = vtx.x;
+            top = bottom = vtx.y;
+            continue;
+        }
+
+        if (vtx.x < left) {
+            left = vtx.x;
+        }
+        if (vtx.x > right) {
+            right = vtx.x;
+        }
+        if (vtx.y < top) {
+            top = vtx.y;
+        }
+        if (vtx.y > bottom) {
+            bottom = vtx.y;
+        }
+    }
+
+    return true;
+}
+
+bool add_pane_current_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right,
+                                    f32& bottom, bool& hasBounds) {
+    f32 paneLeft;
+    f32 paneTop;
+    f32 paneRight;
+    f32 paneBottom;
+    if (!pane_current_global_bounds(pane, paneLeft, paneTop, paneRight, paneBottom)) {
+        return false;
+    }
+
+    if (!hasBounds) {
+        left = paneLeft;
+        top = paneTop;
+        right = paneRight;
+        bottom = paneBottom;
+        hasBounds = true;
+        return true;
+    }
+
+    if (paneLeft < left) {
+        left = paneLeft;
+    }
+    if (paneRight > right) {
+        right = paneRight;
+    }
+    if (paneTop < top) {
+        top = paneTop;
+    }
+    if (paneBottom > bottom) {
+        bottom = paneBottom;
+    }
+
+    return true;
+}
+
+void pane_trans_to_global_center(CPaneMgr* pane, f32 targetX, f32 targetY) {
+    f32 transX = targetX - pane->getInitGlobalCenterPosX();
+    f32 transY = targetY - pane->getInitGlobalCenterPosY();
+    pane->paneTrans(transX, transY);
+
+    f32 left;
+    f32 top;
+    f32 right;
+    f32 bottom;
+    if (!pane_current_global_bounds(pane, left, top, right, bottom)) {
+        return;
+    }
+
+    const f32 centerX = (left + right) * 0.5f;
+    const f32 centerY = (top + bottom) * 0.5f;
+    const f32 localWidth = pane->getSizeX();
+    const f32 localHeight = pane->getSizeY();
+    const f32 globalScaleX = localWidth != 0.0f ? (right - left) / localWidth : 1.0f;
+    const f32 globalScaleY = localHeight != 0.0f ? (bottom - top) / localHeight : 1.0f;
+
+    if (globalScaleX != 0.0f) {
+        transX += (targetX - centerX) / globalScaleX;
+    }
+    if (globalScaleY != 0.0f) {
+        transY += (targetY - centerY) / globalScaleY;
+    }
+    pane->paneTrans(transX, transY);
+}
+
 void scale_round_hud_button_base(CPaneMgr* button, f32 scale) {
     J2DPicture* picture = first_picture_pane(button->getPanePtr());
     const f32 width = picture != NULL ? picture->getWidth() : button->getInitSizeX();
@@ -2295,25 +2437,22 @@ void dMeter2Draw_c::drawRupee(s16 i_rupeeNum) {
 
     mpRupeeParent[0]->scale(g_drawHIO.mRupeeScale * hudScale,
                             g_drawHIO.mRupeeScale * hudScale);
-    mpRupeeParent[0]->paneTrans(g_drawHIO.mRupeePosX + hudTransform.offsetX,
-                                g_drawHIO.mRupeePosY + hudTransform.offsetY);
+    mpRupeeParent[0]->paneTrans(g_drawHIO.mRupeePosX, g_drawHIO.mRupeePosY);
 
     mpRupeeParent[1]->scale(g_drawHIO.mRupeeFramePosY * hudScale,
                             g_drawHIO.mRupeeFramePosY * hudScale);
-    mpRupeeParent[1]->paneTrans(g_drawHIO.mRupeeFrameScale + hudTransform.offsetX,
-                                g_drawHIO.mRupeeFramePosX + hudTransform.offsetY);
+    mpRupeeParent[1]->paneTrans(g_drawHIO.mRupeeFrameScale, g_drawHIO.mRupeeFramePosX);
 
     mpRupeeParent[2]->scale(g_drawHIO.mRupeeFramePosY * hudScale,
                             g_drawHIO.mRupeeFramePosY * hudScale);
-    mpRupeeParent[2]->paneTrans(g_drawHIO.mRupeeFrameScale + hudTransform.offsetX,
-                                g_drawHIO.mRupeeFramePosX + hudTransform.offsetY);
+    mpRupeeParent[2]->paneTrans(g_drawHIO.mRupeeFrameScale, g_drawHIO.mRupeeFramePosX);
 
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 2; j++) {
             mpRupeeTexture[i][j]->scale(g_drawHIO.mRupeeCountScale * hudScale,
                                         g_drawHIO.mRupeeCountScale * hudScale);
-            mpRupeeTexture[i][j]->paneTrans(g_drawHIO.mRupeeCountPosX + hudTransform.offsetX,
-                                            g_drawHIO.mRupeeCountPosY + hudTransform.offsetY);
+            mpRupeeTexture[i][j]->paneTrans(g_drawHIO.mRupeeCountPosX,
+                                            g_drawHIO.mRupeeCountPosY);
         }
     }
 }
@@ -2853,9 +2992,20 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
 
         const auto button = hud_xy_button(i_no);
         const auto hudTransform = dusk::hud_layout::ButtonTransform(button);
+        const f32 hudScale = hudTransform.scale;
+        if (i_no == SELECT_X_e) {
+            scale_round_hud_button_base(mpButtonXY[0], g_drawHIO.mButtonXScale * hudScale);
+            mpButtonXY[0]->paneTrans(g_drawHIO.mButtonXPosX + hudTransform.offsetX,
+                                     g_drawHIO.mButtonXPosY + hudTransform.offsetY);
+        } else if (i_no == SELECT_Y_e) {
+            scale_round_hud_button_base(mpButtonXY[1], g_drawHIO.mButtonYScale * hudScale);
+            mpButtonXY[1]->paneTrans(g_drawHIO.mButtonYPosX + hudTransform.offsetX,
+                                     g_drawHIO.mButtonYPosY + hudTransform.offsetY);
+        }
+
         const f32 textScale = dusk::hud_layout::ButtonTextScale(button);
-        mpTextXY[i_no]->scale(g_drawHIO.mButtonXYTextScale * hudTransform.scale * textScale,
-                              g_drawHIO.mButtonXYTextScale * hudTransform.scale * textScale);
+        mpTextXY[i_no]->scale(g_drawHIO.mButtonXYTextScale * hudScale * textScale,
+                              g_drawHIO.mButtonXYTextScale * hudScale * textScale);
         mpTextXY[i_no]->paneTrans(g_drawHIO.mButtonXYTextPosX +
                                       hud_text_anchor_offset(button, mpTextXY[i_no]) +
                                       hudTransform.offsetX,
@@ -3494,13 +3644,31 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         mpButtonMidona->show();
         const f32 dpadScale = g_drawHIO.mButtonCrossScale * hudTransform.scale;
         const f32 midnaScale = g_drawHIO.mMidnaIconScale * dpadScale;
-        Vec dpadCenter = mpButtonCrossParent->getGlobalVtxCenter(false, 0);
-        const f32 targetX = dpadCenter.x + g_drawHIO.mMidnaIconPosX - 178.0f;
-        const f32 targetY = dpadCenter.y + g_drawHIO.mMidnaIconPosY + 44.0f * dpadScale;
+        f32 currentDpadLeft = 0.0f;
+        f32 currentDpadTop = 0.0f;
+        f32 currentDpadRight = 0.0f;
+        f32 currentDpadBottom = 0.0f;
+        bool hasCurrentDpadBounds = false;
+        for (int i = 0; i < 5; i++) {
+            CPaneMgr* panes[] = {mpJujiI[i], mpJujiM[i]};
+            for (CPaneMgr* pane : panes) {
+                add_pane_current_global_bounds(pane, currentDpadLeft, currentDpadTop,
+                                               currentDpadRight, currentDpadBottom,
+                                               hasCurrentDpadBounds);
+            }
+        }
+        if (!hasCurrentDpadBounds) {
+            add_pane_current_global_bounds(mpButtonCrossParent, currentDpadLeft,
+                                           currentDpadTop, currentDpadRight,
+                                           currentDpadBottom, hasCurrentDpadBounds);
+        }
+
+        const f32 midnaHalfHeight = mpButtonMidona->getInitSizeY() * midnaScale * 0.5f;
+        const f32 targetX = (currentDpadLeft + currentDpadRight) * 0.5f;
+        const f32 targetY = currentDpadBottom + midnaHalfHeight;
 
         mpButtonMidona->scale(midnaScale, midnaScale);
-        mpButtonMidona->paneTrans(targetX - mpButtonMidona->getInitGlobalCenterPosX(),
-                                  targetY - mpButtonMidona->getInitGlobalCenterPosY());
+        pane_trans_to_global_center(mpButtonMidona, targetX, targetY);
     } else {
         mpButtonMidona->scale(g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale,
                               g_drawHIO.mMidnaIconScale * hudTransform.scale * itemScale);

@@ -23,12 +23,14 @@ namespace {
 bool sWiiUPhysicalLHeld[4] = {};
 bool sWiiUPhysicalZLHeld[4] = {};
 bool sWiiUMappedZLHeld[4] = {};
+bool sWiiUPhysicalZRHeld[4] = {};
 
 void resetWiiUPhysicalShoulderState(u32 port) {
     if (port < 4) {
         sWiiUPhysicalLHeld[port] = false;
         sWiiUPhysicalZLHeld[port] = false;
         sWiiUMappedZLHeld[port] = false;
+        sWiiUPhysicalZRHeld[port] = false;
     }
 }
 
@@ -96,6 +98,19 @@ void remapWiiUPhysicalShoulders(interface_of_controller_pad* interface, u32 port
     }
     sWiiUPhysicalZLHeld[port] = physicalZLHeld;
 
+    bool physicalZRHeld = false;
+    bool physicalZRPressed = false;
+    if (useWiiUStyle) {
+        physicalZRHeld = sWiiUPhysicalZRHeld[port];
+        if (interface->mTriggerRight > fapGmHIO_getLROnValue()) {
+            physicalZRHeld = true;
+        } else if (interface->mTriggerRight < fapGmHIO_getLROffValue()) {
+            physicalZRHeld = false;
+        }
+        physicalZRPressed = physicalZRHeld && !sWiiUPhysicalZRHeld[port];
+    }
+    sWiiUPhysicalZRHeld[port] = physicalZRHeld;
+
     interface->mButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
     interface->mPressedButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
     interface->mTriggerLeft = 0.0f;
@@ -112,6 +127,12 @@ void remapWiiUPhysicalShoulders(interface_of_controller_pad* interface, u32 port
     }
     if (physicalZLPressed || mappedZLPressed) {
         interface->mPressedButtonFlags |= PAD_TRIGGER_ZL;
+    }
+    if (physicalZRHeld) {
+        interface->mButtonFlags |= PAD_TRIGGER_R;
+    }
+    if (physicalZRPressed) {
+        interface->mPressedButtonFlags |= PAD_TRIGGER_R;
     }
     #endif
 }

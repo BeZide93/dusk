@@ -1979,8 +1979,11 @@ void dComIfGp_setSelectItem(int i_selItemIdx) {
 u8 dComIfGp_getSelectItem(int i_selItemIdx) {
     u8 playItem = g_dComIfG_gameInfo.play.getSelectItem(i_selItemIdx);
 
-    if ((i_selItemIdx == SELECT_ITEM_X || i_selItemIdx == SELECT_ITEM_Y) &&
-        dComIfGs_getMixItemIndex(i_selItemIdx) != 0xFF)
+    const bool canMixItem =
+        i_selItemIdx == SELECT_ITEM_X || i_selItemIdx == SELECT_ITEM_Y ||
+        (dusk::UseWiiUControllerStyle() && i_selItemIdx == SELECT_ITEM_DOWN);
+
+    if (canMixItem && dComIfGs_getMixItemIndex(i_selItemIdx) != 0xFF)
     {
         u8 saveItem = dComIfGs_getItem(dComIfGs_getMixItemIndex(i_selItemIdx), false);
 

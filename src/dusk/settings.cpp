@@ -40,6 +40,7 @@ UserSettings g_userSettings = {
         .noReturnRupees {"game.noReturnRupees", false},
         .disableRupeeCutscenes {"game.disableRupeeCutscenes", false},
         .noSwordRecoil {"game.noSwordRecoil", false},
+        .enableJumpButton {"game.enableJumpButton", true},
         .damageMultiplier {"game.damageMultiplier", 1},
         .noHeartDrops {"game.noHeartDrops", false},
         .instantDeath {"game.instantDeath", false},
@@ -282,7 +283,12 @@ const char* ControllerStyleName(ControllerStyle style) noexcept {
 
 bool UseWiiUControllerStyle() noexcept {
 #if TARGET_PC
-    return getSettings().game.controllerStyle.getValue() == ControllerStyle::WiiU;
+    auto& controllerStyle = getSettings().game.controllerStyle;
+    if (controllerStyle.getLayer() == config::ConfigVarLayer::Default) {
+        return false;
+    }
+
+    return controllerStyle.getValue() == ControllerStyle::WiiU;
 #else
     return false;
 #endif
@@ -324,6 +330,7 @@ void registerSettings() {
     Register(g_userSettings.game.noReturnRupees);
     Register(g_userSettings.game.disableRupeeCutscenes);
     Register(g_userSettings.game.noSwordRecoil);
+    Register(g_userSettings.game.enableJumpButton);
     Register(g_userSettings.game.damageMultiplier);
     Register(g_userSettings.game.noHeartDrops);
     Register(g_userSettings.game.instantDeath);

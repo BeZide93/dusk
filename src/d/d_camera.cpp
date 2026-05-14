@@ -6926,11 +6926,6 @@ bool dCamera_c::subjectCamera(s32 param_0) {
     bool magne_boots_on = player->checkMagneBootsOn() != 0;
     bool sp10 = check_owner_action(mPadID, 0x80080) != 0;
     bool sp0F = check_owner_action(mPadID, 0x40) != 0;
-#if TARGET_PC
-    bool dusk_cinema_item_aim = dusk::UseCinemaAim() && (sp14 || sp13 || sp12 || sp10);
-#else
-    constexpr bool dusk_cinema_item_aim = false;
-#endif
 
     if (mCurCamStyleTimer == 0) {
         subject->field_0x0 = 'SUBN';
@@ -6980,8 +6975,16 @@ bool dCamera_c::subjectCamera(s32 param_0) {
     cSAngle angle_y = player->getCameraAngleY();
     cXyz* bow_pos = player->checkBowCameraArrowPosP(&bow_angle_x, &bow_angle_y);
     bool sp0E = false;
+#if TARGET_PC
+    const bool dusk_scope_aim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
+    const bool dusk_cinema_item_aim =
+        dusk::UseCinemaAim() && !dusk_scope_aim && (sp14 || sp13 || sp12 || sp10);
+#else
+    const bool dusk_scope_aim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
+    constexpr bool dusk_cinema_item_aim = false;
+#endif
 
-    if (check_owner_action(mPadID, 0x200000) && bow_pos != NULL) {
+    if (dusk_scope_aim) {
         sp2D0 = *bow_pos;
         angle_x.Val(bow_angle_x);
         angle_y.Val(bow_angle_y);

@@ -358,7 +358,13 @@ void dSv_player_item_c::setItem(int i_slotNo, u8 i_itemNo) {
 u8 dSv_player_item_c::getItem(int i_slotNo, bool i_checkCombo) const {
     if (i_slotNo < MAX_ITEM_SLOTS) {
         if (i_checkCombo) {
-            for (int i = 0; i < SELECT_ITEM_NUM; i++) {
+            int comboSlotCount = SELECT_ITEM_NUM;
+#if TARGET_PC
+            if (dusk::UseWiiUControllerStyle()) {
+                comboSlotCount = 3;
+            }
+#endif
+            for (int i = 0; i < comboSlotCount; i++) {
                 if ((i_slotNo == dComIfGs_getSelectItemIndex(i) || i_slotNo == dComIfGs_getMixItemIndex(i)) &&
                     dComIfGs_getMixItemIndex(i) != dItemNo_NONE_e)
                 {

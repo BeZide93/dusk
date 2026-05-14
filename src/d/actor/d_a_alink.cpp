@@ -10870,7 +10870,10 @@ BOOL daAlink_c::checkSlideAction() {
 }
 
 BOOL daAlink_c::checkWiiUManualJumpReady() {
-    if (!dusk::UseWiiUControllerStyle() || !mDoCPd_c::getTrigZL(PAD_1)) {
+    if (!dusk::getSettings().game.enableJumpButton ||
+        !dusk::UseWiiUControllerStyle() ||
+        !mDoCPd_c::getTrigZL(PAD_1))
+    {
         return false;
     }
 
@@ -16983,7 +16986,8 @@ int daAlink_c::procAutoJumpInit(int param_0) {
 int daAlink_c::procAutoJump() {
     int direction = getDirectionFromCurrentAngle();
 
-    if (dusk::UseWiiUControllerStyle() && mDoCPd_c::getHoldZL(PAD_1) &&
+    if (dusk::getSettings().game.enableJumpButton &&
+        dusk::UseWiiUControllerStyle() && mDoCPd_c::getHoldZL(PAD_1) &&
         mDoCPd_c::getTrigB(PAD_1) && mEquipItem == 0x103)
     {
         setWiiUManualJumpDirection();
