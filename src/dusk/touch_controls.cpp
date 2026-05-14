@@ -266,6 +266,45 @@ const char* styled_label(ControlId id, const char* fallback) noexcept {
     }
 }
 
+const char* display_name(ControlId id) noexcept {
+    switch (id) {
+    case ControlId::LeftStick:
+        return "Left Stick";
+    case ControlId::CStick:
+        return "C-Stick";
+    case ControlId::A:
+        return "A";
+    case ControlId::B:
+        return "B";
+    case ControlId::X:
+        return "X";
+    case ControlId::Y:
+        return "Y";
+    case ControlId::L:
+        return "L";
+    case ControlId::R:
+        return UseWiiUControllerStyle() ? "ZR" : "R";
+    case ControlId::Z:
+        return UseWiiUControllerStyle() ? "R" : "Z";
+    case ControlId::Start:
+        return UseWiiUControllerStyle() ? "+" : "Start";
+    case ControlId::Minus:
+        return "-";
+    case ControlId::ZL:
+        return "ZL";
+    case ControlId::DpadUp:
+        return "D-Pad Up";
+    case ControlId::DpadDown:
+        return "D-Pad Down";
+    case ControlId::DpadLeft:
+        return "D-Pad Left";
+    case ControlId::DpadRight:
+        return "D-Pad Right";
+    default:
+        return "";
+    }
+}
+
 bool has_control(const std::vector<TouchControl>& controls, ControlId id) noexcept {
     return std::any_of(controls.begin(), controls.end(),
         [id](const TouchControl& control) { return control.id == id; });
@@ -489,7 +528,7 @@ bool apply_layout_json(const json& root) noexcept {
             }
             found->x = std::clamp(item.value("x", found->x), 0.02f, 0.98f);
             found->y = std::clamp(item.value("y", found->y), 0.02f, 0.98f);
-            found->scale = std::clamp(item.value("scale", found->scale), 0.5f, 1.8f);
+            found->scale = std::clamp(item.value("scale", found->scale), 0.5f, 2.5f);
             applied = true;
         }
         return applied;
@@ -718,6 +757,53 @@ void ApplyPreset(ControllerOverlayLayout preset) noexcept {
     sLoadedPreset = preset;
     sLoadedStyle = getSettings().game.controllerStyle.getValue();
     ResetInputState();
+    SaveLayout();
+}
+
+size_t ControlCount() noexcept {
+    ensure_loaded();
+    return sControls.size();
+}
+
+const char* ControlDisplayName(size_t index) noexcept {
+    ensure_loaded();
+    if (index >= sControls.size()) {
+        return "";
+    }
+    return display_name(sControls[index].id);
+}
+
+int ControlScalePercent(size_t index) noexcept {
+    ensure_loaded();
+    if (index >= sControls.size()) {
+        return 100;
+    }
+    return static_cast<int>(std::round(sControls[index].scale * 100.0f));
+}
+
+int DefaultControlScalePercent(size_t index) noexcept {
+    ensure_loaded();
+    if (index >= sControls.size()) {
+        return 100;
+    }
+
+    const ControlId id = sControls[index].id;
+    const auto defaults = styled_default_layout(getSettings().game.touchControlsPreset.getValue());
+    const auto found = std::find_if(defaults.begin(), defaults.end(),
+        [id](const TouchControl& control) { return control.id == id; });
+    if (found == defaults.end()) {
+        return 100;
+    }
+    return static_cast<int>(std::round(found->scale * 100.0f));
+}
+
+void SetControlScalePercent(size_t index, int percent) noexcept {
+    ensure_loaded();
+    if (index >= sControls.size()) {
+        return;
+    }
+
+    sControls[index].scale = std::clamp(percent, 50, 250) / 100.0f;
     SaveLayout();
 }
 

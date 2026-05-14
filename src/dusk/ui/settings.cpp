@@ -1421,6 +1421,81 @@ SelectButton& config_percent_select(Pane& leftPane, Pane& rightPane, ConfigVar<f
     return button;
 }
 
+SelectButton& config_touch_scale_select(Pane& leftPane, Pane& rightPane) {
+    auto& globalScale = getSettings().game.touchControlsScale;
+    auto touchDisabled = [] { return !getSettings().game.enableTouchControls.getValue(); };
+    auto& button = leftPane.add_select_button({
+        .key = "Touch Scale",
+        .getValue = [&globalScale] {
+            return fmt::format("Global {}%", float_setting_percent(globalScale));
+        },
+        .isDisabled = touchDisabled,
+        .isModified =
+            [&globalScale] {
+                if (globalScale.getValue() != globalScale.getDefaultValue()) {
+                    return true;
+                }
+                const size_t count = touch_controls::ControlCount();
+                for (size_t i = 0; i < count; ++i) {
+                    if (touch_controls::ControlScalePercent(i) !=
+                        touch_controls::DefaultControlScalePercent(i))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            },
+    });
+    leftPane.register_control(button, rightPane, [&globalScale, touchDisabled](Pane& pane) {
+        pane.clear();
+        pane.add_child<NumberButton>(NumberButton::Props{
+            .key = "Global Scale",
+            .getValue = [&globalScale] { return float_setting_percent(globalScale); },
+            .setValue =
+                [&globalScale](int value) {
+                    globalScale.setValue(std::clamp(value, 60, 160) / 100.0f);
+                    config::Save();
+                },
+            .isDisabled = touchDisabled,
+            .isModified =
+                [&globalScale] {
+                    return globalScale.getValue() != globalScale.getDefaultValue();
+                },
+            .min = 60,
+            .max = 160,
+            .step = 5,
+            .suffix = "%",
+        });
+
+        pane.add_section("Buttons");
+        const size_t count = touch_controls::ControlCount();
+        for (size_t i = 0; i < count; ++i) {
+            pane.add_child<NumberButton>(NumberButton::Props{
+                .key = touch_controls::ControlDisplayName(i),
+                .getValue = [i] { return touch_controls::ControlScalePercent(i); },
+                .setValue =
+                    [i](int value) {
+                        touch_controls::SetControlScalePercent(i, value);
+                    },
+                .isDisabled = touchDisabled,
+                .isModified =
+                    [i] {
+                        return touch_controls::ControlScalePercent(i) !=
+                               touch_controls::DefaultControlScalePercent(i);
+                    },
+                .min = 50,
+                .max = 250,
+                .step = 5,
+                .suffix = "%",
+            });
+        }
+        pane.add_text(
+            "Global Scale changes the full touch controller. Button scales adjust individual "
+            "touch controls and are saved with the custom touch layout.");
+    });
+    return button;
+}
+
 SelectButton& config_hud_pixel_select(Pane& leftPane, Pane& rightPane, Rml::String key,
     std::function<ConfigVar<float>&()> selectVar, Rml::String helpText) {
     auto& button = leftPane.add_child<NumberButton>(NumberButton::Props{
@@ -2006,9 +2081,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Choose the initial arrangement used by the on-screen controller.",
             [](ControllerOverlayLayout layout) { touch_controls::ApplyPreset(layout); },
             [] { return !getSettings().game.enableTouchControls.getValue(); });
-        config_percent_select(leftPane, rightPane, getSettings().game.touchControlsScale,
-            "Touch Scale", "Scales the on-screen controller.", 60, 160, 5,
-            [] { return !getSettings().game.enableTouchControls.getValue(); });
+        config_touch_scale_select(leftPane, rightPane);
         config_percent_select(leftPane, rightPane, getSettings().game.touchControlsOpacity,
             "Touch Opacity", "Adjusts the transparency of the on-screen controller.", 20, 100, 5,
             [] { return !getSettings().game.enableTouchControls.getValue(); });
@@ -2296,6 +2369,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Always collect Rupees even if your Wallet is too full.");
         addOption("No Sword Recoil", getSettings().game.noSwordRecoil,
             "Link will not recoil when his sword hits walls.");
+        addOption("Jump Button", getSettings().game.enableJumpButton,
+            "Enables the Wii U style ZL jump button and ZL+B jump attack.");
         addOption("No 2nd Fish for Cat", getSettings().game.no2ndFishForCat,
             "Skip needing to catch a second fish for Sera's cat.");
         addSpeedrunDisabledOption("Sun's Song (R+X)", getSettings().game.sunsSong,

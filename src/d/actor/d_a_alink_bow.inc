@@ -561,7 +561,9 @@ void daAlink_c::setBowSight() {
         checkSightLine(dist, &sight_pos);
         mSight.setPos(&sight_pos);
 #if TARGET_PC
-        if (dusk::UseThirdPersonAim() || dusk::UseCinemaAim()) {
+        if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+            (dusk::UseThirdPersonAim() || dusk::UseCinemaAim()))
+        {
             mSight.onDrawFlg();
         } else
 #endif
@@ -590,8 +592,12 @@ int daAlink_c::procBowSubjectInit() {
                             mpHIO->mItem.mBow.m.mStartInterpolation);
     mNormalSpeed = 0.0f;
 #if TARGET_PC
-    if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseCinemaAim()) {
-        setBodyAngleToCameraViewYaw();
+    if (dusk::UseCinemaAim()) {
+        if (mEquipItem == dItemNo_HAWK_ARROW_e) {
+            setBodyAngleToCameraView();
+        } else {
+            setBodyAngleToCameraViewYaw();
+        }
     }
 #endif
     setBowOrSlingStatus();
@@ -642,7 +648,9 @@ int daAlink_c::procBowSubject() {
 
     if (!checkNextAction(0)) {
 #if TARGET_PC
-        if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseCinemaAim()) {
+        if (mEquipItem != dItemNo_HAWK_ARROW_e &&
+            dusk::UseCinemaAim())
+        {
             if (setBodyAngleToCameraCStick()) {
                 setBowSight();
             }
