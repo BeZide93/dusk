@@ -2829,12 +2829,10 @@ void dMeter2Draw_c::drawButtonB(u8 i_action, bool param_1, f32 i_posX, f32 i_pos
 }
 
 void dMeter2Draw_c::drawButtonR(u8 unused0, u8 i_action, bool unused1, bool unused2) {
-    if (dusk::UseWiiUControllerStyle()) {
-        return;
+    if (!dusk::UseWiiUControllerStyle()) {
+        mpScreen->search(MULTI_CHAR('item_r_n'))->hide();
+        mpTextXY[2]->show();
     }
-
-    mpScreen->search(MULTI_CHAR('item_r_n'))->hide();
-    mpTextXY[2]->show();
 
     getActionString(i_action, 1, &field_0x768[2]);
     if (dComIfGp_isRSetFlag(2) || dComIfGp_isRSetFlag(4)) {

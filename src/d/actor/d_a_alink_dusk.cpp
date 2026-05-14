@@ -35,8 +35,8 @@ void daAlink_c::handleWolfHowl() {
 
         mDoCPd_c::getCpadInfo(PAD_1).mPressedButtonFlags = 0;
 
-        // Ensure that the Z Button is not dimmed
-        if (meterDrawPtr->getButtonZAlpha() != 1.f) {
+        // In Wii U style the Wolf Midna prompt is no longer driven by the Z button alpha.
+        if (!dusk::UseWiiUControllerStyle() && meterDrawPtr->getButtonZAlpha() != 1.f) {
             Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
             return;
         }
@@ -46,6 +46,8 @@ void daAlink_c::handleWolfHowl() {
         if (mLinkAcch.ChkGroundHit() && !checkModeFlg(MODE_PLAYER_FLY) && !checkMagneBootsOn()) {
             if (checkMidnaRide()) {
                 if ((checkWolf() &&
+                     dusk::UseWiiUControllerStyle()) ||
+                    (checkWolf() &&
                      (checkModeFlg(MODE_UNK_1000) || dComIfGp_checkPlayerStatus0(0, 0x10))) ||
                     (!checkWolf() &&
                      (checkEventRun() || getMidnaActor()->checkMetamorphoseEnable()) &&
@@ -101,8 +103,8 @@ void daAlink_c::handleQuickTransform() {
         return;
     }
 
-    // Ensure that the Z Button is not dimmed
-    if (meterDrawPtr->getButtonZAlpha() != 1.f) {
+    // In Wii U style the Midna shortcut is no longer driven by the Z button alpha.
+    if (!dusk::UseWiiUControllerStyle() && meterDrawPtr->getButtonZAlpha() != 1.f) {
         Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
         return;
     }
@@ -124,6 +126,8 @@ void daAlink_c::handleQuickTransform() {
     if (mLinkAcch.ChkGroundHit() && !checkModeFlg(MODE_PLAYER_FLY) && !checkMagneBootsOn()) {
         if (checkMidnaRide()) {
             if ((checkWolf() &&
+                 dusk::UseWiiUControllerStyle()) ||
+                (checkWolf() &&
                  (checkModeFlg(MODE_UNK_1000) || dComIfGp_checkPlayerStatus0(0, 0x10))) ||
                 (!checkWolf() &&
                  (checkEventRun() || getMidnaActor()->checkMetamorphoseEnable()) &&
