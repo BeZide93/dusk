@@ -398,9 +398,12 @@ public:
     void startNewGameNameInput();
     #if TARGET_PC
     void setYesNoLabels(bool);
+    void setStartNewGamePlusLabels();
     void headerTxtSetRaw(const char*, u8, u8);
     bool isValidNewGamePlusSource(u8, u8);
     u8 findNewGamePlusSource(u8);
+    bool shouldOfferNewGamePlusOverwrite();
+    void startNewGamePlusOverwritePrompt();
     void startSkipIntroPrompt();
     void applyNewGamePlusCarryOver();
     void applySkipIntroPreset();
@@ -729,7 +732,8 @@ public:
     u8 mNewGamePlusTargetSlot;
     bool mNewGamePlusPending;
     bool mSkipIntroPending;
-    u8 mNewGamePlusPad[3];
+    bool mNewGamePlusOverwritePrompt;
+    u8 mNewGamePlusPad[2];
     #endif
 
     #if PLATFORM_GCN
