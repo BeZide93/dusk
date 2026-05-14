@@ -240,6 +240,9 @@ struct UserSettings {
         ConfigVar<float> inputViewerScale;
         ConfigVar<bool> hudButtonBackground;
         ConfigVar<int> hudButtonEditTarget;
+        ConfigVar<float> hudButtonBackgroundOffsetX;
+        ConfigVar<float> hudButtonBackgroundOffsetY;
+        ConfigVar<float> hudButtonBackgroundScale;
         ConfigVar<float> hudButtonAOffsetX;
         ConfigVar<float> hudButtonAOffsetY;
         ConfigVar<float> hudButtonAScale;
@@ -277,6 +280,9 @@ struct UserSettings {
         ConfigVar<float> hudRupeesOffsetX;
         ConfigVar<float> hudRupeesOffsetY;
         ConfigVar<float> hudRupeesScale;
+        ConfigVar<float> hudOilOffsetX;
+        ConfigVar<float> hudOilOffsetY;
+        ConfigVar<float> hudOilScale;
         ConfigVar<float> hudDPadOffsetX;
         ConfigVar<float> hudDPadOffsetY;
         ConfigVar<float> hudDPadScale;

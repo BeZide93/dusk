@@ -136,6 +136,9 @@ UserSettings g_userSettings = {
         .inputViewerScale {"game.inputViewerScale", 1.0f},
         .hudButtonBackground {"game.hudButtonBackground", true},
         .hudButtonEditTarget {"game.hudButtonEditTarget", 0},
+        .hudButtonBackgroundOffsetX {"game.hudButtonBackgroundOffsetX", 0.0f},
+        .hudButtonBackgroundOffsetY {"game.hudButtonBackgroundOffsetY", 0.0f},
+        .hudButtonBackgroundScale {"game.hudButtonBackgroundScale", 1.0f},
         .hudButtonAOffsetX {"game.hudButtonAOffsetX", 0.0f},
         .hudButtonAOffsetY {"game.hudButtonAOffsetY", 0.0f},
         .hudButtonAScale {"game.hudButtonAScale", 1.0f},
@@ -173,6 +176,9 @@ UserSettings g_userSettings = {
         .hudRupeesOffsetX {"game.hudRupeesOffsetX", 0.0f},
         .hudRupeesOffsetY {"game.hudRupeesOffsetY", 0.0f},
         .hudRupeesScale {"game.hudRupeesScale", 1.0f},
+        .hudOilOffsetX {"game.hudOilOffsetX", 0.0f},
+        .hudOilOffsetY {"game.hudOilOffsetY", 0.0f},
+        .hudOilScale {"game.hudOilScale", 1.0f},
         .hudDPadOffsetX {"game.hudDPadOffsetX", 0.0f},
         .hudDPadOffsetY {"game.hudDPadOffsetY", 0.0f},
         .hudDPadScale {"game.hudDPadScale", 1.0f},
@@ -418,6 +424,9 @@ void registerSettings() {
     Register(g_userSettings.game.inputViewerScale);
     Register(g_userSettings.game.hudButtonBackground);
     Register(g_userSettings.game.hudButtonEditTarget);
+    Register(g_userSettings.game.hudButtonBackgroundOffsetX);
+    Register(g_userSettings.game.hudButtonBackgroundOffsetY);
+    Register(g_userSettings.game.hudButtonBackgroundScale);
     Register(g_userSettings.game.hudButtonAOffsetX);
     Register(g_userSettings.game.hudButtonAOffsetY);
     Register(g_userSettings.game.hudButtonAScale);
@@ -455,6 +464,9 @@ void registerSettings() {
     Register(g_userSettings.game.hudRupeesOffsetX);
     Register(g_userSettings.game.hudRupeesOffsetY);
     Register(g_userSettings.game.hudRupeesScale);
+    Register(g_userSettings.game.hudOilOffsetX);
+    Register(g_userSettings.game.hudOilOffsetY);
+    Register(g_userSettings.game.hudOilScale);
     Register(g_userSettings.game.hudDPadOffsetX);
     Register(g_userSettings.game.hudDPadOffsetY);
     Register(g_userSettings.game.hudDPadScale);

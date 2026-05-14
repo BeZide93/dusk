@@ -218,7 +218,7 @@ private:
     /* 0x440 */ CPaneMgrAlpha* mpHeartBase[20];
     /* 0x490 */ CPaneMgr* mpJujiI[5];
     /* 0x4A4 */ CPaneMgr* mpJujiM[5];
-    /* 0x4B8 */ CPaneMgrAlpha* mpUzu;
+    /* 0x4B8 */ CPaneMgr* mpUzu;
     /* 0x4BC */ u8 field_0x4bc[0x28];
     /* 0x4E4 */ ResTIMG* mpItemBTex[2][2];
     /* 0x4F4 */ ResTIMG* mpItemXYTex[2][2][2];

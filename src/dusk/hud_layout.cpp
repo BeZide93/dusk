@@ -34,10 +34,14 @@ ConfigVar<float>& offset_x_var(Element element) noexcept {
         return settings.hudHeartsOffsetX;
     case Element::Rupees:
         return settings.hudRupeesOffsetX;
+    case Element::Oil:
+        return settings.hudOilOffsetX;
     case Element::DPad:
         return settings.hudDPadOffsetX;
     case Element::Minimap:
         return settings.hudMinimapOffsetX;
+    case Element::ButtonBackground:
+        return settings.hudButtonBackgroundOffsetX;
     case Element::A:
     default:
         return settings.hudButtonAOffsetX;
@@ -59,10 +63,14 @@ ConfigVar<float>& offset_y_var(Element element) noexcept {
         return settings.hudHeartsOffsetY;
     case Element::Rupees:
         return settings.hudRupeesOffsetY;
+    case Element::Oil:
+        return settings.hudOilOffsetY;
     case Element::DPad:
         return settings.hudDPadOffsetY;
     case Element::Minimap:
         return settings.hudMinimapOffsetY;
+    case Element::ButtonBackground:
+        return settings.hudButtonBackgroundOffsetY;
     case Element::A:
     default:
         return settings.hudButtonAOffsetY;
@@ -84,10 +92,14 @@ ConfigVar<float>& scale_var(Element element) noexcept {
         return settings.hudHeartsScale;
     case Element::Rupees:
         return settings.hudRupeesScale;
+    case Element::Oil:
+        return settings.hudOilScale;
     case Element::DPad:
         return settings.hudDPadScale;
     case Element::Minimap:
         return settings.hudMinimapScale;
+    case Element::ButtonBackground:
+        return settings.hudButtonBackgroundScale;
     case Element::A:
     default:
         return settings.hudButtonAScale;
@@ -315,8 +327,11 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::Z);
     hash = hash_element(hash, Element::Hearts);
     hash = hash_element(hash, Element::Rupees);
+    hash = hash_element(hash, Element::Oil);
     hash = hash_element(hash, Element::DPad);
     hash = hash_element(hash, Element::Minimap);
+    hash = hash_element(hash, Element::ButtonBackground);
+    hash = hash_int(hash, getSettings().game.hudButtonBackground.getValue() ? 1 : 0);
     hash = hash_int(
         hash, static_cast<int>(getSettings().game.hudMinimapSlideDirection.getValue()));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::A)));

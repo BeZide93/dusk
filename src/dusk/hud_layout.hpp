@@ -20,8 +20,10 @@ enum class Element {
     Z,
     Hearts,
     Rupees,
+    Oil,
     DPad,
     Minimap,
+    ButtonBackground,
 };
 
 enum class ItemAnchor : int {

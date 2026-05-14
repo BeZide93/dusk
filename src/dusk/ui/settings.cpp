@@ -133,6 +133,8 @@ constexpr std::array kHudElementNames = {
     "Rupees",
     "D-Pad",
     "Minimap",
+    "Oil",
+    "Button Backing",
 };
 
 constexpr std::array kHudItemAnchors = {
@@ -484,6 +486,10 @@ hud_layout::Element hud_element_id(int index) {
         return hud_layout::Element::DPad;
     case 8:
         return hud_layout::Element::Minimap;
+    case 9:
+        return hud_layout::Element::Oil;
+    case 10:
+        return hud_layout::Element::ButtonBackground;
     case 0:
     default:
         return hud_layout::Element::A;
@@ -533,6 +539,10 @@ ConfigVar<float>& hud_element_offset_x(int index) {
         return game.hudDPadOffsetX;
     case 8:
         return game.hudMinimapOffsetX;
+    case 9:
+        return game.hudOilOffsetX;
+    case 10:
+        return game.hudButtonBackgroundOffsetX;
     case 0:
     default:
         return game.hudButtonAOffsetX;
@@ -558,6 +568,10 @@ ConfigVar<float>& hud_element_offset_y(int index) {
         return game.hudDPadOffsetY;
     case 8:
         return game.hudMinimapOffsetY;
+    case 9:
+        return game.hudOilOffsetY;
+    case 10:
+        return game.hudButtonBackgroundOffsetY;
     case 0:
     default:
         return game.hudButtonAOffsetY;
@@ -583,6 +597,10 @@ ConfigVar<float>& hud_element_scale(int index) {
         return game.hudDPadScale;
     case 8:
         return game.hudMinimapScale;
+    case 9:
+        return game.hudOilScale;
+    case 10:
+        return game.hudButtonBackgroundScale;
     case 0:
     default:
         return game.hudButtonAScale;
@@ -1006,7 +1024,7 @@ json export_hud_layout_json() {
     }
 
     return {
-        {"version", 6},
+        {"version", 7},
         {"background", getSettings().game.hudButtonBackground.getValue()},
         {"elements", std::move(elements)},
     };

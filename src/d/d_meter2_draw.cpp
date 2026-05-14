@@ -405,6 +405,19 @@ dusk::hud_layout::Button hud_xy_button(int i_no) {
                                                dusk::hud_layout::Button::X;
 }
 
+void apply_hud_button_background_layout(CPaneMgr* pane) {
+    if (pane == NULL) {
+        return;
+    }
+
+    const auto hudTransform =
+        dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::ButtonBackground);
+    const f32 hudScale = hudTransform.scale;
+    pane->scale(g_drawHIO.mButtonDisplayBackScale * hudScale,
+                g_drawHIO.mButtonDisplayBackScale * hudScale);
+    pane->paneTrans(hudTransform.offsetX, hudTransform.offsetY);
+}
+
 }  // namespace
 
 dMeter2Draw_c::dMeter2Draw_c(JKRExpHeap* mp_heap) {
@@ -1563,8 +1576,9 @@ void dMeter2Draw_c::initButton() {
     mpButtonXY[2] = JKR_NEW CPaneMgr(mpScreen, MULTI_CHAR('zbtn_n'), 2, NULL);
     JUT_ASSERT(0, mpButtonXY[2] != NULL);
 
-    mpUzu = JKR_NEW CPaneMgrAlpha(mpScreen, MULTI_CHAR('uzu_n'), 2, NULL);
+    mpUzu = JKR_NEW CPaneMgr(mpScreen, MULTI_CHAR('uzu_n'), 2, NULL);
     JUT_ASSERT(0, mpUzu != NULL);
+    apply_hud_button_background_layout(mpUzu);
 
     ResTIMG* timg = (ResTIMG*)dComIfGp_getMain2DArchive()->getResource(
         'TIMG', dMeter2Info_getNumberTextureName(0));
@@ -2074,6 +2088,9 @@ static f32 dummyLiteralOrder() {
 }
 
 void dMeter2Draw_c::drawKantera(s32 i_max, s32 i_oil, f32 i_posX, f32 i_posY) {
+    const auto hudTransform =
+        dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::Oil);
+    const f32 hudScale = hudTransform.scale;
     f32 var_f6 = mpMagicFrameR->getInitPosX() - mpMagicFrameL->getInitPosX();
     f32 var_f7 = 0.0f;
     f32 var_f4 = 0.0f;
@@ -2089,10 +2106,10 @@ void dMeter2Draw_c::drawKantera(s32 i_max, s32 i_oil, f32 i_posX, f32 i_posY) {
     field_0x5a8[1] = mpMagicFrameL->getInitPosY();
     field_0x5b4[1] = var_f4 * mpMagicBase->getInitSizeX();
     field_0x5c0[1] = mpMagicBase->getInitSizeY();
-    field_0x5cc[1] = g_drawHIO.mLanternMeterScale;
-    field_0x5d8[1] = g_drawHIO.mLanternMeterScale;
-    field_0x5e4[1] = i_posX;
-    field_0x5f0[1] = i_posY;
+    field_0x5cc[1] = g_drawHIO.mLanternMeterScale * hudScale;
+    field_0x5d8[1] = g_drawHIO.mLanternMeterScale * hudScale;
+    field_0x5e4[1] = i_posX + hudTransform.offsetX;
+    field_0x5f0[1] = i_posY + hudTransform.offsetY;
 }
 
 void dMeter2Draw_c::setAlphaKanteraChange(bool i_forceSet) {
@@ -2684,6 +2701,12 @@ void dMeter2Draw_c::drawButtonA(u8 i_action, f32 i_posX, f32 i_posY, f32 i_textP
                            hud_text_anchor_offset(dusk::hud_layout::Button::A, mpTextA) +
                            hudTransform.offsetX,
                        g_drawHIO.mButtonATextPosY + i_textPosY + hudTransform.offsetY);
+
+    apply_hud_button_background_layout(mpUzu);
+    if (mpUzu != NULL) {
+        mpUzu->setAlphaRate(
+            hud_button_background_alpha(mButtonBaseAlpha) * mpButtonParent->getAlphaRate());
+    }
 }
 
 void dMeter2Draw_c::drawButtonB(u8 i_action, bool param_1, f32 i_posX, f32 i_posY, f32 i_textPosX,
@@ -4405,6 +4428,21 @@ void dMeter2Draw_c::setItemParamZ(u8 i_itemNo) {
             mItemParams[SELECT_Z_e].num_pos_x = 1.4f;
             mItemParams[SELECT_Z_e].num_pos_y = -30.0f;
             mItemParams[SELECT_Z_e].num_scale = 0.8f;
+            break;
+        case dItemNo_BOMB_BAG_LV1_e:
+        case dItemNo_NORMAL_BOMB_e:
+        case dItemNo_WATER_BOMB_e:
+        case dItemNo_POKE_BOMB_e:
+        case dItemNo_BOMB_ARROW_e:
+        case dItemNo_PACHINKO_e:
+        case dItemNo_BEE_CHILD_e:
+            mItemParams[SELECT_Z_e].pos_x = g_drawHIO.field_0x1cc;
+            mItemParams[SELECT_Z_e].pos_y = g_drawHIO.field_0x1d0;
+            mItemParams[SELECT_Z_e].scale = g_drawHIO.field_0x1d4;
+            mItemParams[SELECT_Z_e].rotation = g_drawHIO.mButtonItemRotation[2];
+            mItemParams[SELECT_Z_e].num_pos_x = 14.0f;
+            mItemParams[SELECT_Z_e].num_pos_y = -30.0f;
+            mItemParams[SELECT_Z_e].num_scale = 0.75f;
             break;
         case dItemNo_KANTERA_e:
             mItemParams[SELECT_Z_e].pos_x = -6.6f;

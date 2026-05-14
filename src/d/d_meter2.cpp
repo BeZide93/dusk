@@ -803,6 +803,13 @@ void dMeter2_c::moveKantera() {
     var_r7 = 0;
     draw_kantera = false;
 
+    static u32 sOilLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sOilLayoutStamp != hudLayoutStamp) {
+        sOilLayoutStamp = hudLayoutStamp;
+        draw_kantera = true;
+    }
+
     if (dComIfGp_getItemMaxOilCount() != 0) {
         var_r7 = dComIfGs_getMaxOil() + dComIfGp_getItemMaxOilCount();
         if (var_r7 > max_oil) {
