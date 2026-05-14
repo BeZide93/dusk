@@ -57,8 +57,15 @@ bool mappedButtonHeld(u32 port, PADButton button) {
         {
             continue;
         }
-        return SDL_GetGamepadButton(
-                   gamepad, static_cast<SDL_GamepadButton>(mappings[i].nativeButton)) != 0;
+        switch (mappings[i].nativeButton) {
+        case PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER:
+            return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384;
+        case PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER:
+            return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384;
+        default:
+            return SDL_GetGamepadButton(
+                       gamepad, static_cast<SDL_GamepadButton>(mappings[i].nativeButton)) != 0;
+        }
     }
 
     return false;
