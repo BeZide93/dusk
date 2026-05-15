@@ -22,11 +22,11 @@ Branch: `Adreno-fixes`
 
 - Keep Dawn robustness enabled on Android release-style builds by not enabling the `disable_robustness` toggle on Android.
 - Clamp GX position/normal matrix indices to the valid `MaxPnMtx` range before indexing `postex_mtx` and `nrm_mtx`.
+- Pass indexed vertex array upload sizes to the shader and clamp indexed attribute fetches to the last safe entry.
 
 ## Follow-Up Fixes If Needed
 
 - Add Adreno adapter detection using `g_adapterInfo.device`/`description` and gate the workaround only to Adreno.
-- Add array-size metadata to the GX uniform and bounds-check indexed vertex attribute fetches.
 - Add zero padding around vertex/storage uploads to make unaligned word-boundary reads safer.
 - If driver issues persist, investigate a CPU-normalized vertex decode path or real WebGPU vertex attributes for Adreno.
 
