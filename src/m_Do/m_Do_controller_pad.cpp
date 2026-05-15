@@ -34,6 +34,17 @@ void resetWiiUPhysicalShoulderState(u32 port) {
     }
 }
 
+bool nativeButtonHeld(SDL_Gamepad* gamepad, u32 nativeButton) {
+    switch (nativeButton) {
+    case PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER:
+        return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384;
+    case PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER:
+        return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384;
+    default:
+        return SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(nativeButton)) != 0;
+    }
+}
+
 bool mappedButtonHeld(u32 port, PADButton button) {
     const s32 index = PADGetIndexForPort(port);
     if (index < 0) {
@@ -57,15 +68,46 @@ bool mappedButtonHeld(u32 port, PADButton button) {
         {
             continue;
         }
-        switch (mappings[i].nativeButton) {
-        case PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER:
-            return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384;
-        case PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER:
-            return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384;
-        default:
-            return SDL_GetGamepadButton(
-                       gamepad, static_cast<SDL_GamepadButton>(mappings[i].nativeButton)) != 0;
+        return nativeButtonHeld(gamepad, mappings[i].nativeButton);
+    }
+
+    return false;
+}
+
+bool mappedButtonHeldUnlessSameNativeAs(u32 port, PADButton button, PADButton conflictButton) {
+    const s32 index = PADGetIndexForPort(port);
+    if (index < 0) {
+        return false;
+    }
+
+    SDL_Gamepad* gamepad = PADGetSDLGamepadForIndex(static_cast<u32>(index));
+    if (gamepad == nullptr) {
+        return false;
+    }
+
+    u32 count = 0;
+    PADButtonMapping* mappings = PADGetButtonMappings(port, &count);
+    if (mappings == nullptr) {
+        return false;
+    }
+
+    for (u32 i = 0; i < count; ++i) {
+        if (mappings[i].padButton != button ||
+            mappings[i].nativeButton == PAD_NATIVE_BUTTON_INVALID ||
+            !nativeButtonHeld(gamepad, mappings[i].nativeButton))
+        {
+            continue;
         }
+
+        for (u32 j = 0; j < count; ++j) {
+            if (mappings[j].padButton == conflictButton &&
+                mappings[j].nativeButton == mappings[i].nativeButton)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     return false;
@@ -91,7 +133,9 @@ void remapWiiUPhysicalShoulders(interface_of_controller_pad* interface, u32 port
     const bool mappedZLHeld = useWiiUStyle && mappedButtonHeld(port, PAD_TRIGGER_ZL);
     const bool mappedZLPressed = mappedZLHeld && !sWiiUMappedZLHeld[port];
     sWiiUMappedZLHeld[port] = mappedZLHeld;
-    const bool mappedZRHeld = useWiiUStyle && mappedButtonHeld(port, PAD_TRIGGER_R);
+    const bool mappedZRHeld = useWiiUStyle &&
+                              mappedButtonHeldUnlessSameNativeAs(
+                                  port, PAD_TRIGGER_R, PAD_TRIGGER_Z);
 
     bool physicalZLHeld = false;
     bool physicalZLPressed = false;
@@ -122,6 +166,11 @@ void remapWiiUPhysicalShoulders(interface_of_controller_pad* interface, u32 port
     interface->mButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
     interface->mPressedButtonFlags &= ~(PAD_TRIGGER_L | PAD_TRIGGER_ZL);
     interface->mTriggerLeft = 0.0f;
+    if (useWiiUStyle) {
+        interface->mButtonFlags &= ~PAD_TRIGGER_R;
+        interface->mPressedButtonFlags &= ~PAD_TRIGGER_R;
+        interface->mTriggerRight = 0.0f;
+    }
 
     if (physicalLHeld) {
         interface->mButtonFlags |= PAD_TRIGGER_L;
