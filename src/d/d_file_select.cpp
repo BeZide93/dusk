@@ -1635,7 +1635,6 @@ void dFile_select_c::applySkipIntroPreset() {
         dSv_event_flag_c::F_0212,
         dSv_event_flag_c::F_0222,
         dSv_event_flag_c::F_0223,
-        dSv_event_flag_c::F_0226,
         dSv_event_flag_c::F_0363,
         dSv_event_flag_c::F_0364,
         dSv_event_flag_c::F_0537,
@@ -1660,6 +1659,7 @@ void dFile_select_c::applySkipIntroPreset() {
         dSv_event_flag_c::M_016,
         dSv_event_flag_c::M_019,
         dSv_event_flag_c::M_020,
+        dSv_event_flag_c::M_021,
         dSv_event_flag_c::M_067,
         dSv_event_flag_c::M_068,
         dSv_event_flag_c::M_072,
@@ -1672,6 +1672,8 @@ void dFile_select_c::applySkipIntroPreset() {
 
     dComIfGs_onTransformLV(0);
     dComIfGs_onDarkClearLV(0);
+    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 71);
+    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 2);
     dComIfGs_setTransformStatus(TF_STATUS_HUMAN);
     dComIfGs_setLightDropNum(FARON_VESSEL, 16);
     dComIfGs_onLightDropGetFlag(FARON_VESSEL);

@@ -71,17 +71,39 @@ int currentNewGamePlusCount() {
     return dComIfGs_getSaveData()->getReserve().getNewGamePlusCount();
 }
 
-bool damageMultiplierLockedToNewGamePlus() {
-    return currentNewGamePlusCount() != 0;
-}
-
-int currentDamageMultiplier() {
+int automaticNewGamePlusDamageMultiplier() {
     const int newGamePlusCount = currentNewGamePlusCount();
     if (newGamePlusCount != 0) {
         return newGamePlusCount;
     }
 
-    return getSettings().game.damageMultiplier.getValue();
+    return 1;
+}
+
+int currentDamageMultiplier() {
+    return std::max(
+        getSettings().game.damageMultiplier.getValue(),
+        automaticNewGamePlusDamageMultiplier());
+}
+
+int automaticNewGamePlusHealthScalePercent() {
+    int newGamePlusCount = currentNewGamePlusCount();
+    if (newGamePlusCount == 0) {
+        return 100;
+    }
+
+    newGamePlusCount = std::clamp(newGamePlusCount, 1, 9);
+    return 200 + newGamePlusCount * 10;
+}
+
+int currentNewGamePlusHealthScalePercent() {
+    const int automaticScale = automaticNewGamePlusHealthScalePercent();
+    const int manualScale = getSettings().game.newGamePlusHealthScalePercent.getValue();
+    if (manualScale > 0) {
+        return std::max(manualScale, automaticScale);
+    }
+
+    return automaticScale;
 }
 
 constexpr SDL_DialogFileFilter kCardImageSaveFilters[] = {
@@ -135,6 +157,7 @@ constexpr std::array kHudElementNames = {
     "Minimap",
     "Oil",
     "Button Backing",
+    "Midna",
 };
 
 constexpr std::array kHudItemAnchors = {
@@ -490,6 +513,8 @@ hud_layout::Element hud_element_id(int index) {
         return hud_layout::Element::Oil;
     case 10:
         return hud_layout::Element::ButtonBackground;
+    case 11:
+        return hud_layout::Element::Midna;
     case 0:
     default:
         return hud_layout::Element::A;
@@ -543,6 +568,8 @@ ConfigVar<float>& hud_element_offset_x(int index) {
         return game.hudOilOffsetX;
     case 10:
         return game.hudButtonBackgroundOffsetX;
+    case 11:
+        return game.hudMidnaOffsetX;
     case 0:
     default:
         return game.hudButtonAOffsetX;
@@ -572,6 +599,8 @@ ConfigVar<float>& hud_element_offset_y(int index) {
         return game.hudOilOffsetY;
     case 10:
         return game.hudButtonBackgroundOffsetY;
+    case 11:
+        return game.hudMidnaOffsetY;
     case 0:
     default:
         return game.hudButtonAOffsetY;
@@ -601,6 +630,8 @@ ConfigVar<float>& hud_element_scale(int index) {
         return game.hudOilScale;
     case 10:
         return game.hudButtonBackgroundScale;
+    case 11:
+        return game.hudMidnaScale;
     case 0:
     default:
         return game.hudButtonAScale;
@@ -1024,8 +1055,9 @@ json export_hud_layout_json() {
     }
 
     return {
-        {"version", 7},
+        {"version", 8},
         {"background", getSettings().game.hudButtonBackground.getValue()},
+        {"roundXYButtons", getSettings().game.hudRoundXYButtons.getValue()},
         {"elements", std::move(elements)},
     };
 }
@@ -1053,6 +1085,8 @@ bool import_hud_layout_json(const json& root) {
     auto& game = getSettings().game;
     game.hudButtonBackground.setValue(
         json_value_or(*hud, "background", game.hudButtonBackground.getValue()));
+    game.hudRoundXYButtons.setValue(
+        json_value_or(*hud, "roundXYButtons", game.hudRoundXYButtons.getValue()));
     const auto buttons = hud->find("buttons");
     if (buttons != hud->end() && buttons->is_object()) {
         for (size_t i = 0; i < 5; ++i) {
@@ -2334,30 +2368,51 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .getValue = [] { return currentDamageMultiplier(); },
                 .setValue =
                     [](int value) {
-                        if (damageMultiplierLockedToNewGamePlus()) {
-                            return;
-                        }
-                        getSettings().game.damageMultiplier.setValue(value);
+                        getSettings().game.damageMultiplier.setValue(
+                            std::max(value, automaticNewGamePlusDamageMultiplier()));
                         config::Save();
                     },
-                .isDisabled =
-                    [] {
-                        return getSettings().game.speedrunMode ||
-                               damageMultiplierLockedToNewGamePlus();
-                    },
+                .isDisabled = [] { return getSettings().game.speedrunMode; },
                 .isModified =
                     [] {
                         return currentDamageMultiplier() !=
                                getSettings().game.damageMultiplier.getDefaultValue();
                     },
                 .min = 1,
-                .max = 8,
+                .max = 99,
                 .suffix = "×",
             }),
             rightPane, [](Pane& pane) {
                 pane.clear();
                 pane.add_text(
-                    "Multiplies incoming damage. New Game+ saves use their + count.");
+                    "Multiplies incoming damage. New Game+ saves use at least their + count.");
+            });
+        leftPane.register_control(
+            leftPane.add_child<NumberButton>(NumberButton::Props{
+                .key = "Enemy HP Scale",
+                .getValue = [] { return currentNewGamePlusHealthScalePercent(); },
+                .setValue =
+                    [](int value) {
+                        const int minimumScale = automaticNewGamePlusHealthScalePercent();
+                        getSettings().game.newGamePlusHealthScalePercent.setValue(
+                            std::max(value, minimumScale));
+                        config::Save();
+                    },
+                .isDisabled = [] { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return currentNewGamePlusHealthScalePercent() != 100;
+                    },
+                .min = 100,
+                .max = 9999,
+                .step = 10,
+                .suffix = "%",
+            }),
+            rightPane, [](Pane& pane) {
+                pane.clear();
+                pane.add_text(
+                    "Scales enemy health when enemies spawn. By default, NG+1 shows 210%, "
+                    "NG+2 shows 220%, up to 290%. Manual values also apply outside NG+.");
             });
         addSpeedrunDisabledOption(
             "Instant Death", getSettings().game.instantDeath, "Any hit will instantly kill you.");
@@ -2659,6 +2714,11 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             {
                 .key = "HUD Backing Texture",
                 .helpText = "Shows the decorative backing behind the in-game HUD buttons.",
+            });
+        config_bool_select(leftPane, rightPane, getSettings().game.hudRoundXYButtons,
+            {
+                .key = "Round X/Y Buttons",
+                .helpText = "Uses the round A/B-style HUD art for the X and Y buttons.",
             });
         leftPane.register_control(
             leftPane.add_select_button({

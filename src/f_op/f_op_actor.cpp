@@ -18,6 +18,7 @@
 #include "f_pc/f_pc_manager.h"
 #include "f_pc/f_pc_debug_sv.h"
 #include "c/c_dylink.h"
+#include "dusk/settings.h"
 #include "m_Do/m_Do_printf.h"
 
 #if DEBUG
@@ -404,16 +405,27 @@ static s16 scaleNewGamePlusEnemyHealthValue(s16 i_health) {
         return i_health;
     }
 
+    int healthScalePercent =
+        dusk::getSettings().game.newGamePlusHealthScalePercent.getValue();
     u8 newGamePlusCount = dComIfGs_getSaveData()->getReserve().getNewGamePlusCount();
-    if (newGamePlusCount == 0) {
+    if (newGamePlusCount != 0) {
+        if (newGamePlusCount > 9) {
+            newGamePlusCount = 9;
+        }
+
+        const int automaticScalePercent = 200 + newGamePlusCount * 10;
+        if (healthScalePercent <= 0) {
+            healthScalePercent = automaticScalePercent;
+        } else if (healthScalePercent < automaticScalePercent) {
+            healthScalePercent = automaticScalePercent;
+        }
+    } else if (healthScalePercent <= 0) {
         return i_health;
     }
 
-    if (newGamePlusCount > 9) {
-        newGamePlusCount = 9;
-    }
+    healthScalePercent = cLib_minMaxLimit<int>(healthScalePercent, 1, 9999);
 
-    int scaledHealth = (static_cast<int>(i_health) * (20 + newGamePlusCount) + 9) / 10;
+    int scaledHealth = (static_cast<int>(i_health) * healthScalePercent + 99) / 100;
     if (scaledHealth > 0x7fff) {
         scaledHealth = 0x7fff;
     }

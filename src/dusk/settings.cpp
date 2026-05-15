@@ -42,6 +42,7 @@ UserSettings g_userSettings = {
         .noSwordRecoil {"game.noSwordRecoil", false},
         .enableJumpButton {"game.enableJumpButton", true},
         .damageMultiplier {"game.damageMultiplier", 1},
+        .newGamePlusHealthScalePercent {"game.newGamePlusHealthScalePercent", 0},
         .noHeartDrops {"game.noHeartDrops", false},
         .instantDeath {"game.instantDeath", false},
         .fastClimbing {"game.fastClimbing", false},
@@ -135,6 +136,7 @@ UserSettings g_userSettings = {
         .inputViewerLayout {"game.inputViewerLayout", ControllerOverlayLayout::GameCube},
         .inputViewerScale {"game.inputViewerScale", 1.0f},
         .hudButtonBackground {"game.hudButtonBackground", true},
+        .hudRoundXYButtons {"game.hudRoundXYButtons", true},
         .hudButtonEditTarget {"game.hudButtonEditTarget", 0},
         .hudButtonBackgroundOffsetX {"game.hudButtonBackgroundOffsetX", 0.0f},
         .hudButtonBackgroundOffsetY {"game.hudButtonBackgroundOffsetY", 0.0f},
@@ -170,6 +172,9 @@ UserSettings g_userSettings = {
         .hudButtonZScale {"game.hudButtonZScale", 1.0f},
         .hudButtonZItemScale {"game.hudButtonZItemScale", 1.0f},
         .hudButtonZTextScale {"game.hudButtonZTextScale", 1.0f},
+        .hudMidnaOffsetX {"game.hudMidnaOffsetX", 0.0f},
+        .hudMidnaOffsetY {"game.hudMidnaOffsetY", 0.0f},
+        .hudMidnaScale {"game.hudMidnaScale", 1.0f},
         .hudHeartsOffsetX {"game.hudHeartsOffsetX", 0.0f},
         .hudHeartsOffsetY {"game.hudHeartsOffsetY", 0.0f},
         .hudHeartsScale {"game.hudHeartsScale", 1.0f},
@@ -338,6 +343,7 @@ void registerSettings() {
     Register(g_userSettings.game.noSwordRecoil);
     Register(g_userSettings.game.enableJumpButton);
     Register(g_userSettings.game.damageMultiplier);
+    Register(g_userSettings.game.newGamePlusHealthScalePercent);
     Register(g_userSettings.game.noHeartDrops);
     Register(g_userSettings.game.instantDeath);
     Register(g_userSettings.game.fastClimbing);
@@ -423,6 +429,7 @@ void registerSettings() {
     Register(g_userSettings.game.inputViewerLayout);
     Register(g_userSettings.game.inputViewerScale);
     Register(g_userSettings.game.hudButtonBackground);
+    Register(g_userSettings.game.hudRoundXYButtons);
     Register(g_userSettings.game.hudButtonEditTarget);
     Register(g_userSettings.game.hudButtonBackgroundOffsetX);
     Register(g_userSettings.game.hudButtonBackgroundOffsetY);
@@ -458,6 +465,9 @@ void registerSettings() {
     Register(g_userSettings.game.hudButtonZScale);
     Register(g_userSettings.game.hudButtonZItemScale);
     Register(g_userSettings.game.hudButtonZTextScale);
+    Register(g_userSettings.game.hudMidnaOffsetX);
+    Register(g_userSettings.game.hudMidnaOffsetY);
+    Register(g_userSettings.game.hudMidnaScale);
     Register(g_userSettings.game.hudHeartsOffsetX);
     Register(g_userSettings.game.hudHeartsOffsetY);
     Register(g_userSettings.game.hudHeartsScale);

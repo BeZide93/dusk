@@ -42,6 +42,8 @@ ConfigVar<float>& offset_x_var(Element element) noexcept {
         return settings.hudMinimapOffsetX;
     case Element::ButtonBackground:
         return settings.hudButtonBackgroundOffsetX;
+    case Element::Midna:
+        return settings.hudMidnaOffsetX;
     case Element::A:
     default:
         return settings.hudButtonAOffsetX;
@@ -71,6 +73,8 @@ ConfigVar<float>& offset_y_var(Element element) noexcept {
         return settings.hudMinimapOffsetY;
     case Element::ButtonBackground:
         return settings.hudButtonBackgroundOffsetY;
+    case Element::Midna:
+        return settings.hudMidnaOffsetY;
     case Element::A:
     default:
         return settings.hudButtonAOffsetY;
@@ -100,6 +104,8 @@ ConfigVar<float>& scale_var(Element element) noexcept {
         return settings.hudMinimapScale;
     case Element::ButtonBackground:
         return settings.hudButtonBackgroundScale;
+    case Element::Midna:
+        return settings.hudMidnaScale;
     case Element::A:
     default:
         return settings.hudButtonAScale;
@@ -331,7 +337,9 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::DPad);
     hash = hash_element(hash, Element::Minimap);
     hash = hash_element(hash, Element::ButtonBackground);
+    hash = hash_element(hash, Element::Midna);
     hash = hash_int(hash, getSettings().game.hudButtonBackground.getValue() ? 1 : 0);
+    hash = hash_int(hash, getSettings().game.hudRoundXYButtons.getValue() ? 1 : 0);
     hash = hash_int(
         hash, static_cast<int>(getSettings().game.hudMinimapSlideDirection.getValue()));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::A)));

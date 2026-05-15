@@ -146,6 +146,7 @@ struct UserSettings {
         ConfigVar<bool> noSwordRecoil;
         ConfigVar<bool> enableJumpButton;
         ConfigVar<int> damageMultiplier;
+        ConfigVar<int> newGamePlusHealthScalePercent;
         ConfigVar<bool> noHeartDrops;
         ConfigVar<bool> instantDeath;
         ConfigVar<bool> fastClimbing;
@@ -239,6 +240,7 @@ struct UserSettings {
         ConfigVar<ControllerOverlayLayout> inputViewerLayout;
         ConfigVar<float> inputViewerScale;
         ConfigVar<bool> hudButtonBackground;
+        ConfigVar<bool> hudRoundXYButtons;
         ConfigVar<int> hudButtonEditTarget;
         ConfigVar<float> hudButtonBackgroundOffsetX;
         ConfigVar<float> hudButtonBackgroundOffsetY;
@@ -274,6 +276,9 @@ struct UserSettings {
         ConfigVar<float> hudButtonZScale;
         ConfigVar<float> hudButtonZItemScale;
         ConfigVar<float> hudButtonZTextScale;
+        ConfigVar<float> hudMidnaOffsetX;
+        ConfigVar<float> hudMidnaOffsetY;
+        ConfigVar<float> hudMidnaScale;
         ConfigVar<float> hudHeartsOffsetX;
         ConfigVar<float> hudHeartsOffsetY;
         ConfigVar<float> hudHeartsScale;

@@ -24,6 +24,7 @@ enum class Element {
     DPad,
     Minimap,
     ButtonBackground,
+    Midna,
 };
 
 enum class ItemAnchor : int {

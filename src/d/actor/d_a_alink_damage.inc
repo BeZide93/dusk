@@ -159,7 +159,7 @@ f32 daAlink_c::damageMagnification(BOOL i_checkZoraMag, int param_1) {
     #if TARGET_PC
     int damageMultiplier = dusk::getSettings().game.damageMultiplier.getValue();
     const int newGamePlusCount = dComIfGs_getSaveData()->getReserve().getNewGamePlusCount();
-    if (newGamePlusCount != 0) {
+    if (newGamePlusCount != 0 && damageMultiplier < newGamePlusCount) {
         damageMultiplier = newGamePlusCount;
     }
     base_mag *= damageMultiplier;
