@@ -895,6 +895,14 @@ public:
     void setNewGamePlusCount(u8 count);
     bool isIntroSkipped() const;
     void setIntroSkipped(bool enabled);
+    bool isBossRush() const;
+    void setBossRush(bool enabled);
+    u8 getBossRushIndex() const;
+    void setBossRushIndex(u8 index);
+    u8 getBossRushLoop() const;
+    void setBossRushLoop(u8 loop);
+    u8 getBossRushState() const;
+    void setBossRushState(u8 state);
 
 private:
     u8 unk[80];

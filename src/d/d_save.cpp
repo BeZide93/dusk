@@ -1588,6 +1588,51 @@ void dSv_reserve_c::setIntroSkipped(bool enabled) {
     }
 }
 
+bool dSv_reserve_c::isBossRush() const {
+    static const char magic[] = "DUSKBR1";
+    return memcmp(unk + 32, magic, sizeof(magic) - 1) == 0;
+}
+
+void dSv_reserve_c::setBossRush(bool enabled) {
+    static const char magic[] = "DUSKBR1";
+
+    if (enabled) {
+        memcpy(unk + 32, magic, sizeof(magic) - 1);
+    } else {
+        memset(unk + 32, 0, 16);
+    }
+}
+
+u8 dSv_reserve_c::getBossRushIndex() const {
+    return isBossRush() ? unk[40] : 0;
+}
+
+void dSv_reserve_c::setBossRushIndex(u8 index) {
+    if (isBossRush()) {
+        unk[40] = index;
+    }
+}
+
+u8 dSv_reserve_c::getBossRushLoop() const {
+    return isBossRush() ? unk[41] : 0;
+}
+
+void dSv_reserve_c::setBossRushLoop(u8 loop) {
+    if (isBossRush()) {
+        unk[41] = loop;
+    }
+}
+
+u8 dSv_reserve_c::getBossRushState() const {
+    return isBossRush() ? unk[42] : 0;
+}
+
+void dSv_reserve_c::setBossRushState(u8 state) {
+    if (isBossRush()) {
+        unk[42] = state;
+    }
+}
+
 void dSv_save_c::init() {
     mPlayer.init();
     for (int i = 0; i < STAGE_MAX; i++) {

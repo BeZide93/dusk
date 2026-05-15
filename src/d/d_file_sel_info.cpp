@@ -114,8 +114,13 @@ int dFile_info_c::setSaveData(dSv_save_c* i_savedata, BOOL i_validChksum, u8 i_d
             setPlayTime(i_savedata);
 
             u8 newGamePlusCount = i_savedata->getReserve().getNewGamePlusCount();
-            if (newGamePlusCount != 0) {
-                sprintf(mPlayerName, "%s +%u", player_name, newGamePlusCount);
+            bool isBossRush = i_savedata->getReserve().isBossRush();
+            if (newGamePlusCount != 0 && isBossRush) {
+                snprintf(mPlayerName, 0x40, "%s +%u BR", player_name, newGamePlusCount);
+            } else if (newGamePlusCount != 0) {
+                snprintf(mPlayerName, 0x40, "%s +%u", player_name, newGamePlusCount);
+            } else if (isBossRush) {
+                snprintf(mPlayerName, 0x40, "%s BR", player_name);
             } else {
                 strcpy(mPlayerName, player_name);
             }

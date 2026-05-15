@@ -18,6 +18,7 @@
 #include "Z2AudioLib/Z2Instances.h"
 
 #include "dusk/frame_interpolation.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/settings.h"
 #if TARGET_PC
 #include "dusk/achievements.h"
@@ -3663,6 +3664,15 @@ static void demo_camera(b_gnd_class* i_this) {
             }
 
             if (i_this->mDemoCamTimer == 330) {
+                if (dusk::bossrush::complete_ganondorf_sequence()) {
+                    camera->mCamera.Start();
+                    camera->mCamera.SetTrimSize(0);
+                    dComIfGp_event_reset();
+                    i_this->mDemoCamMode = 0;
+                    i_this->mDemoCamTimer = 0;
+                    return;
+                }
+
                 dStage_changeScene(0, 0.0f, 0, fopAcM_GetRoomNo(a_this), 0, -1);
             }
         }

@@ -16,6 +16,7 @@
 #include "d/d_meter2_info.h"
 #include "d/d_msg_string.h"
 #include "d/d_s_play.h"
+#include "dusk/bossrush.hpp"
 #include "f_op/f_op_msg_mng.h"
 #include "m_Do/m_Do_MemCardRWmng.h"
 #include "m_Do/m_Do_Reset.h"
@@ -329,6 +330,11 @@ static DataSelProcFunc DataSelProc[] = {
     &dFile_select_c::newGamePlusSourceMoveAnm,
     &dFile_select_c::newGamePlusSourceReturnAnm,
     &dFile_select_c::newGamePlusSourceCancel,
+    &dFile_select_c::bossRushModeIn,
+    &dFile_select_c::bossRushModeSelect,
+    &dFile_select_c::bossRushModeCursorMove,
+    &dFile_select_c::bossRushModeClose,
+    &dFile_select_c::bossRushModeCancel,
     &dFile_select_c::skipIntroModeIn,
     &dFile_select_c::skipIntroModeSelect,
     &dFile_select_c::skipIntroModeCursorMove,
@@ -842,6 +848,15 @@ void dFile_select_c::setStartNewGamePlusLabels() {
     }
 }
 
+void dFile_select_c::setBossRushLabels() {
+    static const char* labels[2] = {"New Game", "Bossrush"};
+
+    for (int i = 0; i < 2; i++) {
+        J2DTextBox* textBox = (J2DTextBox*)mYnSelTxtPane[i]->getPanePtr();
+        textBox->setString(labels[i]);
+    }
+}
+
 void dFile_select_c::headerTxtSetRaw(const char* i_text, u8 i_type, u8 param_3) {
     u8 dispIdx = mHeaderTxtDispIdx ^ 1;
     if (param_3 != 0) {
@@ -906,6 +921,18 @@ void dFile_select_c::startNewGamePlusOverwritePrompt() {
     yesnoMenuMoveAnmInitSet(0x473, 0x47d);
     setStartNewGamePlusLabels();
     mDataSelProc = DATASELPROC_NEW_GAME_PLUS_MODE_IN;
+}
+
+void dFile_select_c::startBossRushPrompt() {
+    mBossRushPending = false;
+    field_0x0268 = 0;
+    field_0x0269 = 1;
+    dComIfGs_setDataNum(mSelectNum);
+    headerTxtSetRaw("Select story mode", 1, 0);
+    yesnoMenuMoveAnmInitSet(0x473, 0x47d);
+    setBossRushLabels();
+    modoruTxtDispAnmInit(1);
+    mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_IN;
 }
 
 static bool isIntroSkipBottleItem(u8 i_itemNo) {
@@ -996,6 +1023,7 @@ void dFile_select_c::startNewGameNameInput() {
     dComIfGs_getSaveData()->getReserve().setNewGamePlus(false);
     #if TARGET_PC
     dComIfGs_getSaveData()->getReserve().setIntroSkipped(false);
+    dComIfGs_getSaveData()->getReserve().setBossRush(false);
     #endif
     mDataSelProc = DATASELPROC_SELECT_DATA_NAME_MOVE;
 }
@@ -1028,6 +1056,7 @@ void dFile_select_c::dataSelectStart() {
         mNewGamePlusPending = false;
         mNewGamePlusOverwritePrompt = false;
         mSkipIntroPending = false;
+        mBossRushPending = false;
 
         if (findNewGamePlusSource(mNewGamePlusTargetSlot) != 0xff) {
             dComIfGs_setDataNum(mSelectNum);
@@ -1039,7 +1068,7 @@ void dFile_select_c::dataSelectStart() {
         #endif
         {
             #if TARGET_PC
-            startSkipIntroPrompt();
+            startBossRushPrompt();
             #else
             startNewGameNameInput();
             #endif
@@ -1303,7 +1332,11 @@ void dFile_select_c::newGamePlusModeCursorMove() {
 
 void dFile_select_c::newGamePlusModeCloseToName() {
     if (yesnoMenuMoveAnm()) {
-        startSkipIntroPrompt();
+        if (mNewGamePlusPending) {
+            startSkipIntroPrompt();
+        } else {
+            startBossRushPrompt();
+        }
     }
 }
 
@@ -1438,6 +1471,82 @@ void dFile_select_c::newGamePlusSourceCancel() {
     if (isHeaderTxtChange && isModoruTxtDisp && isDataSelectMove) {
         selFileCursorShow();
         mNewGamePlusTargetSlot = 0xff;
+        mDataSelProc = DATASELPROC_DATA_SELECT;
+    }
+}
+
+void dFile_select_c::bossRushModeIn() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::bossRushModeSelect() {
+    stick->checkTrigger();
+
+    if (mDoCPd_c::getTrigA(PAD_1) || mDoCPd_c::getTrigStart(PAD_1)) {
+        mDoAud_seStart(field_0x0268 != 0 ? Z2SE_SY_CURSOR_OK : Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mBossRushPending = field_0x0268 != 0;
+        mSelIcon->setAlphaRate(0.0f);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+        mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_CLOSE;
+    } else if (mDoCPd_c::getTrigB(PAD_1)) {
+        mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, NULL, 0, 0);
+        mBossRushPending = false;
+        mSelIcon->setAlphaRate(0.0f);
+        headerTxtSet(0x43, 1, 0);
+        yesnoMenuMoveAnmInitSet(0x47d, 0x473);
+        modoruTxtDispAnmInit(0);
+        mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_CANCEL;
+    } else if (stick->checkRightTrigger()) {
+        if (field_0x0268 != 0) {
+            mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+            field_0x0269 = field_0x0268;
+            field_0x0268 = 0;
+            yesnoSelectAnmSet();
+            mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_CURSOR_MOVE;
+        }
+    } else if (stick->checkLeftTrigger() && field_0x0268 != 1) {
+        mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+        field_0x0269 = field_0x0268;
+        field_0x0268 = 1;
+        yesnoSelectAnmSet();
+        mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_CURSOR_MOVE;
+    }
+}
+
+void dFile_select_c::bossRushModeCursorMove() {
+    bool isYnSelMove = yesnoSelectMoveAnm();
+    bool isYnWakuAlpha = yesnoWakuAlpahAnm(field_0x0269);
+
+    if (isYnSelMove && isYnWakuAlpha) {
+        yesnoCursorShow();
+        mDataSelProc = DATASELPROC_BOSS_RUSH_MODE_SELECT;
+    }
+}
+
+void dFile_select_c::bossRushModeClose() {
+    if (yesnoMenuMoveAnm()) {
+        if (mBossRushPending) {
+            startNewGameNameInput();
+        } else {
+            startSkipIntroPrompt();
+        }
+    }
+}
+
+void dFile_select_c::bossRushModeCancel() {
+    bool isHeaderTxtChange = headerTxtChangeAnm();
+    bool isYnMenuMove = yesnoMenuMoveAnm();
+    bool isModoruTxtDisp = modoruTxtDispAnm();
+
+    if (isHeaderTxtChange && isYnMenuMove && isModoruTxtDisp) {
+        selFileCursorShow();
         mDataSelProc = DATASELPROC_DATA_SELECT;
     }
 }
@@ -1729,6 +1838,16 @@ void dFile_select_c::applySkipIntroPreset() {
     save->getReserve().setIntroSkipped(true);
     dComIfGs_setLineUpItem();
     mSkipIntroPending = false;
+}
+
+void dFile_select_c::applyBossRushPreset() {
+    if (!mBossRushPending) {
+        dComIfGs_getSaveData()->getReserve().setBossRush(false);
+        return;
+    }
+
+    dusk::bossrush::apply_new_save_preset();
+    mBossRushPending = false;
 }
 #endif
 
@@ -2273,6 +2392,7 @@ void dFile_select_c::nameInput2() {
         #if TARGET_PC
         applyNewGamePlusCarryOver();
         applySkipIntroPreset();
+        applyBossRushPreset();
         #endif
         mIsSelectEnd = true;
         mDataSelProc = DATASELPROC_NEXT_MODE_WAIT;
@@ -4230,8 +4350,8 @@ void dFile_select_c::displayInit() {
     mNewGamePlusPending = false;
     mSkipIntroPending = false;
     mNewGamePlusOverwritePrompt = false;
+    mBossRushPending = false;
     mNewGamePlusPad[0] = 0;
-    mNewGamePlusPad[1] = 0;
     #endif
 
     mModoruTxtPane->setAlpha(0);

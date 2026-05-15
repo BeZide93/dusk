@@ -41,6 +41,7 @@
 
 #if TARGET_PC
 #include "dusk/autosave.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/memory.h"
 #include "dusk/ui/ui.hpp"
 #endif
@@ -755,6 +756,8 @@ static int dScnPly_Execute(dScnPly_c* i_this) {
         triggerAutoSave();
         autoSaved = TRUE;
     }
+
+    dusk::bossrush::update();
     #endif
 
     dKy_itudemo_se();

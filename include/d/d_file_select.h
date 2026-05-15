@@ -222,6 +222,11 @@ public:
         DATASELPROC_NEW_GAME_PLUS_SOURCE_MOVE_ANM,
         DATASELPROC_NEW_GAME_PLUS_SOURCE_RETURN_ANM,
         DATASELPROC_NEW_GAME_PLUS_SOURCE_CANCEL,
+        DATASELPROC_BOSS_RUSH_MODE_IN,
+        DATASELPROC_BOSS_RUSH_MODE_SELECT,
+        DATASELPROC_BOSS_RUSH_MODE_CURSOR_MOVE,
+        DATASELPROC_BOSS_RUSH_MODE_CLOSE,
+        DATASELPROC_BOSS_RUSH_MODE_CANCEL,
         DATASELPROC_SKIP_INTRO_MODE_IN,
         DATASELPROC_SKIP_INTRO_MODE_SELECT,
         DATASELPROC_SKIP_INTRO_MODE_CURSOR_MOVE,
@@ -399,14 +404,17 @@ public:
     #if TARGET_PC
     void setYesNoLabels(bool);
     void setStartNewGamePlusLabels();
+    void setBossRushLabels();
     void headerTxtSetRaw(const char*, u8, u8);
     bool isValidNewGamePlusSource(u8, u8);
     u8 findNewGamePlusSource(u8);
     bool shouldOfferNewGamePlusOverwrite();
     void startNewGamePlusOverwritePrompt();
+    void startBossRushPrompt();
     void startSkipIntroPrompt();
     void applyNewGamePlusCarryOver();
     void applySkipIntroPreset();
+    void applyBossRushPreset();
     void newGamePlusModeIn();
     void newGamePlusModeSelect();
     void newGamePlusModeCursorMove();
@@ -417,6 +425,11 @@ public:
     void newGamePlusSourceMoveAnm();
     void newGamePlusSourceReturnAnm();
     void newGamePlusSourceCancel();
+    void bossRushModeIn();
+    void bossRushModeSelect();
+    void bossRushModeCursorMove();
+    void bossRushModeClose();
+    void bossRushModeCancel();
     void skipIntroModeIn();
     void skipIntroModeSelect();
     void skipIntroModeCursorMove();
@@ -733,7 +746,8 @@ public:
     bool mNewGamePlusPending;
     bool mSkipIntroPending;
     bool mNewGamePlusOverwritePrompt;
-    u8 mNewGamePlusPad[2];
+    bool mBossRushPending;
+    u8 mNewGamePlusPad[1];
     #endif
 
     #if PLATFORM_GCN

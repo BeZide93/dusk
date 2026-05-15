@@ -9,6 +9,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
 #include "d/d_s_name.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/imgui/ImGuiConsole.hpp"
 #include "dusk/memory.h"
 #include "dusk/speedrun.h"
@@ -408,10 +409,12 @@ void dScnName_c::changeGameScene() {
         #endif
         dComIfGp_offEnableNextStage();
 
-        if (dFs_c->isDataNew(dFs_c->getSelectNum()) &&
-            !dComIfGs_getSaveData()->getReserve().isIntroSkipped())
-        {
-            dComIfGp_setNextStage("F_SP108", 21, 1, 13);
+        if (dComIfGs_getSaveData()->getReserve().isBossRush()) {
+            dusk::bossrush::set_next_stage_for_current();
+        } else if (dFs_c->isDataNew(dFs_c->getSelectNum())) {
+            if (!dComIfGs_getSaveData()->getReserve().isIntroSkipped()) {
+                dComIfGp_setNextStage("F_SP108", 21, 1, 13);
+            }
         }
         
         dKy_clear_game_init();

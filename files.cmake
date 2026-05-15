@@ -1435,6 +1435,7 @@ set(DUSK_FILES
         src/dusk/hud_layout.hpp
 		src/dusk/gamepad_color.cpp
 		src/dusk/autosave.cpp
+        src/dusk/bossrush.cpp
         src/dusk/http/http.hpp
         src/dusk/io.cpp
         src/dusk/layout.cpp
