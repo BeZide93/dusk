@@ -144,16 +144,13 @@ void ensure_story_state() {
 }
 
 void clear_boss_flags(const BossRushEntry& entry) {
-    dSv_memBit_c& bit = dComIfGs_getSaveData()->getSave(entry.saveTable).getBit();
-    if (entry.clearMode == BossRushEntry::MiddleBoss) {
-        bit.offStageBossEnemy2();
-    } else {
-        bit.offStageBossEnemy();
-        bit.offStageLife();
-        bit.offStageBossDemo();
-    }
+    dComIfGs_getSaveData()->getSave(entry.saveTable).getBit().init();
 
     if (is_current_save_table(entry.saveTable)) {
+        for (int i = 0; i < dSv_info_c::MEMORY_SWITCH + dSv_info_c::DAN_SWITCH; i++) {
+            dComIfGs_offSwitch(i, entry.room);
+        }
+
         if (entry.clearMode == BossRushEntry::MiddleBoss) {
             dComIfGs_offStageMiddleBoss();
         } else {
@@ -161,6 +158,12 @@ void clear_boss_flags(const BossRushEntry& entry) {
             dComIfGs_offStageLife();
             dComIfGs_offStageBossDemo();
         }
+    }
+}
+
+void clear_all_boss_flags() {
+    for (u8 i = 0; i < entry_count(); i++) {
+        clear_boss_flags(kBossRushEntries[i]);
     }
 }
 
@@ -358,6 +361,7 @@ void start_hub_entry(u8 index, u8 state) {
     reserve().setBossRushIndex(index);
     if (state == kBossRushStateRun) {
         reserve().setBossRushLoop(0);
+        clear_all_boss_flags();
     }
 
     set_next_stage_for_entry(kBossRushEntries[index]);
@@ -502,9 +506,7 @@ void apply_new_save_preset() {
     ensure_story_state();
     grant_core_items();
 
-    for (u8 i = 0; i < entry_count(); i++) {
-        clear_boss_flags(kBossRushEntries[i]);
-    }
+    clear_all_boss_flags();
 
     set_return_place_hub();
 }
@@ -530,6 +532,7 @@ bool complete_ganondorf_sequence() {
     }
 
     if (reserve().getBossRushState() == kBossRushStateReplay) {
+        clear_boss_flags(current_entry());
         warp_to_hub();
         return true;
     }
@@ -644,6 +647,7 @@ void update() {
     const BossRushEntry& entry = current_entry();
     if (is_current_stage(entry) && boss_is_cleared(entry)) {
         if (reserve().getBossRushState() == kBossRushStateReplay) {
+            clear_boss_flags(entry);
             warp_to_hub();
         } else {
             grant_victory_heart();
