@@ -23,7 +23,7 @@ Branch: `Adreno-fixes`
 - Keep Dawn robustness enabled on Android release-style builds by not enabling the `disable_robustness` toggle on Android.
 - Clamp GX position/normal matrix indices to the valid `MaxPnMtx` range before indexing `postex_mtx` and `nrm_mtx`.
 - Pass indexed vertex array upload sizes to the shader and clamp indexed attribute fetches to the last safe entry.
-- Add Android-only guard zeroes after vertex/storage uploads and disable GX draw merging on Android to keep guarded ranges isolated.
+- Add Android-only guard zeroes after vertex/storage uploads, keep guarded uploads aligned, and disable GX draw merging on Android to keep guarded ranges isolated.
 
 ## Follow-Up Fixes If Needed
 
