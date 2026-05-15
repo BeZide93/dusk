@@ -14,6 +14,7 @@
 #include "d/d_msg_object.h"
 #include "d/d_s_play.h"
 #include "d/d_debug_viewer.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/frame_interpolation.h"
 
 static f32 dummy_lit_3777(int idx, u8 foo) {
@@ -3295,7 +3296,13 @@ int daMidna_c::execute() {
     setBodyPartPos();
     mSound.framework(0, mReverb);
 
-    if (eventInfo.checkCommandTalk()) {
+    bool hubPromptResolved = dusk::bossrush::consume_hub_midna_prompt_resolution();
+    if (hubPromptResolved) {
+        dComIfGp_getEvent()->reset(this);
+        offStateFlg0(FLG0_UNK_8000);
+    }
+
+    if (eventInfo.checkCommandTalk() && !hubPromptResolved) {
         if (!checkShadowModeTalkWait() || fopAcM_getTalkEventPartner(link) == this) {
             if (!checkStateFlg0(FLG0_UNK_8000)) {
                 offStateFlg0((daMidna_FLG0)(FLG0_NPC_NEAR | FLG0_NPC_FAR));
@@ -3309,47 +3316,70 @@ int daMidna_c::execute() {
                 }
                 onStateFlg0(FLG0_UNK_8000);
                 mMsgFlow.init(this, 0xbb9, 0, NULL);
-            } else if (mMsgFlow.doFlow(this, NULL, 0)) {
-                int item_id;
-                u16 event_id = mMsgFlow.getEventId(&item_id);
-                if (checkStateFlg0(FLG0_NO_DRAW)) {
-                    if (field_0x84e == 3) {
-                        field_0x84e = 4;
-                    } else {
-                        onStateFlg0(FLG0_UNK_1000000);
-                    }
+                if (dusk::bossrush::begin_hub_midna_prompt()) {
+                    dMsgObject_setWord(dusk::bossrush::hub_midna_prompt_text());
+                    dMsgObject_setSelectWordFlag(2);
+                    dMsgObject_setSelectWord(0, "Yes");
+                    dMsgObject_setSelectWord(1, "No");
+                    dMsgObject_setSelectWord(2, "");
                 }
-
-                if (event_id == 4 || event_id == 5) {
+            } else {
+                bool flowDone = mMsgFlow.doFlow(this, NULL, 0);
+                int choice = mMsgFlow.getChoiceNo();
+                if (dusk::bossrush::has_hub_midna_prompt() && choice >= 0 &&
+                    dusk::bossrush::finish_hub_midna_prompt(choice))
+                {
                     dComIfGp_getEvent()->reset(this);
                     offStateFlg0(FLG0_UNK_8000);
-                    fopAcM_orderPotentialEvent(this, 0x400, 0xffff, 1);
-                    link->changeOriginalDemo();
-                    if (event_id == 4) {
-                        link->changeDemoMode(0x3a, 0, 0, 0);
-                        if (mpModel != NULL && !checkStateFlg0(FLG0_NO_DRAW)) {
-                            changeOriginalDemo();
-                            changeDemoMode(0xf);
-                        }
-                    } else {
-                        link->changeDemoMode(0x39, 0, 0, 0);
-                    }
-
+                } else if (flowDone) {
+                    int item_id;
+                    u16 event_id = mMsgFlow.getEventId(&item_id);
                     if (checkStateFlg0(FLG0_NO_DRAW)) {
-                        onStateFlg0(FLG0_UNK_2000000);
-                    }
-                } else if (
-                    !checkStateFlg0(FLG0_NO_DRAW) || (checkSetAnime(0, ANM_S_RETURN) && mpMorf->isStop())
-                ) {
-                    if (event_id == 0xB) {
-                        dMeter2Info_setPauseStatus(6);
-                        link->onPortalWarpMidnaAtnKeep();
-                    } else {
-                        link->onMidnaTalkPolySpeed();
+                        if (field_0x84e == 3) {
+                            field_0x84e = 4;
+                        } else {
+                            onStateFlg0(FLG0_UNK_1000000);
+                        }
                     }
 
-                    dComIfGp_getEvent()->reset(this);
-                    offStateFlg0(FLG0_UNK_8000);
+                    if (choice < 0 && dusk::bossrush::has_hub_midna_prompt()) {
+                        choice = dMsgObject_getSelectCursorPos();
+                    }
+                    if (dusk::bossrush::finish_hub_midna_prompt(choice)) {
+                        dComIfGp_getEvent()->reset(this);
+                        offStateFlg0(FLG0_UNK_8000);
+                    } else if (event_id == 4 || event_id == 5) {
+                        dComIfGp_getEvent()->reset(this);
+                        offStateFlg0(FLG0_UNK_8000);
+                        fopAcM_orderPotentialEvent(this, 0x400, 0xffff, 1);
+                        link->changeOriginalDemo();
+                        if (event_id == 4) {
+                            link->changeDemoMode(0x3a, 0, 0, 0);
+                            if (mpModel != NULL && !checkStateFlg0(FLG0_NO_DRAW)) {
+                                changeOriginalDemo();
+                                changeDemoMode(0xf);
+                            }
+                        } else {
+                            link->changeDemoMode(0x39, 0, 0, 0);
+                        }
+
+                        if (checkStateFlg0(FLG0_NO_DRAW)) {
+                            onStateFlg0(FLG0_UNK_2000000);
+                        }
+                    } else if (
+                        !checkStateFlg0(FLG0_NO_DRAW) ||
+                        (checkSetAnime(0, ANM_S_RETURN) && mpMorf->isStop())
+                    ) {
+                        if (event_id == 0xB) {
+                            dMeter2Info_setPauseStatus(6);
+                            link->onPortalWarpMidnaAtnKeep();
+                        } else {
+                            link->onMidnaTalkPolySpeed();
+                        }
+
+                        dComIfGp_getEvent()->reset(this);
+                        offStateFlg0(FLG0_UNK_8000);
+                    }
                 }
             }
         }

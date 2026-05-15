@@ -1,10 +1,15 @@
 #include "dusk/bossrush.hpp"
 
+#include "SSystem/SComponent/c_math.h"
+#include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_gameover.h"
 #include "d/d_meter2_info.h"
 #include "d/d_stage.h"
+#include "f_op/f_op_actor_mng.h"
 #include "f_op/f_op_overlap_mng.h"
+#include "f_pc/f_pc_name.h"
+#include <cstdio>
 #include <cstring>
 
 namespace dusk::bossrush {
@@ -21,31 +26,77 @@ struct BossRushEntry {
         MiddleBoss,
         GanondorfSequence,
     } clearMode;
+    const char* displayName;
 };
 
 static const BossRushEntry kBossRushEntries[] = {
-    {"D_MN05B", 0, 51, 0, dStage_SaveTbl_LV1, BossRushEntry::MiddleBoss},         // Ook
-    {"D_MN05A", 0, 50, 0, dStage_SaveTbl_LV1, BossRushEntry::Boss},               // Diababa
-    {"D_MN04B", 0, 51, 0, dStage_SaveTbl_LV2, BossRushEntry::MiddleBoss},         // Dangoro
-    {"D_MN04A", 0, 50, 0, dStage_SaveTbl_LV2, BossRushEntry::Boss},               // Fyrus
-    {"D_MN01B", 0, 51, 0, dStage_SaveTbl_LV3, BossRushEntry::MiddleBoss},         // Deku Toad
-    {"D_MN01A", 0, 50, 0, dStage_SaveTbl_LV3, BossRushEntry::Boss},               // Morpheel
-    {"D_MN10B", 0, 51, 0, dStage_SaveTbl_LV4, BossRushEntry::MiddleBoss},         // Death Sword
-    {"D_MN10A", 0, 50, 0, dStage_SaveTbl_LV4, BossRushEntry::Boss},               // Stallord
-    {"D_MN11B", 0, 51, 0, dStage_SaveTbl_LV5, BossRushEntry::MiddleBoss},         // Darkhammer
-    {"D_MN11A", 0, 50, 0, dStage_SaveTbl_LV5, BossRushEntry::Boss},               // Blizzeta
-    {"D_MN06B", 0, 51, 0, dStage_SaveTbl_LV6, BossRushEntry::MiddleBoss},         // Darknut
-    {"D_MN06A", 0, 50, 0, dStage_SaveTbl_LV6, BossRushEntry::Boss},               // Armogohma
-    {"D_MN07B", 0, 51, 0, dStage_SaveTbl_LV7, BossRushEntry::MiddleBoss},         // Aeralfos
-    {"D_MN07A", 0, 50, 0, dStage_SaveTbl_LV7, BossRushEntry::Boss},               // Argorok
-    {"D_MN08D", 0, 50, 0, dStage_SaveTbl_LV8, BossRushEntry::Boss},               // Zant
-    {"D_MN09A", 0, 50, 0, dStage_SaveTbl_LV9, BossRushEntry::GanondorfSequence},  // Ganondorf
+    {"D_MN05B", 0, 51, 0, dStage_SaveTbl_LV1, BossRushEntry::MiddleBoss, "Ook"},
+    {"D_MN05A", 0, 50, 0, dStage_SaveTbl_LV1, BossRushEntry::Boss, "Diababa"},
+    {"D_MN04B", 0, 51, 0, dStage_SaveTbl_LV2, BossRushEntry::MiddleBoss, "Dangoro"},
+    {"D_MN04A", 0, 50, 0, dStage_SaveTbl_LV2, BossRushEntry::Boss, "Fyrus"},
+    {"D_MN01B", 0, 51, 0, dStage_SaveTbl_LV3, BossRushEntry::MiddleBoss, "Deku Toad"},
+    {"D_MN01A", 0, 50, 0, dStage_SaveTbl_LV3, BossRushEntry::Boss, "Morpheel"},
+    {"D_MN10B", 0, 51, 0, dStage_SaveTbl_LV4, BossRushEntry::MiddleBoss, "Death Sword"},
+    {"D_MN10A", 0, 50, 0, dStage_SaveTbl_LV4, BossRushEntry::Boss, "Stallord"},
+    {"D_MN11B", 0, 51, 0, dStage_SaveTbl_LV5, BossRushEntry::MiddleBoss, "Darkhammer"},
+    {"D_MN11A", 0, 50, 0, dStage_SaveTbl_LV5, BossRushEntry::Boss, "Blizzeta"},
+    {"D_MN06B", 0, 51, 0, dStage_SaveTbl_LV6, BossRushEntry::MiddleBoss, "Darknut"},
+    {"D_MN06A", 0, 50, 0, dStage_SaveTbl_LV6, BossRushEntry::Boss, "Armogohma"},
+    {"D_MN07B", 0, 51, 0, dStage_SaveTbl_LV7, BossRushEntry::MiddleBoss, "Aeralfos"},
+    {"D_MN07A", 0, 50, 0, dStage_SaveTbl_LV7, BossRushEntry::Boss, "Argorok"},
+    {"D_MN08D", 0, 50, 0, dStage_SaveTbl_LV8, BossRushEntry::Boss, "Zant"},
+    {"D_MN09A", 0, 50, 0, dStage_SaveTbl_LV9, BossRushEntry::GanondorfSequence, "Ganondorf"},
 };
 
 // Ganondorf is handled as a special sequence because the vanilla final battle spans multiple stages.
 
+static constexpr u8 kBossRushStateHub = 0;
+static constexpr u8 kBossRushStateRun = 1;
+static constexpr u8 kBossRushStateReplay = 2;
+static constexpr u8 kBossRushCenterPortalIndex = 16;
+static constexpr u8 kBossRushHubPortalCount = kBossRushCenterPortalIndex + 1;
+static constexpr char kBossRushHubStage[] = "D_MN09C";
+static constexpr s16 kBossRushHubPoint = 0;
+static constexpr s8 kBossRushHubRoom = 0;
+static constexpr s8 kBossRushHubLayer = 0;
+static constexpr f32 kBossRushHubY = 1100.0f;
+static constexpr f32 kBossRushHubPortalRadius = 1200.0f;
+static constexpr f32 kBossRushHubTriggerRadius = 150.0f;
+
 static fpc_ProcID sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
 static bool sAdvancePending = false;
+static fpc_ProcID sHubBarrierId = fpcM_ERROR_PROCESS_ID_e;
+static fpc_ProcID sHubPortalIds[kBossRushHubPortalCount];
+static bool sHubActorIdsInitialized = false;
+static bool sHubActorsSpawned = false;
+static bool sHubPortalsArmed = false;
+static bool sHubMidnaPromptActive = false;
+static bool sHubMidnaPromptResolved = false;
+static int sHubPendingPortal = -1;
+static char sHubPromptText[64] = "Fight Boss?";
+
+cXyz hub_center() {
+    return cXyz(0.0f, kBossRushHubY, 0.0f);
+}
+
+void reset_hub_actor_ids() {
+    sHubBarrierId = fpcM_ERROR_PROCESS_ID_e;
+    for (u8 i = 0; i < kBossRushHubPortalCount; i++) {
+        sHubPortalIds[i] = fpcM_ERROR_PROCESS_ID_e;
+    }
+    sHubActorIdsInitialized = true;
+    sHubActorsSpawned = false;
+    sHubPortalsArmed = false;
+    sHubMidnaPromptActive = false;
+    sHubMidnaPromptResolved = false;
+    sHubPendingPortal = -1;
+}
+
+void ensure_hub_actor_ids_initialized() {
+    if (!sHubActorIdsInitialized) {
+        reset_hub_actor_ids();
+    }
+}
 
 u8 entry_count() {
     return static_cast<u8>(sizeof(kBossRushEntries) / sizeof(kBossRushEntries[0]));
@@ -77,6 +128,10 @@ bool is_current_stage(const BossRushEntry& entry) {
 bool can_open_save_prompt() {
     return !dComIfGp_event_runCheck() && !fopOvlpM_IsPeek() && !dComIfGp_isEnableNextStage() &&
            dMeter2Info_getGameOverType() == 0;
+}
+
+bool can_hub_warp() {
+    return can_open_save_prompt() && dComIfGp_getGameoverStatus() == 0;
 }
 
 bool is_current_save_table(int saveTable) {
@@ -123,8 +178,27 @@ bool boss_is_cleared(const BossRushEntry& entry) {
     return entry.clearMode == BossRushEntry::MiddleBoss ? bit.isStageBossEnemy2() : bit.isStageBossEnemy();
 }
 
-void set_return_place(const BossRushEntry& entry) {
-    dComIfGs_getSaveData()->getPlayer().getPlayerReturnPlace().set(entry.stage, entry.room, 0);
+bool is_boss_hub_stage_name() {
+    return strcmp(dComIfGp_getStartStageName(), kBossRushHubStage) == 0 &&
+           dComIfGp_getStartStageRoomNo() == kBossRushHubRoom;
+}
+
+void set_return_place_hub() {
+    dComIfGs_getSaveData()->getPlayer().getPlayerReturnPlace().set(kBossRushHubStage, kBossRushHubRoom, 0);
+}
+
+void warp_to_hub() {
+    reserve().setBossRushState(kBossRushStateHub);
+    reserve().setBossRushIndex(0);
+    set_return_place_hub();
+    dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
+}
+
+void set_next_stage_for_entry(const BossRushEntry& entry) {
+    ensure_story_state();
+    clear_boss_flags(entry);
+    set_return_place_hub();
+    dComIfGp_setNextStage(entry.stage, entry.point, entry.room, entry.layer);
 }
 
 void set_item(int slot, u8 item) {
@@ -245,21 +319,25 @@ void grant_victory_heart() {
     dComIfGs_setLife(dComIfGs_getMaxLifeGauge());
 }
 
-void advance_to_next_entry() {
+bool advance_to_next_entry() {
     u8 index = current_index();
     index++;
 
     if (index >= entry_count()) {
-        index = 0;
         u8 loop = reserve().getBossRushLoop();
         if (loop < 0xff) {
             reserve().setBossRushLoop(loop + 1);
         }
+        reserve().setBossRushIndex(0);
+        reserve().setBossRushState(kBossRushStateHub);
+        set_return_place_hub();
+        return false;
     }
 
     reserve().setBossRushIndex(index);
     clear_boss_flags(current_entry());
-    set_return_place(current_entry());
+    set_return_place_hub();
+    return true;
 }
 
 void finish_prompt_and_advance() {
@@ -271,6 +349,145 @@ void finish_prompt_and_advance() {
     }
 }
 
+void start_hub_entry(u8 index, u8 state) {
+    if (index >= entry_count()) {
+        return;
+    }
+
+    reserve().setBossRushState(state);
+    reserve().setBossRushIndex(index);
+    if (state == kBossRushStateRun) {
+        reserve().setBossRushLoop(0);
+    }
+
+    set_next_stage_for_entry(kBossRushEntries[index]);
+}
+
+const char* hub_portal_name(int portal) {
+    if (portal == kBossRushCenterPortalIndex) {
+        return "Boss Rush";
+    }
+    if (portal >= 0 && portal < entry_count()) {
+        return kBossRushEntries[portal].displayName;
+    }
+    return "Boss";
+}
+
+void set_hub_pending_portal(int portal) {
+    if (portal < 0 || portal >= kBossRushHubPortalCount) {
+        sHubPendingPortal = -1;
+        sHubMidnaPromptActive = false;
+        return;
+    }
+
+    sHubPendingPortal = portal;
+    std::snprintf(sHubPromptText, sizeof(sHubPromptText), "Fight %s?", hub_portal_name(portal));
+}
+
+void clear_hub_midna_prompt() {
+    sHubPendingPortal = -1;
+    sHubMidnaPromptActive = false;
+    sHubPortalsArmed = false;
+}
+
+void spawn_hub_actors() {
+    ensure_hub_actor_ids_initialized();
+    if (sHubActorsSpawned) {
+        return;
+    }
+
+    cXyz center = hub_center();
+    sHubBarrierId =
+        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushHubRoom, NULL, NULL, -1);
+
+    for (u8 i = 0; i < entry_count(); i++) {
+        s16 angle = static_cast<s16>((0x10000 * i) / entry_count());
+        cXyz pos(
+            center.x + (cM_ssin(angle) * kBossRushHubPortalRadius),
+            center.y,
+            center.z + (cM_scos(angle) * kBossRushHubPortalRadius)
+        );
+        csXyz rot(0, angle, 0);
+        sHubPortalIds[i] = fopAcM_createWarpHole(&pos, &rot, kBossRushHubRoom, i, 0, 0xff);
+    }
+
+    csXyz centerRot(0, 0, 0);
+    sHubPortalIds[kBossRushCenterPortalIndex] =
+        fopAcM_createWarpHole(&center, &centerRot, kBossRushHubRoom, kBossRushCenterPortalIndex, 0, 0xff);
+
+    sHubActorsSpawned = true;
+}
+
+int touched_hub_portal() {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == NULL) {
+        return -1;
+    }
+
+    cXyz center = hub_center();
+    for (u8 i = 0; i < kBossRushHubPortalCount; i++) {
+        cXyz pos = center;
+        if (i < entry_count()) {
+            s16 angle = static_cast<s16>((0x10000 * i) / entry_count());
+            pos.x += cM_ssin(angle) * kBossRushHubPortalRadius;
+            pos.z += cM_scos(angle) * kBossRushHubPortalRadius;
+        }
+
+        f32 distXZ = player->current.pos.absXZ(pos);
+        f32 distY = player->current.pos.y - pos.y;
+        if (distXZ < kBossRushHubTriggerRadius && distY < 200.0f && distY > -100.0f) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
+void update_hub() {
+    sAdvancePending = false;
+    sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+    set_return_place_hub();
+
+    if (!is_boss_hub_stage_name()) {
+        if (!dComIfGp_isEnableNextStage()) {
+            dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
+        }
+        return;
+    }
+
+    spawn_hub_actors();
+
+    if (sHubMidnaPromptActive) {
+        return;
+    }
+
+    int portal = touched_hub_portal();
+    if (portal < 0) {
+        sHubPortalsArmed = true;
+        if (!sHubMidnaPromptActive) {
+            sHubPendingPortal = -1;
+        }
+        return;
+    }
+
+    if (!sHubPortalsArmed || !can_hub_warp()) {
+        return;
+    }
+
+    sHubPortalsArmed = false;
+    set_hub_pending_portal(portal);
+}
+
+void reset_hub_runtime_when_away() {
+    if (!is_boss_hub_stage_name()) {
+        sHubActorsSpawned = false;
+        sHubPortalsArmed = false;
+        sHubMidnaPromptActive = false;
+        sHubMidnaPromptResolved = false;
+        sHubPendingPortal = -1;
+    }
+}
+
 }  // namespace
 
 void apply_new_save_preset() {
@@ -278,7 +495,7 @@ void apply_new_save_preset() {
     saveReserve.setBossRush(true);
     saveReserve.setBossRushIndex(0);
     saveReserve.setBossRushLoop(0);
-    saveReserve.setBossRushState(0);
+    saveReserve.setBossRushState(kBossRushStateHub);
 
     dComIfGs_setMaxLife(25);
     dComIfGs_setLife(20);
@@ -289,7 +506,7 @@ void apply_new_save_preset() {
         clear_boss_flags(kBossRushEntries[i]);
     }
 
-    set_return_place(current_entry());
+    set_return_place_hub();
 }
 
 void set_next_stage_for_current() {
@@ -297,16 +514,24 @@ void set_next_stage_for_current() {
         return;
     }
 
+    if (reserve().getBossRushState() == kBossRushStateHub) {
+        set_return_place_hub();
+        dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
+        return;
+    }
+
     const BossRushEntry& entry = current_entry();
-    ensure_story_state();
-    clear_boss_flags(entry);
-    set_return_place(entry);
-    dComIfGp_setNextStage(entry.stage, entry.point, entry.room, entry.layer);
+    set_next_stage_for_entry(entry);
 }
 
 bool complete_ganondorf_sequence() {
     if (!reserve().isBossRush() || sAdvancePending || current_entry().clearMode != BossRushEntry::GanondorfSequence) {
         return false;
+    }
+
+    if (reserve().getBossRushState() == kBossRushStateReplay) {
+        warp_to_hub();
+        return true;
     }
 
     grant_victory_heart();
@@ -315,10 +540,90 @@ bool complete_ganondorf_sequence() {
     return true;
 }
 
+bool is_hub_stage() {
+    return reserve().isBossRush() && reserve().getBossRushState() == kBossRushStateHub &&
+           is_boss_hub_stage_name();
+}
+
+bool is_hub_center_portal(u8 sceneListNo) {
+    return sceneListNo == kBossRushCenterPortalIndex;
+}
+
+bool has_hub_midna_prompt() {
+    return reserve().isBossRush() && reserve().getBossRushState() == kBossRushStateHub &&
+           is_boss_hub_stage_name() && sHubPendingPortal >= 0 &&
+           sHubPendingPortal < kBossRushHubPortalCount;
+}
+
+const char* hub_midna_prompt_text() {
+    return sHubPromptText;
+}
+
+bool begin_hub_midna_prompt() {
+    if (!has_hub_midna_prompt()) {
+        return false;
+    }
+
+    sHubMidnaPromptActive = true;
+    return true;
+}
+
+bool finish_hub_midna_prompt(int choice) {
+    if (!sHubMidnaPromptActive || !has_hub_midna_prompt()) {
+        return false;
+    }
+
+    int portal = sHubPendingPortal;
+    clear_hub_midna_prompt();
+
+    if (choice == 0) {
+        if (portal == kBossRushCenterPortalIndex) {
+            start_hub_entry(0, kBossRushStateRun);
+        } else if (portal >= 0 && portal < entry_count()) {
+            start_hub_entry(static_cast<u8>(portal), kBossRushStateReplay);
+        }
+    }
+
+    return true;
+}
+
+bool resolve_hub_midna_prompt(int choice) {
+    if (!finish_hub_midna_prompt(choice)) {
+        return false;
+    }
+
+    sHubMidnaPromptResolved = true;
+    return true;
+}
+
+bool consume_hub_midna_prompt_resolution() {
+    if (!sHubMidnaPromptResolved) {
+        return false;
+    }
+
+    sHubMidnaPromptResolved = false;
+    return true;
+}
+
 void update() {
     if (!reserve().isBossRush()) {
         sAdvancePending = false;
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+        reset_hub_actor_ids();
+        return;
+    }
+
+    if (reserve().getBossRushState() == kBossRushStateHub) {
+        update_hub();
+        return;
+    }
+
+    reset_hub_runtime_when_away();
+
+    if (dComIfGs_getLife() == 0 && !dComIfGp_isEnableNextStage()) {
+        reserve().setBossRushState(kBossRushStateHub);
+        reserve().setBossRushIndex(0);
+        set_return_place_hub();
         return;
     }
 
@@ -338,9 +643,13 @@ void update() {
 
     const BossRushEntry& entry = current_entry();
     if (is_current_stage(entry) && boss_is_cleared(entry)) {
-        grant_victory_heart();
-        advance_to_next_entry();
-        sAdvancePending = true;
+        if (reserve().getBossRushState() == kBossRushStateReplay) {
+            warp_to_hub();
+        } else {
+            grant_victory_heart();
+            advance_to_next_entry();
+            sAdvancePending = true;
+        }
     }
 }
 

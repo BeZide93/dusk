@@ -26,6 +26,7 @@
 #include <cstring>
 
 #include "JSystem/JKernel/JKRExpHeap.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/version.hpp"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_lib.h"
@@ -549,10 +550,21 @@ int dMsgObject_c::_draw() {
         }
         if (mpScrnDraw != NULL) {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
-            mpScrnDraw->setString(pRef->getTextPtr(), pRef->getTextSPtr());
-            mpScrnDraw->setRubyString(pRef->getRubyPtr());
-            mpScrnDraw->setSelectString(pRef->getSelTextPtr(0), pRef->getSelTextPtr(1),
-                                        pRef->getSelTextPtr(2));
+            if (dusk::bossrush::has_hub_midna_prompt()) {
+                char text[128];
+                char yes[8] = "Yes";
+                char no[8] = "No";
+                char empty[1] = "";
+                std::snprintf(text, sizeof(text), "%s", dusk::bossrush::hub_midna_prompt_text());
+                mpScrnDraw->setString(text, text);
+                mpScrnDraw->setRubyString(empty);
+                mpScrnDraw->setSelectString(empty, yes, no);
+            } else {
+                mpScrnDraw->setString(pRef->getTextPtr(), pRef->getTextSPtr());
+                mpScrnDraw->setRubyString(pRef->getRubyPtr());
+                mpScrnDraw->setSelectString(pRef->getSelTextPtr(0), pRef->getSelTextPtr(1),
+                                            pRef->getSelTextPtr(2));
+            }
             mpScrnDraw->setSelectRubyString(pRef->getSelRubyPtr(0), pRef->getSelRubyPtr(1),
                                             pRef->getSelRubyPtr(2));
         }
@@ -1122,6 +1134,14 @@ void dMsgObject_c::selectProc() {
     }
     field_0x100->select_idx = pRef->getSelectPos();
     if (isSend() && field_0x1a3 != 0 && iVar8) {
+        if (dusk::bossrush::resolve_hub_midna_prompt(getSelectCursorPosLocal())) {
+            field_0x1a3 = 0;
+            setSelectCancelPosLocal(0);
+            field_0x16a = 0;
+            dMsgObject_onKillMessageFlag();
+            return;
+        }
+
         field_0x1a3 = 0;
         if (mDoCPd_c::getTrigB(0)) {
             mSelectPushFlag = 2;

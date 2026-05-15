@@ -12,6 +12,7 @@
 #include "f_pc/f_pc_name.h"
 #include "d/actor/d_a_obj_life_container.h"
 #include "d/actor/d_a_obj_ystone.h"
+#include "dusk/bossrush.hpp"
 #include <cstring>
 
 static char* l_arcName = "ef_Portal";
@@ -217,6 +218,37 @@ BOOL daObjBossWarp_c::checkDistance() {
 }
 
 int daObjBossWarp_c::execute() {
+    if (dusk::bossrush::is_hub_stage()) {
+        appear(0);
+        bool animate = dusk::bossrush::is_hub_center_portal(getSceneListNo());
+        if (animate) {
+            mpBrkAnm->play();
+            mpBtkAnm[0]->play();
+            mpBtkAnm[1]->play();
+        } else {
+            mpBrkAnm->setPlaySpeed(0.0f);
+            mpBtkAnm[0]->setPlaySpeed(0.0f);
+            mpBtkAnm[1]->setPlaySpeed(0.0f);
+        }
+
+        if (mScalingUp) {
+            cLib_chaseF(&scale.y, 1.0f, 0.016f);
+        }
+
+        if (mpParticle[3] != NULL) {
+            JGeometry::TVec3<f32> scale_vec;
+            JGeometry::setTVec3f(&scale.x, &scale_vec.x);
+            mpParticle[3]->setGlobalScale(scale_vec);
+        }
+
+        if (animate && mpBrkAnm != NULL && mpBrkAnm->getFrame() != 0.0f) {
+            mDoAud_seStartLevel(Z2SE_OBJ_MDN_ESCAPE_HOLE, &current.pos, 0, 0);
+        }
+
+        setBaseMtx();
+        return 1;
+    }
+
     if (dStage_stagInfo_GetSTType(dComIfGp_getStage()->getStagInfo()) != 3) {
         u8 sw = getSwNo();
         if (sw == 0xff || fopAcM_isSwitch(this, sw)) {
