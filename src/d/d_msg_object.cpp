@@ -809,7 +809,9 @@ void dMsgObject_c::openProc() {
         if (field_0x16a == 0) {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
             field_0x1a3 = 0;
-            if (mpRefer->getMsgID() == 0x7fa) {
+            bool threeChoiceMidna =
+                mpRefer->getMsgID() == 0x7fa || dusk::bossrush::has_midna_hub_warp_prompt();
+            if (threeChoiceMidna) {
                 mpScrnDraw->selectAnimeInit(3, pRef->getSelectPos(), pRef->getSelTBoxWidth(),
                                             pRef->getSelectRubyFlag());
             } else {
@@ -829,7 +831,9 @@ void dMsgObject_c::openProc() {
                 field_0x1a3 = 2;
                 field_0x16a = 9;
             }
-            if (mpRefer->getMsgID() == 0x7fa) {
+            bool threeChoiceMidna =
+                mpRefer->getMsgID() == 0x7fa || dusk::bossrush::has_midna_hub_warp_prompt();
+            if (threeChoiceMidna) {
                 mpScrnDraw->selectAnimeMove(2, getSelectCursorPosLocal(), uVar12);
             } else {
                 if (getSelectCursorPosLocal() != 0xff) {
@@ -894,7 +898,7 @@ void dMsgObject_c::openProc() {
         }
         field_0x16a = 0;
         if (isMidonaMessage()) {
-            if (mpRefer->getMsgID() == 0x7fa) {
+            if (mpRefer->getMsgID() == 0x7fa || dusk::bossrush::has_midna_hub_warp_prompt()) {
                 setStatusLocal(9);
             } else {
                 setStatusLocal(8);
@@ -1134,7 +1138,28 @@ void dMsgObject_c::selectProc() {
     }
     field_0x100->select_idx = pRef->getSelectPos();
     if (isSend() && field_0x1a3 != 0 && iVar8) {
-        if (dusk::bossrush::resolve_hub_midna_prompt(getSelectCursorPosLocal())) {
+        if (field_0x1a3 == 2 &&
+            (dusk::bossrush::cancel_midna_hub_warp_prompt() ||
+             dusk::bossrush::resolve_hub_midna_prompt(1)))
+        {
+            field_0x1a3 = 0;
+            setSelectCancelPosLocal(0);
+            field_0x16a = 0;
+            dMsgObject_onKillMessageFlag();
+            return;
+        }
+
+        if (field_0x1a3 == 1 &&
+            dusk::bossrush::resolve_midna_hub_warp_prompt(getSelectCursorPosLocal()))
+        {
+            field_0x1a3 = 0;
+            setSelectCancelPosLocal(0);
+            field_0x16a = 0;
+            dMsgObject_onKillMessageFlag();
+            return;
+        }
+
+        if (field_0x1a3 == 1 && dusk::bossrush::resolve_hub_midna_prompt(getSelectCursorPosLocal())) {
             field_0x1a3 = 0;
             setSelectCancelPosLocal(0);
             field_0x16a = 0;
@@ -1844,7 +1869,8 @@ bool dMsgObject_c::isHowlMessage() {
 
 bool dMsgObject_c::isMidonaMessage() {
     if (mFukiKind == 13 && (mpRefer->getMsgID() == 0x7d3 || mpRefer->getMsgID() == 0x7f6 ||
-                            mpRefer->getMsgID() == 0x7fa))
+                            mpRefer->getMsgID() == 0x7fa ||
+                            dusk::bossrush::has_midna_hub_warp_prompt()))
     {
         return 1;
     }

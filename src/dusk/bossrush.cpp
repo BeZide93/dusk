@@ -73,6 +73,9 @@ static bool sHubActorsSpawned = false;
 static bool sHubPortalsArmed = false;
 static bool sHubMidnaPromptActive = false;
 static bool sHubMidnaPromptResolved = false;
+static bool sMidnaHubWarpPromptActive = false;
+static bool sMidnaHubWarpPromptResolved = false;
+static bool sMidnaHubWarpRequested = false;
 static int sHubPendingPortal = -1;
 static char sHubPromptText[64] = "Fight Boss?";
 
@@ -90,6 +93,9 @@ void reset_hub_actor_ids() {
     sHubPortalsArmed = false;
     sHubMidnaPromptActive = false;
     sHubMidnaPromptResolved = false;
+    sMidnaHubWarpPromptActive = false;
+    sMidnaHubWarpPromptResolved = false;
+    sMidnaHubWarpRequested = false;
     sHubPendingPortal = -1;
 }
 
@@ -133,6 +139,10 @@ bool can_open_save_prompt() {
 
 bool can_hub_warp() {
     return can_open_save_prompt() && dComIfGp_getGameoverStatus() == 0;
+}
+
+bool can_offer_midna_hub_warp() {
+    return reserve().isBossRush() && !has_hub_midna_prompt();
 }
 
 bool is_current_save_table(int saveTable) {
@@ -218,6 +228,15 @@ void warp_to_hub() {
     set_return_place_hub();
     reset_audio_for_warp();
     dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
+}
+
+void prepare_hub_warp_item() {
+    reserve().setBossRushState(kBossRushStateHub);
+    reserve().setBossRushIndex(0);
+    set_return_place_hub();
+    reset_audio_for_warp();
+    dComIfGs_setWarpItemData(kBossRushHubStage, hub_center(), 0, kBossRushHubRoom, 0, 1);
+    dComIfGs_setItem(SLOT_18, dItemNo_DUNGEON_BACK_e);
 }
 
 void set_next_stage_for_entry(const BossRushEntry& entry) {
@@ -421,7 +440,18 @@ void clear_hub_midna_prompt() {
 void spawn_hub_actors() {
     ensure_hub_actor_ids_initialized();
     if (sHubActorsSpawned) {
-        return;
+        bool actorsAlive = sHubBarrierId != fpcM_ERROR_PROCESS_ID_e &&
+                           fopAcM_SearchByID(sHubBarrierId) != NULL;
+        for (u8 i = 0; actorsAlive && i < kBossRushHubPortalCount; i++) {
+            actorsAlive = sHubPortalIds[i] != fpcM_ERROR_PROCESS_ID_e &&
+                          fopAcM_SearchByID(sHubPortalIds[i]) != NULL;
+        }
+
+        if (actorsAlive) {
+            return;
+        }
+
+        reset_hub_actor_ids();
     }
 
     cXyz center = hub_center();
@@ -631,6 +661,81 @@ bool consume_hub_midna_prompt_resolution() {
 
     sHubMidnaPromptResolved = false;
     return true;
+}
+
+bool has_midna_hub_warp_prompt() {
+    return sMidnaHubWarpPromptActive && can_offer_midna_hub_warp();
+}
+
+const char* midna_hub_warp_option_text() {
+    return "Warp to Garden of Twilight";
+}
+
+bool begin_midna_hub_warp_prompt() {
+    if (!can_offer_midna_hub_warp()) {
+        return false;
+    }
+
+    sMidnaHubWarpPromptActive = true;
+    return true;
+}
+
+bool resolve_midna_hub_warp_prompt(int choice) {
+    if (!sMidnaHubWarpPromptActive) {
+        return false;
+    }
+
+    sMidnaHubWarpPromptActive = false;
+    if (choice != 2) {
+        return false;
+    }
+
+    sMidnaHubWarpPromptResolved = true;
+    sMidnaHubWarpRequested = true;
+    return true;
+}
+
+bool cancel_midna_hub_warp_prompt() {
+    if (!sMidnaHubWarpPromptActive) {
+        return false;
+    }
+
+    sMidnaHubWarpPromptActive = false;
+    sMidnaHubWarpPromptResolved = true;
+    return true;
+}
+
+bool consume_midna_hub_warp_prompt_resolution() {
+    if (!sMidnaHubWarpPromptResolved) {
+        return false;
+    }
+
+    sMidnaHubWarpPromptResolved = false;
+    return true;
+}
+
+bool consume_midna_hub_warp_request() {
+    if (!sMidnaHubWarpRequested) {
+        return false;
+    }
+
+    sMidnaHubWarpRequested = false;
+    return true;
+}
+
+bool prepare_midna_hub_warp() {
+    if (!reserve().isBossRush()) {
+        return false;
+    }
+
+    prepare_hub_warp_item();
+    return true;
+}
+
+void warp_to_hub_now() {
+    if (reserve().isBossRush()) {
+        warp_to_hub();
+    }
 }
 
 void update() {

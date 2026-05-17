@@ -3297,12 +3297,22 @@ int daMidna_c::execute() {
     mSound.framework(0, mReverb);
 
     bool hubPromptResolved = dusk::bossrush::consume_hub_midna_prompt_resolution();
-    if (hubPromptResolved) {
+    bool hubWarpPromptResolved = dusk::bossrush::consume_midna_hub_warp_prompt_resolution();
+    bool hubWarpRequested = dusk::bossrush::consume_midna_hub_warp_request();
+    if (hubPromptResolved || hubWarpPromptResolved || hubWarpRequested) {
         dComIfGp_getEvent()->reset(this);
         offStateFlg0(FLG0_UNK_8000);
     }
 
-    if (eventInfo.checkCommandTalk() && !hubPromptResolved) {
+    if (hubWarpRequested && dusk::bossrush::prepare_midna_hub_warp() &&
+        !link->procDungeonWarpReadyInit())
+    {
+        dusk::bossrush::warp_to_hub_now();
+    }
+
+    if (eventInfo.checkCommandTalk() && !hubPromptResolved && !hubWarpPromptResolved &&
+        !hubWarpRequested)
+    {
         if (!checkShadowModeTalkWait() || fopAcM_getTalkEventPartner(link) == this) {
             if (!checkStateFlg0(FLG0_UNK_8000)) {
                 offStateFlg0((daMidna_FLG0)(FLG0_NPC_NEAR | FLG0_NPC_FAR));
@@ -3322,11 +3332,19 @@ int daMidna_c::execute() {
                     dMsgObject_setSelectWord(0, "Yes");
                     dMsgObject_setSelectWord(1, "No");
                     dMsgObject_setSelectWord(2, "");
+                } else if (dusk::bossrush::begin_midna_hub_warp_prompt()) {
+                    dMsgObject_setSelectWordFlag(3);
+                    dMsgObject_setSelectWord(0, "");
+                    dMsgObject_setSelectWord(1, "");
+                    dMsgObject_setSelectWord(2, "");
                 }
             } else {
                 bool flowDone = mMsgFlow.doFlow(this, NULL, 0);
                 int choice = mMsgFlow.getChoiceNo();
-                if (dusk::bossrush::has_hub_midna_prompt() && choice >= 0 &&
+                if (choice >= 0 && dusk::bossrush::resolve_midna_hub_warp_prompt(choice)) {
+                    dComIfGp_getEvent()->reset(this);
+                    offStateFlg0(FLG0_UNK_8000);
+                } else if (dusk::bossrush::has_hub_midna_prompt() && choice >= 0 &&
                     dusk::bossrush::finish_hub_midna_prompt(choice))
                 {
                     dComIfGp_getEvent()->reset(this);
@@ -3342,10 +3360,16 @@ int daMidna_c::execute() {
                         }
                     }
 
-                    if (choice < 0 && dusk::bossrush::has_hub_midna_prompt()) {
+                    if (choice < 0 &&
+                        (dusk::bossrush::has_hub_midna_prompt() ||
+                         dusk::bossrush::has_midna_hub_warp_prompt()))
+                    {
                         choice = dMsgObject_getSelectCursorPos();
                     }
-                    if (dusk::bossrush::finish_hub_midna_prompt(choice)) {
+                    if (dusk::bossrush::resolve_midna_hub_warp_prompt(choice)) {
+                        dComIfGp_getEvent()->reset(this);
+                        offStateFlg0(FLG0_UNK_8000);
+                    } else if (dusk::bossrush::finish_hub_midna_prompt(choice)) {
                         dComIfGp_getEvent()->reset(this);
                         offStateFlg0(FLG0_UNK_8000);
                     } else if (event_id == 4 || event_id == 5) {

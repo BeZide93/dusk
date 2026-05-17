@@ -15,6 +15,7 @@
 #if TARGET_PC
 #include "dusk/scope_guard.hpp"
 #endif
+#include "dusk/bossrush.hpp"
 
 #if REGION_JPN
 #define CHAR_CODE_MALE_ICON 0x8189
@@ -1949,7 +1950,7 @@ void jmessage_tSequenceProcessor::do_end() {
     } else {
         if (pReference->getSelectNum() == 3) {
             if (pReference->getSelectType() == 0) {
-                if (!pReference->isMidona()) {
+                if (!pReference->isMidona() || dusk::bossrush::has_midna_hub_warp_prompt()) {
                     pReference->setStopFlag(3);
                 }
             } else {
@@ -2788,7 +2789,15 @@ void jmessage_tRenderingProcessor::do_begin(void const* pEntry, char const* pszT
 void jmessage_tRenderingProcessor::do_end() {
     jmessage_tReference* pReference = (jmessage_tReference*)getReference();
 
-    if (dMsgObject_getSelectWordFlag() != 0) {
+    if (dusk::bossrush::has_midna_hub_warp_prompt()) {
+        char option0[200];
+        char option1[200];
+        strcpy(option0, pReference->getSelTextPtr(1));
+        strcpy(option1, pReference->getSelTextPtr(2));
+        strcpy(pReference->getSelTextPtr(0), option0);
+        strcpy(pReference->getSelTextPtr(1), option1);
+        strcpy(pReference->getSelTextPtr(2), dusk::bossrush::midna_hub_warp_option_text());
+    } else if (dMsgObject_getSelectWordFlag() != 0) {
         for (int i = 0; i < dMsgObject_getSelectWordFlag(); i++) {
             char buffer[200];
             strcpy(buffer, dMsgObject_getSelectWord(i));
