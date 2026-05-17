@@ -153,6 +153,7 @@ constexpr std::array kHudElementNames = {
     "Z",
     "Hearts",
     "Rupees",
+    "Keys",
     "D-Pad",
     "Minimap",
     "Oil",
@@ -506,14 +507,16 @@ hud_layout::Element hud_element_id(int index) {
     case 6:
         return hud_layout::Element::Rupees;
     case 7:
-        return hud_layout::Element::DPad;
+        return hud_layout::Element::Keys;
     case 8:
-        return hud_layout::Element::Minimap;
+        return hud_layout::Element::DPad;
     case 9:
-        return hud_layout::Element::Oil;
+        return hud_layout::Element::Minimap;
     case 10:
-        return hud_layout::Element::ButtonBackground;
+        return hud_layout::Element::Oil;
     case 11:
+        return hud_layout::Element::ButtonBackground;
+    case 12:
         return hud_layout::Element::Midna;
     case 0:
     default:
@@ -527,6 +530,14 @@ bool hud_element_is_button(int index) {
 
 bool hud_element_is_minimap(int index) {
     return hud_element_id(index) == hud_layout::Element::Minimap;
+}
+
+bool hud_element_is_dpad(int index) {
+    return hud_element_id(index) == hud_layout::Element::DPad;
+}
+
+bool hud_element_has_dpad_minimap_motion(int index) {
+    return hud_element_is_dpad(index) || hud_element_is_minimap(index);
 }
 
 hud_layout::Button hud_element_button(int index) {
@@ -561,14 +572,16 @@ ConfigVar<float>& hud_element_offset_x(int index) {
     case 6:
         return game.hudRupeesOffsetX;
     case 7:
-        return game.hudDPadOffsetX;
+        return game.hudKeysOffsetX;
     case 8:
-        return game.hudMinimapOffsetX;
+        return game.hudDPadOffsetX;
     case 9:
-        return game.hudOilOffsetX;
+        return game.hudMinimapOffsetX;
     case 10:
-        return game.hudButtonBackgroundOffsetX;
+        return game.hudOilOffsetX;
     case 11:
+        return game.hudButtonBackgroundOffsetX;
+    case 12:
         return game.hudMidnaOffsetX;
     case 0:
     default:
@@ -592,14 +605,16 @@ ConfigVar<float>& hud_element_offset_y(int index) {
     case 6:
         return game.hudRupeesOffsetY;
     case 7:
-        return game.hudDPadOffsetY;
+        return game.hudKeysOffsetY;
     case 8:
-        return game.hudMinimapOffsetY;
+        return game.hudDPadOffsetY;
     case 9:
-        return game.hudOilOffsetY;
+        return game.hudMinimapOffsetY;
     case 10:
-        return game.hudButtonBackgroundOffsetY;
+        return game.hudOilOffsetY;
     case 11:
+        return game.hudButtonBackgroundOffsetY;
+    case 12:
         return game.hudMidnaOffsetY;
     case 0:
     default:
@@ -623,14 +638,16 @@ ConfigVar<float>& hud_element_scale(int index) {
     case 6:
         return game.hudRupeesScale;
     case 7:
-        return game.hudDPadScale;
+        return game.hudKeysScale;
     case 8:
-        return game.hudMinimapScale;
+        return game.hudDPadScale;
     case 9:
-        return game.hudOilScale;
+        return game.hudMinimapScale;
     case 10:
-        return game.hudButtonBackgroundScale;
+        return game.hudOilScale;
     case 11:
+        return game.hudButtonBackgroundScale;
+    case 12:
         return game.hudMidnaScale;
     case 0:
     default:
@@ -686,6 +703,10 @@ bool hud_element_has_item_scale(int index) {
     return hud_element_is_button(index) && hud_layout::HasItemScale(hud_element_button(index));
 }
 
+bool hud_element_has_item_offset(int index) {
+    return hud_element_is_button(index) && hud_layout::HasItemOffset(hud_element_button(index));
+}
+
 ConfigVar<float>& hud_element_item_scale(int index) {
     auto& game = getSettings().game;
     switch (hud_element_button(index)) {
@@ -698,6 +719,79 @@ ConfigVar<float>& hud_element_item_scale(int index) {
     case hud_layout::Button::X:
     default:
         return game.hudButtonXItemScale;
+    }
+}
+
+ConfigVar<float>& hud_element_item_offset_x(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBItemOffsetX;
+    case hud_layout::Button::Y:
+        return game.hudButtonYItemOffsetX;
+    case hud_layout::Button::Z:
+        return game.hudButtonZItemOffsetX;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXItemOffsetX;
+    }
+}
+
+ConfigVar<float>& hud_element_item_offset_y(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBItemOffsetY;
+    case hud_layout::Button::Y:
+        return game.hudButtonYItemOffsetY;
+    case hud_layout::Button::Z:
+        return game.hudButtonZItemOffsetY;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXItemOffsetY;
+    }
+}
+
+bool hud_element_has_ammo_layout(int index) {
+    return hud_element_is_button(index) && hud_layout::HasAmmoLayout(hud_element_button(index));
+}
+
+ConfigVar<float>& hud_element_ammo_offset_x(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::Y:
+        return game.hudButtonYAmmoOffsetX;
+    case hud_layout::Button::Z:
+        return game.hudButtonZAmmoOffsetX;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXAmmoOffsetX;
+    }
+}
+
+ConfigVar<float>& hud_element_ammo_offset_y(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::Y:
+        return game.hudButtonYAmmoOffsetY;
+    case hud_layout::Button::Z:
+        return game.hudButtonZAmmoOffsetY;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXAmmoOffsetY;
+    }
+}
+
+ConfigVar<float>& hud_element_ammo_scale(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::Y:
+        return game.hudButtonYAmmoScale;
+    case hud_layout::Button::Z:
+        return game.hudButtonZAmmoScale;
+    case hud_layout::Button::X:
+    default:
+        return game.hudButtonXAmmoScale;
     }
 }
 
@@ -730,6 +824,10 @@ bool hud_element_modified(int index) {
         hud_element_is_minimap(index) &&
         getSettings().game.hudMinimapSlideDirection.getValue() !=
             getSettings().game.hudMinimapSlideDirection.getDefaultValue();
+    const bool dpadFollowModified =
+        hud_element_has_dpad_minimap_motion(index) &&
+        getSettings().game.hudDPadFollowMinimap.getValue() !=
+            getSettings().game.hudDPadFollowMinimap.getDefaultValue();
     const bool itemAnchorModified =
         hud_element_has_item_anchor(index) &&
         hud_element_item_anchor(index).getValue() !=
@@ -742,6 +840,20 @@ bool hud_element_modified(int index) {
         hud_element_has_item_scale(index) &&
         hud_element_item_scale(index).getValue() !=
             hud_element_item_scale(index).getDefaultValue();
+    const bool itemOffsetModified =
+        hud_element_has_item_offset(index) &&
+        (hud_element_item_offset_x(index).getValue() !=
+                hud_element_item_offset_x(index).getDefaultValue() ||
+            hud_element_item_offset_y(index).getValue() !=
+                hud_element_item_offset_y(index).getDefaultValue());
+    const bool ammoLayoutModified =
+        hud_element_has_ammo_layout(index) &&
+        (hud_element_ammo_offset_x(index).getValue() !=
+                hud_element_ammo_offset_x(index).getDefaultValue() ||
+            hud_element_ammo_offset_y(index).getValue() !=
+                hud_element_ammo_offset_y(index).getDefaultValue() ||
+            hud_element_ammo_scale(index).getValue() !=
+                hud_element_ammo_scale(index).getDefaultValue());
     const bool textScaleModified =
         hud_element_has_text_scale(index) &&
         hud_element_text_scale(index).getValue() !=
@@ -749,8 +861,10 @@ bool hud_element_modified(int index) {
     return offsetX.getValue() != offsetX.getDefaultValue() ||
            offsetY.getValue() != offsetY.getDefaultValue() ||
            scale.getValue() != scale.getDefaultValue() || minimapSlideModified ||
+           dpadFollowModified ||
            itemAnchorModified ||
-           textAnchorModified || itemScaleModified || textScaleModified;
+           textAnchorModified || itemScaleModified || itemOffsetModified ||
+           ammoLayoutModified || textScaleModified;
 }
 
 bool hud_layout_modified() {
@@ -773,6 +887,10 @@ void reset_hud_element(int index) {
         auto& slideDirection = getSettings().game.hudMinimapSlideDirection;
         slideDirection.setValue(slideDirection.getDefaultValue());
     }
+    if (hud_element_has_dpad_minimap_motion(index)) {
+        auto& dpadFollowMinimap = getSettings().game.hudDPadFollowMinimap;
+        dpadFollowMinimap.setValue(dpadFollowMinimap.getDefaultValue());
+    }
     if (hud_element_has_item_anchor(index)) {
         auto& itemAnchor = hud_element_item_anchor(index);
         itemAnchor.setValue(itemAnchor.getDefaultValue());
@@ -780,6 +898,20 @@ void reset_hud_element(int index) {
     if (hud_element_has_item_scale(index)) {
         auto& itemScale = hud_element_item_scale(index);
         itemScale.setValue(itemScale.getDefaultValue());
+    }
+    if (hud_element_has_item_offset(index)) {
+        auto& itemOffsetX = hud_element_item_offset_x(index);
+        auto& itemOffsetY = hud_element_item_offset_y(index);
+        itemOffsetX.setValue(itemOffsetX.getDefaultValue());
+        itemOffsetY.setValue(itemOffsetY.getDefaultValue());
+    }
+    if (hud_element_has_ammo_layout(index)) {
+        auto& ammoOffsetX = hud_element_ammo_offset_x(index);
+        auto& ammoOffsetY = hud_element_ammo_offset_y(index);
+        auto& ammoScale = hud_element_ammo_scale(index);
+        ammoOffsetX.setValue(ammoOffsetX.getDefaultValue());
+        ammoOffsetY.setValue(ammoOffsetY.getDefaultValue());
+        ammoScale.setValue(ammoScale.getDefaultValue());
     }
     if (hud_element_has_text_anchor(index)) {
         auto& textAnchor = hud_element_text_anchor(index);
@@ -950,6 +1082,7 @@ json hud_element_to_json(int index) {
     if (hud_element_is_minimap(index)) {
         element["slideDirection"] =
             MinimapSlideDirectionName(getSettings().game.hudMinimapSlideDirection.getValue());
+        element["dpadFollowsMinimap"] = getSettings().game.hudDPadFollowMinimap.getValue();
     }
     if (hud_element_has_item_anchor(index)) {
         element["itemAnchor"] =
@@ -957,6 +1090,15 @@ json hud_element_to_json(int index) {
     }
     if (hud_element_has_item_scale(index)) {
         element["itemScale"] = hud_element_item_scale(index).getValue();
+    }
+    if (hud_element_has_item_offset(index)) {
+        element["itemOffsetX"] = hud_element_item_offset_x(index).getValue();
+        element["itemOffsetY"] = hud_element_item_offset_y(index).getValue();
+    }
+    if (hud_element_has_ammo_layout(index)) {
+        element["ammoOffsetX"] = hud_element_ammo_offset_x(index).getValue();
+        element["ammoOffsetY"] = hud_element_ammo_offset_y(index).getValue();
+        element["ammoScale"] = hud_element_ammo_scale(index).getValue();
     }
     if (hud_element_has_text_anchor(index)) {
         element["textAnchor"] =
@@ -982,6 +1124,19 @@ void import_hud_element_json(const json& elements, int index) {
     if (hud_element_has_item_scale(index)) {
         set_float_from_json(hud_element_item_scale(index), *found, "itemScale", 0.01f, 99.99f);
     }
+    if (hud_element_has_item_offset(index)) {
+        set_float_from_json(hud_element_item_offset_x(index), *found, "itemOffsetX", -9999.0f,
+                            9999.0f);
+        set_float_from_json(hud_element_item_offset_y(index), *found, "itemOffsetY", -9999.0f,
+                            9999.0f);
+    }
+    if (hud_element_has_ammo_layout(index)) {
+        set_float_from_json(hud_element_ammo_offset_x(index), *found, "ammoOffsetX", -9999.0f,
+                            9999.0f);
+        set_float_from_json(hud_element_ammo_offset_y(index), *found, "ammoOffsetY", -9999.0f,
+                            9999.0f);
+        set_float_from_json(hud_element_ammo_scale(index), *found, "ammoScale", 0.01f, 99.99f);
+    }
     if (hud_element_has_text_anchor(index)) {
         set_side_anchor_from_json(hud_element_text_anchor(index), *found, "textAnchor");
     }
@@ -990,6 +1145,9 @@ void import_hud_element_json(const json& elements, int index) {
     }
     if (hud_element_is_minimap(index)) {
         set_minimap_slide_direction_from_json(*found, "slideDirection");
+        getSettings().game.hudDPadFollowMinimap.setValue(json_value_or(
+            *found, "dpadFollowsMinimap",
+            getSettings().game.hudDPadFollowMinimap.getValue()));
     }
 }
 
@@ -1055,7 +1213,7 @@ json export_hud_layout_json() {
     }
 
     return {
-        {"version", 8},
+        {"version", 9},
         {"background", getSettings().game.hudButtonBackground.getValue()},
         {"roundXYButtons", getSettings().game.hudRoundXYButtons.getValue()},
         {"elements", std::move(elements)},
@@ -1549,16 +1707,34 @@ SelectButton& config_touch_scale_select(Pane& leftPane, Pane& rightPane) {
 }
 
 SelectButton& config_hud_pixel_select(Pane& leftPane, Pane& rightPane, Rml::String key,
-    std::function<ConfigVar<float>&()> selectVar, Rml::String helpText) {
+    std::function<ConfigVar<float>&()> selectVar, Rml::String helpText,
+    std::function<bool()> isDisabled = {}) {
+    auto disabled = std::move(isDisabled);
+    auto disabledForValue = disabled;
+    auto disabledForSet = disabled;
+    auto disabledForModified = disabled;
     auto& button = leftPane.add_child<NumberButton>(NumberButton::Props{
         .key = std::move(key),
-        .getValue = [selectVar] { return rounded_float_setting(selectVar()); },
+        .getValue =
+            [selectVar, disabledForValue] {
+                if (disabledForValue && disabledForValue()) {
+                    return 0;
+                }
+                return rounded_float_setting(selectVar());
+            },
         .setValue =
-            [selectVar](int value) {
+            [selectVar, disabledForSet](int value) {
+                if (disabledForSet && disabledForSet()) {
+                    return;
+                }
                 selectVar().setValue(static_cast<float>(value));
                 config::Save();
             },
-        .isModified = [selectVar] {
+        .isDisabled = std::move(disabled),
+        .isModified = [selectVar, disabledForModified] {
+            if (disabledForModified && disabledForModified()) {
+                return false;
+            }
             auto& var = selectVar();
             return var.getValue() != var.getDefaultValue();
         },
@@ -2799,6 +2975,14 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 }
                 pane.add_text("Chooses which side the minimap slides in from.");
             });
+        config_bool_select(leftPane, rightPane, getSettings().game.hudDPadFollowMinimap,
+            {
+                .key = "D-Pad follows Minimap",
+                .helpText =
+                    "Moves the D-Pad with the minimap when the minimap slides in or out.",
+                .isDisabled =
+                    [] { return !hud_element_has_dpad_minimap_motion(hud_element_index()); },
+            });
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "HUD Item Anchor",
@@ -2847,10 +3031,30 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     "<br/>Places the assigned item icon left, right, above, or below the "
                     "selected HUD button.");
             });
+        config_hud_pixel_select(leftPane, rightPane, "HUD Item Offset X",
+            []() -> ConfigVar<float>& { return hud_element_item_offset_x(hud_element_index()); },
+            "Moves the item icon attached to the selected HUD button horizontally.",
+            [] { return !hud_element_has_item_offset(hud_element_index()); });
+        config_hud_pixel_select(leftPane, rightPane, "HUD Item Offset Y",
+            []() -> ConfigVar<float>& { return hud_element_item_offset_y(hud_element_index()); },
+            "Moves the item icon attached to the selected HUD button vertically.",
+            [] { return !hud_element_has_item_offset(hud_element_index()); });
         config_hud_percent_select(leftPane, rightPane, "HUD Item Scale",
             []() -> ConfigVar<float>& { return hud_element_item_scale(hud_element_index()); },
             "Scales the item icon attached to the selected HUD button.",
             [] { return !hud_element_has_item_scale(hud_element_index()); });
+        config_hud_pixel_select(leftPane, rightPane, "Ammo Offset X",
+            []() -> ConfigVar<float>& { return hud_element_ammo_offset_x(hud_element_index()); },
+            "Moves the ammo count attached to the selected HUD button horizontally.",
+            [] { return !hud_element_has_ammo_layout(hud_element_index()); });
+        config_hud_pixel_select(leftPane, rightPane, "Ammo Offset Y",
+            []() -> ConfigVar<float>& { return hud_element_ammo_offset_y(hud_element_index()); },
+            "Moves the ammo count attached to the selected HUD button vertically.",
+            [] { return !hud_element_has_ammo_layout(hud_element_index()); });
+        config_hud_percent_select(leftPane, rightPane, "Ammo Scale",
+            []() -> ConfigVar<float>& { return hud_element_ammo_scale(hud_element_index()); },
+            "Scales the ammo count attached to the selected HUD button.",
+            [] { return !hud_element_has_ammo_layout(hud_element_index()); });
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "HUD Text Anchor",

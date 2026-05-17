@@ -1295,6 +1295,13 @@ void dMeter2_c::moveKey() {
     bool draw_key;
 
     draw_key = false;
+    static u32 sKeyLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sKeyLayoutStamp != hudLayoutStamp) {
+        sKeyLayoutStamp = hudLayoutStamp;
+        draw_key = true;
+    }
+
     if (dComIfGp_getItemKeyNumCount() != 0) {
         var_r5 = dComIfGs_getKeyNum() + dComIfGp_getItemKeyNumCount();
         if (var_r5 > 99) {
@@ -2332,7 +2339,7 @@ void dMeter2_c::moveButtonCross() {
         draw_cross = true;
     }
 
-    if (mpMap != NULL) {
+    if (mpMap != NULL && dusk::getSettings().game.hudDPadFollowMinimap.getValue()) {
         temp_f31 = mpMap->getMapDispEdgeTop();
         temp_f1 = (temp_f31 - mpMeterDraw->getButtonCrossParentInitTransY()) - 15.0f;
 
@@ -2355,6 +2362,12 @@ void dMeter2_c::moveButtonCross() {
 
             var_f31 = mButtonCrossOFFPosY;
         }
+    } else {
+        if (field_0x1b4 != 0) {
+            field_0x1b4 = 0;
+            draw_cross = true;
+        }
+        var_f31 = mButtonCrossOFFPosY;
     }
 
     temp_f30 = mButtonCrossOFFPosX + (((f32)field_0x1b4 / (f32)g_drawHIO.mButtonCrossMoveFrame) *

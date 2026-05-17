@@ -34,6 +34,8 @@ ConfigVar<float>& offset_x_var(Element element) noexcept {
         return settings.hudHeartsOffsetX;
     case Element::Rupees:
         return settings.hudRupeesOffsetX;
+    case Element::Keys:
+        return settings.hudKeysOffsetX;
     case Element::Oil:
         return settings.hudOilOffsetX;
     case Element::DPad:
@@ -65,6 +67,8 @@ ConfigVar<float>& offset_y_var(Element element) noexcept {
         return settings.hudHeartsOffsetY;
     case Element::Rupees:
         return settings.hudRupeesOffsetY;
+    case Element::Keys:
+        return settings.hudKeysOffsetY;
     case Element::Oil:
         return settings.hudOilOffsetY;
     case Element::DPad:
@@ -96,6 +100,8 @@ ConfigVar<float>& scale_var(Element element) noexcept {
         return settings.hudHeartsScale;
     case Element::Rupees:
         return settings.hudRupeesScale;
+    case Element::Keys:
+        return settings.hudKeysScale;
     case Element::Oil:
         return settings.hudOilScale;
     case Element::DPad:
@@ -152,6 +158,75 @@ ConfigVar<float>& item_scale_var(Button button) noexcept {
     case Button::X:
     default:
         return settings.hudButtonXItemScale;
+    }
+}
+
+ConfigVar<float>& item_offset_x_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::B:
+        return settings.hudButtonBItemOffsetX;
+    case Button::Y:
+        return settings.hudButtonYItemOffsetX;
+    case Button::Z:
+        return settings.hudButtonZItemOffsetX;
+    case Button::X:
+    default:
+        return settings.hudButtonXItemOffsetX;
+    }
+}
+
+ConfigVar<float>& item_offset_y_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::B:
+        return settings.hudButtonBItemOffsetY;
+    case Button::Y:
+        return settings.hudButtonYItemOffsetY;
+    case Button::Z:
+        return settings.hudButtonZItemOffsetY;
+    case Button::X:
+    default:
+        return settings.hudButtonXItemOffsetY;
+    }
+}
+
+ConfigVar<float>& ammo_offset_x_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::Y:
+        return settings.hudButtonYAmmoOffsetX;
+    case Button::Z:
+        return settings.hudButtonZAmmoOffsetX;
+    case Button::X:
+    default:
+        return settings.hudButtonXAmmoOffsetX;
+    }
+}
+
+ConfigVar<float>& ammo_offset_y_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::Y:
+        return settings.hudButtonYAmmoOffsetY;
+    case Button::Z:
+        return settings.hudButtonZAmmoOffsetY;
+    case Button::X:
+    default:
+        return settings.hudButtonXAmmoOffsetY;
+    }
+}
+
+ConfigVar<float>& ammo_scale_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::Y:
+        return settings.hudButtonYAmmoScale;
+    case Button::Z:
+        return settings.hudButtonZAmmoScale;
+    case Button::X:
+    default:
+        return settings.hudButtonXAmmoScale;
     }
 }
 
@@ -273,9 +348,17 @@ bool HasItemScale(Button button) noexcept {
            button == Button::Z;
 }
 
+bool HasItemOffset(Button button) noexcept {
+    return HasItemScale(button);
+}
+
 bool HasTextScale(Button button) noexcept {
     return button == Button::A || button == Button::B || button == Button::X ||
            button == Button::Y || button == Button::Z;
+}
+
+bool HasAmmoLayout(Button button) noexcept {
+    return button == Button::X || button == Button::Y || button == Button::Z;
 }
 
 ItemAnchor ButtonItemAnchor(Button button) noexcept {
@@ -312,6 +395,26 @@ float ButtonTextScale(Button button) noexcept {
     return HasTextScale(button) ? text_scale_var(button).getValue() : 1.0f;
 }
 
+float ButtonItemOffsetX(Button button) noexcept {
+    return HasItemOffset(button) ? item_offset_x_var(button).getValue() : 0.0f;
+}
+
+float ButtonItemOffsetY(Button button) noexcept {
+    return HasItemOffset(button) ? item_offset_y_var(button).getValue() : 0.0f;
+}
+
+float ButtonAmmoOffsetX(Button button) noexcept {
+    return HasAmmoLayout(button) ? ammo_offset_x_var(button).getValue() : 0.0f;
+}
+
+float ButtonAmmoOffsetY(Button button) noexcept {
+    return HasAmmoLayout(button) ? ammo_offset_y_var(button).getValue() : 0.0f;
+}
+
+float ButtonAmmoScale(Button button) noexcept {
+    return HasAmmoLayout(button) ? ammo_scale_var(button).getValue() : 1.0f;
+}
+
 Transform ButtonTransform(Button button) noexcept {
     return ElementTransform(button_element(button));
 }
@@ -333,6 +436,7 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::Z);
     hash = hash_element(hash, Element::Hearts);
     hash = hash_element(hash, Element::Rupees);
+    hash = hash_element(hash, Element::Keys);
     hash = hash_element(hash, Element::Oil);
     hash = hash_element(hash, Element::DPad);
     hash = hash_element(hash, Element::Minimap);
@@ -340,6 +444,7 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::Midna);
     hash = hash_int(hash, getSettings().game.hudButtonBackground.getValue() ? 1 : 0);
     hash = hash_int(hash, getSettings().game.hudRoundXYButtons.getValue() ? 1 : 0);
+    hash = hash_int(hash, getSettings().game.hudDPadFollowMinimap.getValue() ? 1 : 0);
     hash = hash_int(
         hash, static_cast<int>(getSettings().game.hudMinimapSlideDirection.getValue()));
     hash = hash_int(hash, static_cast<int>(ButtonTextAnchor(Button::A)));
@@ -351,12 +456,29 @@ u32 LayoutStamp() noexcept {
     hash = hash_int(hash, static_cast<int>(ButtonItemAnchor(Button::Y)));
     hash = hash_float(hash, ButtonTextScale(Button::A));
     hash = hash_float(hash, ButtonItemScale(Button::B));
+    hash = hash_float(hash, ButtonItemOffsetX(Button::B));
+    hash = hash_float(hash, ButtonItemOffsetY(Button::B));
     hash = hash_float(hash, ButtonTextScale(Button::B));
     hash = hash_float(hash, ButtonItemScale(Button::X));
+    hash = hash_float(hash, ButtonItemOffsetX(Button::X));
+    hash = hash_float(hash, ButtonItemOffsetY(Button::X));
+    hash = hash_float(hash, ButtonAmmoOffsetX(Button::X));
+    hash = hash_float(hash, ButtonAmmoOffsetY(Button::X));
+    hash = hash_float(hash, ButtonAmmoScale(Button::X));
     hash = hash_float(hash, ButtonTextScale(Button::X));
     hash = hash_float(hash, ButtonItemScale(Button::Y));
+    hash = hash_float(hash, ButtonItemOffsetX(Button::Y));
+    hash = hash_float(hash, ButtonItemOffsetY(Button::Y));
+    hash = hash_float(hash, ButtonAmmoOffsetX(Button::Y));
+    hash = hash_float(hash, ButtonAmmoOffsetY(Button::Y));
+    hash = hash_float(hash, ButtonAmmoScale(Button::Y));
     hash = hash_float(hash, ButtonTextScale(Button::Y));
     hash = hash_float(hash, ButtonItemScale(Button::Z));
+    hash = hash_float(hash, ButtonItemOffsetX(Button::Z));
+    hash = hash_float(hash, ButtonItemOffsetY(Button::Z));
+    hash = hash_float(hash, ButtonAmmoOffsetX(Button::Z));
+    hash = hash_float(hash, ButtonAmmoOffsetY(Button::Z));
+    hash = hash_float(hash, ButtonAmmoScale(Button::Z));
     return hash_float(hash, ButtonTextScale(Button::Z));
 }
 

@@ -20,6 +20,7 @@ enum class Element {
     Z,
     Hearts,
     Rupees,
+    Keys,
     Oil,
     DPad,
     Minimap,
@@ -56,10 +57,17 @@ SideAnchor ButtonTextAnchor(Button button) noexcept;
 SideAnchor DefaultTextAnchor(Button button) noexcept;
 float ButtonItemScale(Button button) noexcept;
 float ButtonTextScale(Button button) noexcept;
+float ButtonItemOffsetX(Button button) noexcept;
+float ButtonItemOffsetY(Button button) noexcept;
+float ButtonAmmoOffsetX(Button button) noexcept;
+float ButtonAmmoOffsetY(Button button) noexcept;
+float ButtonAmmoScale(Button button) noexcept;
 bool HasItemAnchor(Button button) noexcept;
 bool HasTextAnchor(Button button) noexcept;
 bool HasItemScale(Button button) noexcept;
 bool HasTextScale(Button button) noexcept;
+bool HasItemOffset(Button button) noexcept;
+bool HasAmmoLayout(Button button) noexcept;
 Transform ButtonTransform(Button button) noexcept;
 Transform ElementTransform(Element element) noexcept;
 u32 LayoutStamp() noexcept;
