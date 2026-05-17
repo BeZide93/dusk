@@ -1744,9 +1744,6 @@ void dFile_select_c::applySkipIntroPreset() {
         dSv_event_flag_c::F_0212,
         dSv_event_flag_c::F_0222,
         dSv_event_flag_c::F_0223,
-        dSv_event_flag_c::F_0224,
-        dSv_event_flag_c::F_0225,
-        dSv_event_flag_c::F_0226,
         dSv_event_flag_c::F_0363,
         dSv_event_flag_c::F_0364,
         dSv_event_flag_c::F_0537,
@@ -1786,6 +1783,8 @@ void dFile_select_c::applySkipIntroPreset() {
     dComIfGs_onDarkClearLV(0);
     dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 71);
     dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 2);
+    dComIfGs_offSaveSwitch(dStage_SaveTbl_FARON, 12);
+    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 20);
     dComIfGs_setTransformStatus(TF_STATUS_HUMAN);
     dComIfGs_setLightDropNum(FARON_VESSEL, 16);
     dComIfGs_onLightDropGetFlag(FARON_VESSEL);
@@ -1835,6 +1834,10 @@ void dFile_select_c::applySkipIntroPreset() {
 
     if (dComIfGs_getBButtonItemKey() == dItemNo_NONE_e) {
         dComIfGs_setBButtonItemKey(dItemNo_SWORD_e);
+    }
+
+    if (dComIfGs_getRupee() < 100) {
+        dComIfGs_setRupee(100);
     }
 
     save->getPlayer().getPlayerReturnPlace().set("F_SP108", 1, 0);

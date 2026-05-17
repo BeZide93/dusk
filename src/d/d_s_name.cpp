@@ -9,6 +9,7 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_meter2_info.h"
 #include "d/d_s_name.h"
+#include "d/d_stage.h"
 #include "dusk/bossrush.hpp"
 #include "dusk/imgui/ImGuiConsole.hpp"
 #include "dusk/memory.h"
@@ -408,6 +409,13 @@ void dScnName_c::changeGameScene() {
         fopScnM_ChangeReq(this, field_0x41f == 0 ? fpcNm_PLAY_SCENE_e : fpcNm_PLAY_SCENE_e, 0, 5);
         #endif
         dComIfGp_offEnableNextStage();
+
+        if (dComIfGs_getSaveData()->getReserve().isIntroSkipped()) {
+            if (!dComIfGs_isEventBit(dSv_event_flag_c::F_0226)) {
+                dComIfGs_offSaveSwitch(dStage_SaveTbl_FARON, 12);
+            }
+            dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 20);
+        }
 
         if (dComIfGs_getSaveData()->getReserve().isBossRush()) {
             dusk::bossrush::set_next_stage_for_current();
