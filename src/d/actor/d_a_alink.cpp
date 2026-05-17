@@ -53,6 +53,7 @@
 
 #if TARGET_PC
 #include "dusk/action_bindings.h"
+#include "dusk/bossrush.hpp"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "res/Object/Alink.h"
@@ -11675,7 +11676,12 @@ int daAlink_c::orderZTalk() {
 
     if (checkMidnaRide()) {
         fopAc_ac_c* zhint = dComIfGp_att_getZHint();
-        if (zhint != NULL) {
+#if TARGET_PC
+        const bool bossRushHubMidnaPrompt = dusk::bossrush::has_hub_midna_prompt();
+#else
+        const bool bossRushHubMidnaPrompt = false;
+#endif
+        if (zhint != NULL || bossRushHubMidnaPrompt) {
             setMidnaTalkStatus(BUTTON_STATUS_CHECK);
         }
 

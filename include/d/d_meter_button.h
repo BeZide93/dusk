@@ -129,6 +129,7 @@ public:
     void setAlphaIconAnimeMax();
     bool isClose();
     void setString(char*, u8, u8, u8);
+    void setHideZButtonGlyph(bool);
     void hideAll();
     f32 getCenterPosCalc(u8, char*, int);
     void trans_button(int, f32);

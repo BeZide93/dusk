@@ -9,6 +9,7 @@
 #include "f_op/f_op_actor_mng.h"
 #include "f_op/f_op_overlap_mng.h"
 #include "f_pc/f_pc_name.h"
+#include "Z2AudioLib/Z2SeqMgr.h"
 #include <cstdio>
 #include <cstring>
 
@@ -190,10 +191,32 @@ void set_return_place_hub() {
     dComIfGs_getSaveData()->getPlayer().getPlayerReturnPlace().set(kBossRushHubStage, kBossRushHubRoom, 0);
 }
 
+void reset_audio_for_warp() {
+    Z2SeqMgr* seqMgr = Z2GetSeqMgr();
+    if (seqMgr == NULL) {
+        return;
+    }
+
+    seqMgr->setBattleBgmOff(true);
+    seqMgr->resetBattleBgmParams();
+    seqMgr->bgmAllUnMute(0);
+    seqMgr->unMuteSceneBgm(0);
+    seqMgr->bgmStop(0, 0);
+    seqMgr->subBgmStop();
+    seqMgr->subBgmStopInner();
+    seqMgr->bgmStreamStop(0);
+    if (seqMgr->mFanfareHandle) {
+        seqMgr->mFanfareHandle->stop(0);
+    }
+    seqMgr->mFanfareID.setAnonymous();
+    seqMgr->mFanfareCount = 0;
+}
+
 void warp_to_hub() {
     reserve().setBossRushState(kBossRushStateHub);
     reserve().setBossRushIndex(0);
     set_return_place_hub();
+    reset_audio_for_warp();
     dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
 }
 
@@ -201,6 +224,7 @@ void set_next_stage_for_entry(const BossRushEntry& entry) {
     ensure_story_state();
     clear_boss_flags(entry);
     set_return_place_hub();
+    reset_audio_for_warp();
     dComIfGp_setNextStage(entry.stage, entry.point, entry.room, entry.layer);
 }
 
@@ -518,6 +542,7 @@ void set_next_stage_for_current() {
 
     if (reserve().getBossRushState() == kBossRushStateHub) {
         set_return_place_hub();
+        reset_audio_for_warp();
         dComIfGp_setNextStage(kBossRushHubStage, kBossRushHubPoint, kBossRushHubRoom, kBossRushHubLayer);
         return;
     }

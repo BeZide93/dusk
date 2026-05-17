@@ -1871,7 +1871,9 @@ void dMeter2_c::moveButtonZ() {
             dComIfGp_setZStatus(mZStatus, 1);
         }
 
-        if (!wiiuStyle) {
+        if (wiiuStyle) {
+            mpMeterDraw->updateButtonZActionState(mZStatus);
+        } else {
             mpMeterDraw->drawButtonZ(mZStatus);
         }
     }
@@ -2487,8 +2489,14 @@ void dMeter2_c::move2DContents() {
             var_r30 -= 1;
         }
 
+        const bool hideWiiUMidnaGlyph =
+            dusk::UseWiiUControllerStyle() && mZStatus == BUTTON_STATUS_CHECK;
+        mpEmpButton->setHideZButtonGlyph(hideWiiUMidnaGlyph);
         if (mpMeterDraw->isEmphasisZ() && var_r30 != 0 && mpEmpButton->isSetButton(3)) {
-            if (mZStatus == 8) {
+            static char emptyWiiUMidnaPrompt[] = "";
+            if (hideWiiUMidnaGlyph) {
+                mpEmpButton->setString(emptyWiiUMidnaPrompt, 3, 2 - var_r30, 0);
+            } else if (mZStatus == 8) {
                 mpEmpButton->setString(mpMeterDraw->getActionString(100, 0, NULL), 3, 2 - var_r30,
                                        0);
             } else {

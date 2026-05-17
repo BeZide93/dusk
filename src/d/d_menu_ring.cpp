@@ -42,6 +42,105 @@ static bool dMenuRing_closeTrigger() {
     return dMw_UP_TRIGGER() || (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER());
 }
 
+static J2DPicture* dMenuRing_asPicture(J2DPane* pane) {
+    if (pane == NULL || pane->getTypeID() != 18) {
+        return NULL;
+    }
+
+    return static_cast<J2DPicture*>(pane);
+}
+
+static J2DPicture* dMenuRing_findPictureByIndex(J2DPane* pane, int& index, int targetIndex) {
+    if (pane == NULL) {
+        return NULL;
+    }
+
+    if (J2DPicture* picture = dMenuRing_asPicture(pane)) {
+        if (index == targetIndex) {
+            return picture;
+        }
+        index++;
+    }
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        if (J2DPicture* picture = dMenuRing_findPictureByIndex(child, index, targetIndex)) {
+            return picture;
+        }
+    }
+
+    return NULL;
+}
+
+static void dMenuRing_changePictureTextureByIndex(J2DPane* pane, int targetIndex,
+                                                  const char* textureName) {
+    int index = 0;
+    J2DPicture* picture = dMenuRing_findPictureByIndex(pane, index, targetIndex);
+    if (picture == NULL) {
+        return;
+    }
+
+    ResTIMG* texture =
+        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
+    if (texture != NULL) {
+        picture->changeTexture(texture, 0);
+    }
+}
+
+static void dMenuRing_changePictureTexturesFromIndex(J2DPane* pane, int firstIndex,
+                                                     const char* textureName) {
+    ResTIMG* texture =
+        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
+    if (texture == NULL) {
+        return;
+    }
+
+    for (int targetIndex = firstIndex;; targetIndex++) {
+        int index = 0;
+        J2DPicture* picture = dMenuRing_findPictureByIndex(pane, index, targetIndex);
+        if (picture == NULL) {
+            break;
+        }
+
+        picture->changeTexture(texture, 0);
+    }
+}
+
+static bool dMenuRing_changePictureTexture(J2DScreen* screen, u64 paneName, const char* textureName) {
+    J2DPane* pane = screen->search(paneName);
+    J2DPicture* picture = dMenuRing_asPicture(pane);
+    if (picture == NULL) {
+        return false;
+    }
+
+    ResTIMG* texture =
+        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
+    if (texture == NULL) {
+        return false;
+    }
+
+    picture->changeTexture(texture, 0);
+    return true;
+}
+
+static void dMenuRing_applyWiiUSetItemPrompt(J2DScreen* screen) {
+    J2DPane* rButton = screen->search(MULTI_CHAR('r_btn_n'));
+    if (rButton == NULL) {
+        return;
+    }
+
+    rButton->translate(rButton->getTranslateX() + 64.0f, rButton->getTranslateY());
+    if (!dMenuRing_changePictureTexture(screen, MULTI_CHAR('r_btn_b'),
+                                        "im_zelda_button_z_base.bti"))
+    {
+        dMenuRing_changePictureTextureByIndex(rButton, 0, "im_zelda_button_z_base.bti");
+    }
+    if (!dMenuRing_changePictureTexture(screen, MULTI_CHAR('r_btn'), "im_zelda_button_z_text.bti")) {
+        dMenuRing_changePictureTextureByIndex(rButton, 1, "im_zelda_button_z_text.bti");
+    }
+    dMenuRing_changePictureTexturesFromIndex(rButton, 1, "im_zelda_button_z_text.bti");
+}
+
 typedef void (dMenu_Ring_c::*initFunc)();
 static initFunc stick_init[] = {
     /* STATUS_WAIT          */ &dMenu_Ring_c::stick_wait_init,
@@ -338,6 +437,7 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         mpTextParent[0]->show();
         mpTextParent[0]->setAlphaRate(1.0f);
         mpScreen->search(MULTI_CHAR('r_btn_n'))->show();
+        dMenuRing_applyWiiUSetItemPrompt(mpScreen);
     } else {
         mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
     }

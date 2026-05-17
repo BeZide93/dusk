@@ -25,6 +25,57 @@
 #define STR_BUF_LEN 512
 #endif
 
+static bool dMeterButton_hasPaneTag(J2DPane* pane, u64 tag) {
+    if (pane == NULL) {
+        return false;
+    }
+
+    if (pane->mInfoTag == tag) {
+        return true;
+    }
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        if (dMeterButton_hasPaneTag(child, tag)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void dMeterButton_setPaneTreeVisible(J2DPane* pane, bool visible) {
+    if (pane == NULL) {
+        return;
+    }
+
+    if (visible) {
+        pane->show();
+    } else {
+        pane->hide();
+    }
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        dMeterButton_setPaneTreeVisible(child, visible);
+    }
+}
+
+static void dMeterButton_hidePaneTreeExcept(J2DPane* pane, u64 keepTag) {
+    if (pane == NULL) {
+        return;
+    }
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        if (dMeterButton_hasPaneTag(child, keepTag)) {
+            dMeterButton_hidePaneTreeExcept(child, keepTag);
+        } else {
+            dMeterButton_setPaneTreeVisible(child, false);
+        }
+    }
+}
+
 dMeterButton_c::dMeterButton_c() {
     _create();
 }
@@ -3043,6 +3094,46 @@ void dMeterButton_c::setString(char* i_string, u8 i_button, u8 param_2, u8 param
 
     for (int i = 0; i < 5; i++) {
         strcpy(mpTextBox[5 + i]->getStringPtr(), i_string);
+    }
+}
+
+void dMeterButton_c::setHideZButtonGlyph(bool i_hide) {
+    J2DPane* z_button = mpButtonScreen->search('zbtn');
+    J2DPane* z_label = mpButtonScreen->search(MULTI_CHAR('z_btnl'));
+    J2DPane* z_root = mpButtonZ != NULL ? mpButtonZ->getPanePtr() : NULL;
+
+    if (z_root != NULL) {
+        if (i_hide) {
+            dMeterButton_hidePaneTreeExcept(z_root, MULTI_CHAR('midona'));
+        } else {
+            dMeterButton_setPaneTreeVisible(z_root, true);
+        }
+    }
+
+    if (z_button != NULL) {
+        if (i_hide) {
+            z_button->hide();
+        } else {
+            z_button->show();
+        }
+    }
+
+    if (z_label != NULL) {
+        if (i_hide) {
+            z_label->hide();
+        } else {
+            z_label->show();
+        }
+    }
+
+    if (i_hide) {
+        for (int slot = 0; slot < 2; slot++) {
+            if (field_0x4be[slot] == BUTTON_Z_e) {
+                for (int i = 0; i < 5; i++) {
+                    strcpy(mpTextBox[(slot * 5) + i]->getStringPtr(), "");
+                }
+            }
+        }
     }
 }
 

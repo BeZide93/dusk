@@ -85,6 +85,7 @@ public:
     void drawButtonB(u8, bool, f32, f32, f32, f32, f32, bool);
     void drawButtonR(u8, u8, bool, bool);
     void drawButtonZ(u8);
+    void updateButtonZActionState(u8);
     void drawButtonZItem(u8);
     void drawButton3D(u8);
     void drawButtonC(u8, bool);

@@ -2924,6 +2924,13 @@ void dMeter2Draw_c::drawButtonZ(u8 i_action) {
                            g_drawHIO.mButtonZFontPosY + hudTransform.offsetY);
 }
 
+void dMeter2Draw_c::updateButtonZActionState(u8 i_action) {
+    getActionString(i_action, 1, &field_0x764);
+    if (dComIfGp_isZSetFlag(2) || dComIfGp_isZSetFlag(4)) {
+        field_0x764 = 7;
+    }
+}
+
 void dMeter2Draw_c::drawButtonZItem(u8 i_itemNo) {
     mpTextXY[2]->hide();
 
