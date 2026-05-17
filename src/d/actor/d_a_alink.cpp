@@ -9416,7 +9416,17 @@ BOOL daAlink_c::spActionTrigger() {
 BOOL daAlink_c::manualShieldButton() const {
 #if TARGET_PC
     if (dusk::getSettings().game.manualShielding) {
-        return mDoCPd_c::getHoldLockL(PAD_1) && mDoCPd_c::getHoldLockR(PAD_1);
+        if (!mDoCPd_c::getHoldLockR(PAD_1)) {
+            return false;
+        }
+
+        if (mDoCPd_c::getHoldLockL(PAD_1)) {
+            return true;
+        }
+
+        return dComIfGs_getOptAttentionType() == 1 && mAttention != NULL &&
+               mAttention->LockonTruth() &&
+               (mTargetedActor != NULL || mAttention->LockonTarget(0) != NULL);
     }
 #endif
 

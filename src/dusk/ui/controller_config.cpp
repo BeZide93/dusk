@@ -166,6 +166,8 @@ const char* controller_button_name(PADButton button) {
             return "+";
         case PAD_BUTTON_MINUS:
             return "-";
+        case PAD_TRIGGER_L:
+            return "L (Target)";
         case PAD_TRIGGER_Z:
             return "Z (R)";
         default:
@@ -174,6 +176,21 @@ const char* controller_button_name(PADButton button) {
     }
 
     return PADGetButtonName(button);
+}
+
+const char* controller_axis_name(PADAxis axis) {
+    if (UseWiiUControllerStyle()) {
+        switch (axis) {
+        case PAD_AXIS_TRIGGER_L:
+            return "ZL (Jump)";
+        case PAD_AXIS_TRIGGER_R:
+            return "ZR (Action)";
+        default:
+            break;
+        }
+    }
+
+    return PADGetAxisName(axis);
 }
 
 bool input_neutral(int port) {
@@ -386,7 +403,9 @@ void ControllerConfigWindow::build_port_tab(Rml::Element* content, int port) {
                                   .isDisabled = [port] { return PADGetDeadZones(port) == nullptr; },
                               }),
         rightPane, [](Pane& pane) {
-            pane.add_text("Treat analog trigger movement as digital L and R button input.");
+            pane.add_text("Treat analog trigger movement as digital L/R button input. In Wii U controller "
+                          "style, ZL/ZR use the analog trigger bindings directly; this mainly affects "
+                          "GameCube-style trigger behavior and digital fallback bindings.");
         });
 
     render_page(rightPane, port, mPage);
@@ -596,7 +615,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             auto addKeyAxis = [&](PADAxis axis) {
                 pane.add_select_button(
                         {
-                            .key = PADGetAxisName(axis),
+                            .key = controller_axis_name(axis),
                             .getValue =
                                 [this, port, axis] {
                                     if (mPendingKeyAxis == static_cast<int>(axis)) {
@@ -653,7 +672,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
                 }
                 PADAxisMapping& mapping = axes[axis];
                 pane.add_select_button({
-                                           .key = PADGetAxisName(mapping.padAxis),
+                                           .key = controller_axis_name(mapping.padAxis),
                                            .getValue =
                                                [this, &mapping, gamepad] {
                                                    if (mPendingAxisMapping == &mapping) {

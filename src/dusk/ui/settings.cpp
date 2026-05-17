@@ -1862,6 +1862,36 @@ SelectButton& config_aim_mode_select(Pane& leftPane, Pane& rightPane) {
     return button;
 }
 
+const char* lock_on_type_name() {
+    return dComIfGs_getOptAttentionType() == 0 ? "Hold" : "Switch";
+}
+
+SelectButton& config_lock_on_type_select(Pane& leftPane, Pane& rightPane) {
+    auto& button = leftPane.add_select_button({
+        .key = "Lock-on Type",
+        .getValue = [] { return Rml::String{lock_on_type_name()}; },
+        .isModified = [] { return dComIfGs_getOptAttentionType() != 0; },
+    });
+    leftPane.register_control(button, rightPane, [](Pane& pane) {
+        pane.clear();
+        for (u8 type = 0; type < 2; ++type) {
+            pane
+                .add_button({
+                    .text = Rml::String{type == 0 ? "Hold" : "Switch"},
+                    .isSelected = [type] { return dComIfGs_getOptAttentionType() == type; },
+                })
+                .on_pressed([type] {
+                    mDoAud_seStartMenu(kSoundItemChange);
+                    dComIfGs_setOptAttentionType(type);
+                });
+        }
+        pane.add_text("Mirrors the original in-game Lock-on Type option. Hold requires holding "
+                      "Target. Switch toggles lock-on; with Manual Shielding enabled, ZR can "
+                      "shield while an enemy is already locked on.");
+    });
+    return button;
+}
+
 SelectButton& config_controller_style_select(Pane& leftPane, Pane& rightPane) {
     auto& var = getSettings().game.controllerStyle;
     auto& button = leftPane.add_select_button({
@@ -2621,7 +2651,9 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         addOption("Jump Button", getSettings().game.enableJumpButton,
             "Enables the Wii U style ZL jump button and ZL+B jump attack.");
         addOption("Manual Shielding", getSettings().game.manualShielding,
-            "Requires holding Target and ZR to shield. Shield Attack becomes Target+ZR+B.");
+            "Requires Target+ZR to shield. With Lock-on Type set to Switch, ZR alone shields "
+            "while locked on. Shield Attack becomes ZR+B while shielding.");
+        config_lock_on_type_select(leftPane, rightPane);
         addOption("No 2nd Fish for Cat", getSettings().game.no2ndFishForCat,
             "Skip needing to catch a second fish for Sera's cat.");
         addSpeedrunDisabledOption("Sun's Song (R+X)", getSettings().game.sunsSong,
