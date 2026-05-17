@@ -2620,6 +2620,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Link will not recoil when his sword hits walls.");
         addOption("Jump Button", getSettings().game.enableJumpButton,
             "Enables the Wii U style ZL jump button and ZL+B jump attack.");
+        addOption("Manual Shielding", getSettings().game.manualShielding,
+            "Requires holding Target and ZR to shield. Shield Attack becomes Target+ZR+B.");
         addOption("No 2nd Fish for Cat", getSettings().game.no2ndFishForCat,
             "Skip needing to catch a second fish for Sera's cat.");
         addSpeedrunDisabledOption("Sun's Song (R+X)", getSettings().game.sunsSong,

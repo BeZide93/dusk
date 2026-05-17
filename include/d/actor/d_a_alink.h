@@ -1585,6 +1585,8 @@ public:
     BOOL itemTrigger();
     BOOL spActionButton();
     BOOL spActionTrigger();
+    BOOL manualShieldButton() const;
+    BOOL manualShieldAttackTrigger();
     BOOL midnaTalkTrigger() const;
     BOOL swordSwingTrigger();
     void setItemActionButtonStatus(u8 i_status);

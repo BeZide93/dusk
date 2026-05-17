@@ -41,6 +41,7 @@ UserSettings g_userSettings = {
         .disableRupeeCutscenes {"game.disableRupeeCutscenes", false},
         .noSwordRecoil {"game.noSwordRecoil", false},
         .enableJumpButton {"game.enableJumpButton", true},
+        .manualShielding {"game.manualShielding", false},
         .damageMultiplier {"game.damageMultiplier", 1},
         .newGamePlusHealthScalePercent {"game.newGamePlusHealthScalePercent", 0},
         .noHeartDrops {"game.noHeartDrops", false},
@@ -363,6 +364,7 @@ void registerSettings() {
     Register(g_userSettings.game.disableRupeeCutscenes);
     Register(g_userSettings.game.noSwordRecoil);
     Register(g_userSettings.game.enableJumpButton);
+    Register(g_userSettings.game.manualShielding);
     Register(g_userSettings.game.damageMultiplier);
     Register(g_userSettings.game.newGamePlusHealthScalePercent);
     Register(g_userSettings.game.noHeartDrops);

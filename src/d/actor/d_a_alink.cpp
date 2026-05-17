@@ -9413,6 +9413,20 @@ BOOL daAlink_c::spActionTrigger() {
     return itemTriggerCheck(BTN_R);
 }
 
+BOOL daAlink_c::manualShieldButton() const {
+#if TARGET_PC
+    if (dusk::getSettings().game.manualShielding) {
+        return mDoCPd_c::getHoldLockL(PAD_1) && mDoCPd_c::getHoldLockR(PAD_1);
+    }
+#endif
+
+    return false;
+}
+
+BOOL daAlink_c::manualShieldAttackTrigger() {
+    return manualShieldButton() && itemTriggerCheck(BTN_B);
+}
+
 BOOL daAlink_c::midnaTalkTrigger() const {
 #if TARGET_PC
     // If we have a custom bind for Midna, check that instead
@@ -9429,6 +9443,10 @@ BOOL daAlink_c::midnaTalkTrigger() const {
 }
 
 BOOL daAlink_c::swordSwingTrigger() {
+    if (manualShieldButton()) {
+        return false;
+    }
+
     return swordTrigger();
 }
 
@@ -12053,10 +12071,20 @@ BOOL daAlink_c::checkItemAction() {
             ) && ((mLinkAcch.ChkGroundHit() || checkMagneBootsOn()) && dComIfGp_getRStatus() == 0)
             )
         {
-            setRStatus(BUTTON_STATUS_SHIELD_ATTACK);
+            if (dusk::getSettings().game.manualShielding) {
+                if (manualShieldButton()) {
+                    setBStatus(BUTTON_STATUS_SHIELD_ATTACK);
 
-            if (spActionTrigger()) {
-                return procGuardAttackInit();
+                    if (manualShieldAttackTrigger()) {
+                        return procGuardAttackInit();
+                    }
+                }
+            } else {
+                setRStatus(BUTTON_STATUS_SHIELD_ATTACK);
+
+                if (spActionTrigger()) {
+                    return procGuardAttackInit();
+                }
             }
         }
     }
