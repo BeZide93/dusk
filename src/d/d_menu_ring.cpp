@@ -42,103 +42,53 @@ static bool dMenuRing_closeTrigger() {
     return dMw_UP_TRIGGER() || (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER());
 }
 
-static J2DPicture* dMenuRing_asPicture(J2DPane* pane) {
-    if (pane == NULL || pane->getTypeID() != 18) {
-        return NULL;
-    }
-
-    return static_cast<J2DPicture*>(pane);
-}
-
-static J2DPicture* dMenuRing_findPictureByIndex(J2DPane* pane, int& index, int targetIndex) {
+static void dMenuRing_hidePaneTree(J2DPane* pane) {
     if (pane == NULL) {
-        return NULL;
+        return;
     }
 
-    if (J2DPicture* picture = dMenuRing_asPicture(pane)) {
-        if (index == targetIndex) {
-            return picture;
-        }
-        index++;
-    }
+    pane->hide();
 
     for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
          child = child->getNextChildPane()) {
-        if (J2DPicture* picture = dMenuRing_findPictureByIndex(child, index, targetIndex)) {
-            return picture;
-        }
+        dMenuRing_hidePaneTree(child);
     }
-
-    return NULL;
 }
 
-static void dMenuRing_changePictureTextureByIndex(J2DPane* pane, int targetIndex,
-                                                  const char* textureName) {
-    int index = 0;
-    J2DPicture* picture = dMenuRing_findPictureByIndex(pane, index, targetIndex);
-    if (picture == NULL) {
+static void dMenuRing_showPaneTree(J2DPane* pane) {
+    if (pane == NULL) {
         return;
     }
 
-    ResTIMG* texture =
-        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
-    if (texture != NULL) {
-        picture->changeTexture(texture, 0);
+    pane->show();
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        dMenuRing_showPaneTree(child);
     }
 }
 
-static void dMenuRing_changePictureTexturesFromIndex(J2DPane* pane, int firstIndex,
-                                                     const char* textureName) {
-    ResTIMG* texture =
-        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
-    if (texture == NULL) {
-        return;
-    }
-
-    for (int targetIndex = firstIndex;; targetIndex++) {
-        int index = 0;
-        J2DPicture* picture = dMenuRing_findPictureByIndex(pane, index, targetIndex);
-        if (picture == NULL) {
-            break;
-        }
-
-        picture->changeTexture(texture, 0);
+static void dMenuRing_showPaneParents(J2DPane* pane) {
+    for (J2DPane* parent = pane; parent != NULL; parent = parent->getParentPane()) {
+        parent->show();
     }
 }
 
-static bool dMenuRing_changePictureTexture(J2DScreen* screen, u64 paneName, const char* textureName) {
-    J2DPane* pane = screen->search(paneName);
-    J2DPicture* picture = dMenuRing_asPicture(pane);
-    if (picture == NULL) {
-        return false;
-    }
+static J2DPane* dMenuRing_getWiiUSetItemZAnchor(J2DScreen* screen) {
+    return screen != NULL ? screen->search(MULTI_CHAR('r_btn_n')) : NULL;
+}
 
-    ResTIMG* texture =
-        (ResTIMG*)dComIfGp_getMain2DArchive()->getResource('TIMG', textureName);
-    if (texture == NULL) {
-        return false;
-    }
-
-    picture->changeTexture(texture, 0);
-    return true;
+static void dMenuRing_applyWiiUSetItemZVisualOffset(Vec& pos) {
+    pos.x += 5.0f;
+    pos.y -= 5.0f;
 }
 
 static void dMenuRing_applyWiiUSetItemPrompt(J2DScreen* screen) {
-    J2DPane* rButton = screen->search(MULTI_CHAR('r_btn_n'));
-    if (rButton == NULL) {
-        return;
+    J2DPane* rButton = dMenuRing_getWiiUSetItemZAnchor(screen);
+    if (rButton != NULL) {
+        rButton->translate(rButton->getTranslateX() + 64.0f, rButton->getTranslateY());
+        rButton->hide();
     }
-
-    rButton->translate(rButton->getTranslateX() + 64.0f, rButton->getTranslateY());
-    if (!dMenuRing_changePictureTexture(screen, MULTI_CHAR('r_btn_b'),
-                                        "im_zelda_button_z_base.bti"))
-    {
-        dMenuRing_changePictureTextureByIndex(rButton, 0, "im_zelda_button_z_base.bti");
-    }
-    if (!dMenuRing_changePictureTexture(screen, MULTI_CHAR('r_btn'), "im_zelda_button_z_text.bti")) {
-        dMenuRing_changePictureTextureByIndex(rButton, 1, "im_zelda_button_z_text.bti");
-    }
-    dMenuRing_changePictureTexturesFromIndex(rButton, 1, "im_zelda_button_z_text.bti");
 }
 
 typedef void (dMenu_Ring_c::*initFunc)();
@@ -266,6 +216,8 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     field_0x6d1 = 0xff;
     field_0x6d2 = 0xff;
     field_0x6d3 = 0xff;
+    mpWiiUSetItemZScreen = NULL;
+    mpWiiUSetItemZButton = NULL;
     int i;
     for (int i = 0; i < 3; i++) {
         field_0x580[i] = 0.0f;
@@ -436,8 +388,8 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     if (dMenuRing_wiiuControllerStyle() && !mPlayerIsWolf) {
         mpTextParent[0]->show();
         mpTextParent[0]->setAlphaRate(1.0f);
-        mpScreen->search(MULTI_CHAR('r_btn_n'))->show();
         dMenuRing_applyWiiUSetItemPrompt(mpScreen);
+        setupWiiUSetItemZButton();
     } else {
         mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
     }
@@ -602,6 +554,12 @@ dMenu_Ring_c::~dMenu_Ring_c() {
     JKR_DELETE(mpKanteraMeter);
     mpKanteraMeter = NULL;
 
+    JKR_DELETE(mpWiiUSetItemZButton);
+    mpWiiUSetItemZButton = NULL;
+
+    JKR_DELETE(mpWiiUSetItemZScreen);
+    mpWiiUSetItemZScreen = NULL;
+
     JKR_DELETE(mpScreen);
     mpScreen = NULL;
 
@@ -684,6 +642,40 @@ void dMenu_Ring_c::_delete() {
     /* empty function */
 }
 
+void dMenu_Ring_c::setupWiiUSetItemZButton() {
+    mpWiiUSetItemZScreen = JKR_NEW J2DScreen();
+    if (mpWiiUSetItemZScreen == NULL) {
+        return;
+    }
+
+    bool loaded =
+        mpWiiUSetItemZScreen->setPriority("zelda_game_image.blo", 0x20000,
+                                          dComIfGp_getMain2DArchive());
+    if (!loaded) {
+        JKR_DELETE(mpWiiUSetItemZScreen);
+        mpWiiUSetItemZScreen = NULL;
+        return;
+    }
+
+    dPaneClass_showNullPane(mpWiiUSetItemZScreen);
+    dMenuRing_hidePaneTree(mpWiiUSetItemZScreen->search('ROOT'));
+
+    J2DPane* zButton = mpWiiUSetItemZScreen->search(MULTI_CHAR('zbtn_n'));
+    if (zButton == NULL) {
+        JKR_DELETE(mpWiiUSetItemZScreen);
+        mpWiiUSetItemZScreen = NULL;
+        return;
+    }
+
+    dMenuRing_showPaneParents(zButton);
+    dMenuRing_showPaneTree(zButton);
+    mpWiiUSetItemZButton = JKR_NEW CPaneMgr(mpWiiUSetItemZScreen, MULTI_CHAR('zbtn_n'), 2, NULL);
+    if (mpWiiUSetItemZButton != NULL) {
+        mpWiiUSetItemZButton->setAlphaRate(1.0f);
+        mpWiiUSetItemZButton->show();
+    }
+}
+
 /** @details
  * This is the update function which runs every frame. 
  * It runs a process based on mStatus every frame or 
@@ -708,6 +700,29 @@ void dMenu_Ring_c::_move() {
         mRingCursorScale = g_ringHIO.mCursorScale;
         mpDrawCursor->setScale(g_ringHIO.mCursorScale);
     }
+}
+
+void dMenu_Ring_c::drawWiiUSetItemZButton() {
+    if (mpWiiUSetItemZScreen == NULL || mpWiiUSetItemZButton == NULL) {
+        return;
+    }
+
+    J2DPane* anchor = dMenuRing_getWiiUSetItemZAnchor(mpScreen);
+    if (anchor == NULL) {
+        return;
+    }
+
+    CPaneMgr paneMgr;
+    Vec pos = paneMgr.getGlobalVtxCenter(anchor, true, 0);
+    pos.x += mCenterPosX;
+    pos.y += mCenterPosY;
+    dMenuRing_applyWiiUSetItemZVisualOffset(pos);
+
+    mpWiiUSetItemZButton->scale(0.9f, 0.9f);
+    mpWiiUSetItemZButton->paneTrans(pos.x - mpWiiUSetItemZButton->getInitGlobalCenterPosX(),
+                                    pos.y - mpWiiUSetItemZButton->getInitGlobalCenterPosY());
+    mpWiiUSetItemZButton->setAlphaRate(mAlphaRate);
+    mpWiiUSetItemZScreen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
 }
 
 void dMenu_Ring_c::_draw() {
@@ -750,6 +765,7 @@ void dMenu_Ring_c::_draw() {
             mpTextParent[1]->setAlphaRate(alphaRate * mAlphaRate);
         }
         mpScreen->draw(mCenterPosX, mCenterPosY, grafPort);
+        drawWiiUSetItemZButton();
         if (mStatus != STATUS_EXPLAIN && mPikariFlashingSpeed > 0.0f) {
             Vec pos;
             CPaneMgr paneMgr;

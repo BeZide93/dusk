@@ -26,13 +26,38 @@
 
 namespace {
 
-bool hud_button_background_hidden_by_context() {
-    if (dComIfGp_isPauseFlag() || dMeter2Info_isSub2DStatus(1) || dComIfGp_event_runCheck()) {
+bool hud_common_button_context_hidden() {
+    if (dComIfGp_isPauseFlag() || dMeter2Info_isSub2DStatus(1) ||
+        !dComIfGp_2dShowCheck())
+    {
+        return true;
+    }
+
+    dMsgObject_c* msgObject = dMsgObject_getMsgObjectClass();
+    if (msgObject != NULL && msgObject->isPlaceMessage()) {
+        return true;
+    }
+
+    if (dCam_getBody()->Mode() == 4 || dComIfGp_checkPlayerStatus0(0, 0x8000000) ||
+        dComIfGp_checkPlayerStatus0(0, 0x2000108))
+    {
         return true;
     }
 
     daAlink_c* player = (daAlink_c*)dComIfGp_getPlayer(0);
     return player != NULL && player->checkPlayerDemoMode();
+}
+
+bool hud_button_background_hidden_by_context() {
+    return hud_common_button_context_hidden() || dComIfGp_event_runCheck();
+}
+
+bool hud_midna_icon_hidden_by_context() {
+    if (hud_common_button_context_hidden()) {
+        return true;
+    }
+
+    return dComIfGp_event_runCheck() && !dMsgObject_isTalkNowCheck();
 }
 
 f32 hud_button_background_alpha(f32 alpha) {
@@ -3749,6 +3774,7 @@ void dMeter2Draw_c::setButtonIconBAlpha(u8 unused0, u32 unused1, bool param_2) {
 
 void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
     const bool wiiuStyle = dusk::UseWiiUControllerStyle();
+    const bool keepWiiUWolfMidnaVisible = wiiuStyle && daPy_py_c::checkNowWolf();
     const auto hudTransform = wiiuStyle ?
         dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::DPad) :
         dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
@@ -3803,9 +3829,10 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         f32 temp_f31 = mpButtonParent->getAlphaRate();
         bool var_r31 = 1;
 
-        if (getCanoeFishing() ||
+        if (hud_midna_icon_hidden_by_context() || getCanoeFishing() ||
               /*dSv_event_flag_c::M_009 - Cutscene - [cutscene: 6B] Prison escape - Midna rides on back */
-            (!dComIfGs_isEventBit(0x0540) && !dMeter2Info_isUseButton(0x800)) ||
+            (!dComIfGs_isEventBit(0x0540) && !dMeter2Info_isUseButton(0x800) &&
+             !keepWiiUWolfMidnaVisible) ||
              /* dSv_event_flag_c::M_067 - Main Event - Midna riding / not riding (ON == riding) */
             !dComIfGs_isEventBit(0x0C10) ||
             /* dSv_event_flag_c::F_0800 - Cutscene - After returning to Ordon Woods, until Midna comes out of the shadows 
@@ -3813,9 +3840,7 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
             dComIfGs_isEventBit(0x6140))
         {
             var_f29 = 0.0f;
-        } else if (dComIfGp_isPauseFlag()) {
-            var_f29 = 0.0f;
-        } else if (!dMeter2Info_isUseButton(0x800)) {
+        } else if (!dMeter2Info_isUseButton(0x800) && !keepWiiUWolfMidnaVisible) {
             var_f29 = g_drawHIO.mButtonXYItemDimAlpha / 255.0f;
         } else if (isEmphasisZ() && !(param_0 & 0x40000000) && temp_f31 > 0.0f) {
             if (field_0x738 == 0.0f) {

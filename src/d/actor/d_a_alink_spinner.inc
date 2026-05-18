@@ -211,7 +211,9 @@ int daAlink_c::procSpinnerWait() {
             mProcVar3.field_0x300e = shape_angle.y;
         }
     } else {
-        if (checkSetItemTrigger(dItemNo_SPINNER_e) || swordSwingTrigger() || itemSetBtn == 2) {
+        if (checkSetItemTrigger(dItemNo_SPINNER_e) || swordSwingTrigger() ||
+            daAlink_isLegacyZSelectItemSlot(itemSetBtn))
+        {
             if (swordSwingTrigger()) {
                 swordEquip(0);
             }
