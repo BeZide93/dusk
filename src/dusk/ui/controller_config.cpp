@@ -154,9 +154,17 @@ bool is_dpad_button(PADButton button) {
 }
 
 bool is_action_button(PADButton button) {
+    if (UseWiiUControllerStyle() && button == PAD_TRIGGER_L) {
+        return true;
+    }
+
     return button == PAD_BUTTON_A || button == PAD_BUTTON_B || button == PAD_BUTTON_X ||
            button == PAD_BUTTON_Y || button == PAD_BUTTON_START || button == PAD_BUTTON_MINUS ||
            button == PAD_TRIGGER_Z;
+}
+
+bool show_digital_triggers() {
+    return !UseWiiUControllerStyle();
 }
 
 const char* controller_button_name(PADButton button) {
@@ -167,7 +175,7 @@ const char* controller_button_name(PADButton button) {
         case PAD_BUTTON_MINUS:
             return "-";
         case PAD_TRIGGER_L:
-            return "L (Target)";
+            return "L";
         case PAD_TRIGGER_Z:
             return "Z (R)";
         default:
@@ -517,6 +525,9 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             addKeyButton(PAD_BUTTON_START);
             addKeyButton(PAD_BUTTON_MINUS);
             addKeyButton(PAD_TRIGGER_Z);
+            if (UseWiiUControllerStyle()) {
+                addKeyButton(PAD_TRIGGER_L);
+            }
 
             pane.add_section("D-Pad");
             addKeyButton(PAD_BUTTON_UP);
@@ -659,9 +670,11 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             addKeyAxis(PAD_AXIS_TRIGGER_L);
             addKeyAxis(PAD_AXIS_TRIGGER_R);
 
-            pane.add_section("Digital");
-            addKeyButton(PAD_TRIGGER_L);
-            addKeyButton(PAD_TRIGGER_R);
+            if (show_digital_triggers()) {
+                pane.add_section("Digital");
+                addKeyButton(PAD_TRIGGER_L);
+                addKeyButton(PAD_TRIGGER_R);
+            }
             break;
         }
 
@@ -703,7 +716,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
             }
         }
 
-        if (getSettings().backend.enableAdvancedSettings) {
+        if (getSettings().backend.enableAdvancedSettings && show_digital_triggers()) {
             pane.add_section("Digital");
             if (buttons != nullptr) {
                 for (u32 i = 0; i < buttonCount; ++i) {
