@@ -15,6 +15,11 @@ enum class BloomMode : int {
     Dusk = 2,
 };
 
+enum class Resampler : int {
+    Bilinear = 0,
+    Area = 1,
+};
+
 enum class GameLanguage : u8 {
     English = OS_LANGUAGE_ENGLISH,
     German = OS_LANGUAGE_GERMAN,
@@ -56,11 +61,23 @@ enum class MinimapSlideDirection : u8 {
     RightToLeft = 1,
 };
 
+enum class FrameInterpMode : u8 {
+    Off = 0,
+    Capped = 1,
+    Unlimited = 2,
+};
+
 namespace config {
 template <>
 struct ConfigEnumRange<BloomMode> {
     static constexpr auto min = BloomMode::Off;
     static constexpr auto max = BloomMode::Dusk;
+};
+
+template <>
+struct ConfigEnumRange<Resampler> {
+    static constexpr auto min = Resampler::Bilinear;
+    static constexpr auto max = Resampler::Area;
 };
 
 template <>
@@ -104,7 +121,13 @@ struct ConfigEnumRange<MinimapSlideDirection> {
     static constexpr auto min = MinimapSlideDirection::LeftToRight;
     static constexpr auto max = MinimapSlideDirection::RightToLeft;
 };
-}
+
+template <>
+struct ConfigEnumRange<FrameInterpMode> {
+    static constexpr auto min = FrameInterpMode::Off;
+    static constexpr auto max = FrameInterpMode::Unlimited;
+};
+}  // namespace config
 
 // Persistent user settings
 
@@ -118,6 +141,7 @@ struct UserSettings {
         ConfigVar<bool> lockAspectRatio;
         ConfigVar<bool> enableFpsOverlay;
         ConfigVar<int> fpsOverlayCorner;
+        ConfigVar<int> maxFrameRate;
     } video;
 
     struct {
@@ -172,9 +196,11 @@ struct UserSettings {
         ConfigVar<BloomMode> bloomMode;
         ConfigVar<float> bloomMultiplier;
         ConfigVar<bool> disableWaterRefraction;
-        ConfigVar<bool> enableFrameInterpolation;
+        ConfigVar<bool> enableTextureReplacements;
+        ConfigVar<FrameInterpMode> enableFrameInterpolation;
         ConfigVar<int> internalResolutionScale;
         ConfigVar<int> shadowResolutionMultiplier;
+        ConfigVar<Resampler> resampler;
         ConfigVar<bool> enableDepthOfField;
         ConfigVar<bool> enableMapBackground;
         ConfigVar<bool> disableCutscenePillarboxing;

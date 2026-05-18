@@ -12,6 +12,7 @@
 #include "d/d_stage.h"
 #include "dusk/bossrush.hpp"
 #include "dusk/imgui/ImGuiConsole.hpp"
+#include "dusk/livesplit.h"
 #include "dusk/memory.h"
 #include "dusk/speedrun.h"
 #include "dusk/settings.h"
@@ -435,6 +436,7 @@ void dScnName_c::changeGameScene() {
             if (!dusk::m_speedrunInfo.m_isRunStarted) {
                 dusk::resetForSpeedrunMode();
                 dusk::m_speedrunInfo.startRun();
+                dusk::speedrun::start();
             }
         }
 

@@ -38,6 +38,10 @@ static bool dMw_isItemRingDownOrigin() {
     return !dusk::UseWiiUControllerStyle() && dMw_DOWN_TRIGGER();
 }
 
+#ifdef TARGET_PC
+#include "dusk/frame_interpolation.h"
+#endif
+
 class dDlst_MENU_CAPTURE_c : public dDlst_base_c {
 public:
     virtual void draw() {
@@ -1100,6 +1104,10 @@ void dMw_c::dMw_ring_create(u8 i_origin) {
     }
 
     mpCapture->setCaptureFlag();
+
+#ifdef TARGET_PC
+    dusk::frame_interp::request_presentation_sync();
+#endif
 }
 
 bool dMw_c::dMw_ring_delete() {
