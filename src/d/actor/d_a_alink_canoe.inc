@@ -1702,6 +1702,11 @@ int daAlink_c::procFishingCast() {
 }
 
 int daAlink_c::procFishingFoodInit() {
+    int rodButton = checkItemSetButton(0x108);
+    if (!checkFishingRodItem(mEquipItem) && !checkFishingRodItem(dComIfGp_getSelectItem(rodButton))) {
+        return 0;
+    }
+
     if (!dComIfGp_event_compulsory(this, NULL, 0xFFFF)) {
         return 0;
     }
@@ -1718,7 +1723,7 @@ int daAlink_c::procFishingFoodInit() {
         mProcVar4.field_0x3010 = 1;
         keepItemData();
         deleteEquipItem(FALSE, FALSE);
-        mSelectItemId = checkItemSetButton(0x108);
+        mSelectItemId = rodButton;
         mEquipItem = dComIfGp_getSelectItem(mSelectItemId);
         setItemActor();
     }

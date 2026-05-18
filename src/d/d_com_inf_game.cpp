@@ -2186,6 +2186,20 @@ u8 dComIfGs_getBottleMax() {
     return 10;
 }
 
+static bool dComIfGp_getSelectBeeLarvaBottleIdx(int i_selItemIdx, u8* o_bottleIdx) {
+    u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx);
+    if (slot_no < SLOT_11 || slot_no >= SLOT_15) {
+        return false;
+    }
+
+    if (dComIfGs_getItem(slot_no, false) != dItemNo_BEE_CHILD_e) {
+        return false;
+    }
+
+    *o_bottleIdx = slot_no - SLOT_11;
+    return true;
+}
+
 s16 dComIfGp_getSelectItemNum(int i_selItemIdx) {
     u8 selectItem = dComIfGp_getSelectItem(i_selItemIdx);
     s16 itemNum = 0;
@@ -2198,8 +2212,10 @@ s16 dComIfGp_getSelectItemNum(int i_selItemIdx) {
     } else if (selectItem == dItemNo_PACHINKO_e) {
         itemNum = dComIfGs_getPachinkoNum();
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
-        u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
-        itemNum = dComIfGs_getBottleNum(slot_no);
+        u8 bottle_slot_no;
+        if (dComIfGp_getSelectBeeLarvaBottleIdx(i_selItemIdx, &bottle_slot_no)) {
+            itemNum = dComIfGs_getBottleNum(bottle_slot_no);
+        }
     }
 
     return itemNum;
@@ -2239,12 +2255,13 @@ void dComIfGp_setSelectItemNum(int i_selItemIdx, s16 i_num) {
     } else if (selectItem == dItemNo_PACHINKO_e) {
         dComIfGs_setPachinkoNum(i_num);
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
-        u8 bottle_slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
-
-        if (i_num > dComIfGs_getBottleMax()) {
-            i_num = dComIfGs_getBottleMax();
+        u8 bottle_slot_no;
+        if (dComIfGp_getSelectBeeLarvaBottleIdx(i_selItemIdx, &bottle_slot_no)) {
+            if (i_num > dComIfGs_getBottleMax()) {
+                i_num = dComIfGs_getBottleMax();
+            }
+            dComIfGs_setBottleNum(bottle_slot_no, i_num);
         }
-        dComIfGs_setBottleNum(bottle_slot_no, i_num);
     }
 }
 
@@ -2259,8 +2276,10 @@ void dComIfGp_addSelectItemNum(int i_selItemIdx, s16 i_num) {
     } else if (selectItem == dItemNo_PACHINKO_e) {
         dComIfGp_setItemPachinkoNumCount(i_num);
     } else if (selectItem == dItemNo_BEE_CHILD_e) {
-        u8 slot_no = dComIfGs_getSelectItemIndex(i_selItemIdx) - SLOT_11;
-        dComIfGs_addBottleNum(slot_no, i_num);
+        u8 bottle_slot_no;
+        if (dComIfGp_getSelectBeeLarvaBottleIdx(i_selItemIdx, &bottle_slot_no)) {
+            dComIfGs_addBottleNum(bottle_slot_no, i_num);
+        }
     }
 }
 

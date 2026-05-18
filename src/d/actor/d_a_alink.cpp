@@ -14852,10 +14852,17 @@ int daAlink_c::checkNewItemChange(u8 i_selItemIdx) {
                     return ITEM_PROC_SPINNER_READY;
                 } else if (checkDungeonWarpItem(sel_item)) {
                     return ITEM_PROC_DUNGEON_WARP_READY;
-                } else if (!daAlink_isLegacyZSelectItemSlot(checkItemSetButton(0x108)) &&
-                           (sel_item == dItemNo_WORM_e || sel_item == dItemNo_BEE_CHILD_e))
+                } else if (sel_item == dItemNo_WORM_e || sel_item == dItemNo_BEE_CHILD_e)
                 {
-                    int itemNo = dComIfGp_getSelectItem(checkItemSetButton(0x108));
+                    int rodButton = checkItemSetButton(0x108);
+                    int itemNo = dComIfGp_getSelectItem(rodButton);
+                    if (daAlink_isLegacyZSelectItemSlot(rodButton) || !checkFishingRodItem(itemNo)) {
+                        if (checkDrinkBottleItem(sel_item)) {
+                            return ITEM_PROC_BOTTLE_DRINK;
+                        }
+                        return ITEM_PROC_NONE;
+                    }
+
                     if (itemNo == dItemNo_WORM_ROD_e || itemNo == dItemNo_JEWEL_WORM_ROD_e) {
                         if (sel_item == dItemNo_BEE_CHILD_e) {
                             return ITEM_PROC_BOTTLE_DRINK;

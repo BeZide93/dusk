@@ -46,6 +46,47 @@ static u8 dSv_item_rename(u8 i_itemNo) {
     }
 }
 
+static bool dSv_is_valid_item_slot(u8 i_slotNo) {
+    return i_slotNo < MAX_ITEM_SLOTS;
+}
+
+static bool dSv_is_bottle_slot(u8 i_slotNo) {
+    return i_slotNo >= SLOT_11 && i_slotNo < SLOT_15;
+}
+
+static bool dSv_is_valid_mix_pair(const u8* i_items, u8 i_selectSlot, u8 i_mixSlot) {
+    if (i_mixSlot == dItemNo_NONE_e) {
+        return true;
+    }
+
+    if (!dSv_is_valid_item_slot(i_selectSlot) || !dSv_is_valid_item_slot(i_mixSlot)) {
+        return false;
+    }
+
+    u8 select_item = i_items[i_selectSlot];
+    u8 mix_item = i_items[i_mixSlot];
+
+    if (select_item == dItemNo_BOW_e) {
+        return mix_item == dItemNo_NORMAL_BOMB_e || mix_item == dItemNo_WATER_BOMB_e ||
+               mix_item == dItemNo_POKE_BOMB_e || mix_item == dItemNo_HAWK_EYE_e;
+    }
+    if (mix_item == dItemNo_BOW_e) {
+        return select_item == dItemNo_NORMAL_BOMB_e || select_item == dItemNo_WATER_BOMB_e ||
+               select_item == dItemNo_POKE_BOMB_e || select_item == dItemNo_HAWK_EYE_e;
+    }
+
+    if (select_item == dItemNo_FISHING_ROD_1_e) {
+        return mix_item == dItemNo_BEE_CHILD_e || mix_item == dItemNo_WORM_e ||
+               mix_item == dItemNo_ZORAS_JEWEL_e;
+    }
+    if (mix_item == dItemNo_FISHING_ROD_1_e) {
+        return select_item == dItemNo_BEE_CHILD_e || select_item == dItemNo_WORM_e ||
+               select_item == dItemNo_ZORAS_JEWEL_e;
+    }
+
+    return false;
+}
+
 void dSv_player_status_a_c::init() {
     mMaxLife = 15;
     mLife = 12;
@@ -345,7 +386,12 @@ void dSv_player_item_c::setItem(int i_slotNo, u8 i_itemNo) {
     }
 
     for (int i = DEFAULT_SELECT_ITEM_INDEX; i < MAX_SELECT_ITEM - 1; i++) {
-        if (i_slotNo == dComIfGs_getSelectItemIndex(i)) {
+        u8 select_slot = dComIfGs_getSelectItemIndex(i);
+        u8 mix_slot = dComIfGs_getMixItemIndex(i);
+        if (i_slotNo == select_slot || i_slotNo == mix_slot) {
+            if (!dSv_is_valid_mix_pair(mItems, select_slot, mix_slot)) {
+                dComIfGs_setMixItemIndex(i, dItemNo_NONE_e);
+            }
             dComIfGp_setSelectItem(i);
         }
     }
@@ -365,11 +411,14 @@ u8 dSv_player_item_c::getItem(int i_slotNo, bool i_checkCombo) const {
             }
 #endif
             for (int i = 0; i < comboSlotCount; i++) {
-                if ((i_slotNo == dComIfGs_getSelectItemIndex(i) || i_slotNo == dComIfGs_getMixItemIndex(i)) &&
-                    dComIfGs_getMixItemIndex(i) != dItemNo_NONE_e)
+                u8 select_slot = dComIfGs_getSelectItemIndex(i);
+                u8 mix_slot = dComIfGs_getMixItemIndex(i);
+                if ((i_slotNo == select_slot || i_slotNo == mix_slot) &&
+                    dSv_is_valid_mix_pair(mItems, select_slot, mix_slot) &&
+                    mix_slot != dItemNo_NONE_e)
                 {
-                    u8 select_item = mItems[dComIfGs_getSelectItemIndex(i)];
-                    u8 mix_item = mItems[dComIfGs_getMixItemIndex(i)];
+                    u8 select_item = mItems[select_slot];
+                    u8 mix_item = mItems[mix_slot];
 
                     // Get Bomb arrow check: Bow + Normal Bombs
                     if ((select_item == dItemNo_BOW_e && mix_item == dItemNo_NORMAL_BOMB_e) ||
@@ -475,6 +524,9 @@ void dSv_player_item_c::setBottleItemIn(u8 curItemIn, u8 newItemIn) {
     for (int i = 0; i < 4; i++) {
         if (curItemIn == mItems[i + SLOT_11]) {
             setItem(i + SLOT_11, newItemIn);
+            if (newItemIn != dItemNo_BEE_CHILD_e) {
+                dComIfGs_setBottleNum(i, 0);
+            }
             if (newItemIn == dItemNo_HOT_SPRING_e) {
                 dMeter2Info_setHotSpringTimer(i + SLOT_11);
             }
@@ -515,15 +567,19 @@ void dSv_player_item_c::setEmptyBottle(u8 i_itemNo) {
 void dSv_player_item_c::setEquipBottleItemIn(u8 curItemIn, u8 newItemIn) {
     newItemIn = dSv_item_rename(newItemIn);
 
-    if (dComIfGs_getSelectItemIndex(curItemIn) >= SLOT_11 &&
-        dComIfGs_getSelectItemIndex(curItemIn) <= SLOT_14) {
+    u8 bottle_slot = dComIfGs_getSelectItemIndex(curItemIn);
+    if (dSv_is_bottle_slot(bottle_slot)) {
         if (newItemIn == dItemNo_HOT_SPRING_e) {
-            dMeter2Info_setHotSpringTimer(dComIfGs_getSelectItemIndex(curItemIn));
+            dMeter2Info_setHotSpringTimer(bottle_slot);
         }
 
-        setItem(dComIfGs_getSelectItemIndex(curItemIn), newItemIn);
-        dComIfGs_setItem(dComIfGs_getSelectItemIndex(curItemIn), newItemIn);
-        dComIfGp_setItem(dComIfGs_getSelectItemIndex(curItemIn), newItemIn);
+        if (newItemIn != dItemNo_BEE_CHILD_e) {
+            dComIfGs_setBottleNum(bottle_slot - SLOT_11, 0);
+        }
+
+        setItem(bottle_slot, newItemIn);
+        dComIfGs_setItem(bottle_slot, newItemIn);
+        dComIfGp_setItem(bottle_slot, newItemIn);
         dComIfGp_setSelectItem(curItemIn);
     }
 }
