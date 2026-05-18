@@ -7,7 +7,7 @@ namespace dusk {
      *
      * This gets used for file paths and such, and cannot be changed!
      */
-    constexpr auto AppName = "Dusklight";
+    constexpr auto AppName = "Dawnlight";
 
     /**
      * Previous AppName to migrate data from.
@@ -19,7 +19,7 @@ namespace dusk {
      *
      * This gets used for file paths and such, and cannot be changed!
      */
-    constexpr auto OrgName = "TwilitRealm";
+    constexpr auto OrgName = "BeZide93";
 }
 
 #endif  // DUSK_APPNAME_HPP

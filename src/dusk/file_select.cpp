@@ -347,7 +347,7 @@ bool show_android_folder_select(AndroidFolderDialogState* state) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_dev_twilitrealm_dusk_DuskActivity_nativeFolderDialogResult(
+Java_dev_bezide_dawnlight_DuskActivity_nativeFolderDialogResult(
     JNIEnv* env, jclass, jlong userdata, jstring path, jstring error) {
     auto* state = reinterpret_cast<AndroidFolderDialogState*>(userdata);
     if (state == nullptr) {

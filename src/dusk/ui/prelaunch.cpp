@@ -288,11 +288,11 @@ std::string get_error_msg(iso::ValidationError error) {
     case iso::ValidationError::InvalidImage:
         return "The selected file is not a valid disc image.";
     case iso::ValidationError::WrongGame:
-        return "The selected game is not supported by Dusklight.";
+        return "The selected game is not supported by Dawnlight.";
     case iso::ValidationError::WrongVersion:
-        return "Dusklight currently supports GameCube USA and PAL disc images only.";
+        return "Dawnlight currently supports GameCube USA and PAL disc images only.";
     case iso::ValidationError::Canceled:
-        return "Disc verification was canceled. Dusklight cannot guarantee the selected disc "
+        return "Disc verification was canceled. Dawnlight cannot guarantee the selected disc "
                "image is compatible.";
     case iso::ValidationError::HashMismatch:
         return "The selected disc image did not pass hash verification. It may be corrupt or "
@@ -802,7 +802,7 @@ void Prelaunch::show() {
                     "A restart is required to apply selected options.<br/><br/>Restart now to "
                     "apply them immediately?" :
                     "A restart is required to apply selected options.<br/><br/>Close and reopen "
-                    "Dusklight to apply them.",
+                    "Dawnlight to apply them.",
             .actions = std::move(actions),
             .onDismiss = dismiss,
         }));

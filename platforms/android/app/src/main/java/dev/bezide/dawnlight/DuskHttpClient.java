@@ -1,4 +1,4 @@
-package dev.twilitrealm.dusk;
+package dev.bezide.dawnlight;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

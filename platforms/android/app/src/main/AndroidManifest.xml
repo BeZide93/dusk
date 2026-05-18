@@ -25,8 +25,8 @@
             android:resource="@xml/game_mode_config" />
 
         <provider
-            android:name="dev.twilitrealm.dusk.DuskDocumentsProvider"
-            android:authorities="dev.twilitrealm.dusk.documents"
+            android:name="dev.bezide.dawnlight.DuskDocumentsProvider"
+            android:authorities="dev.bezide.dawnlight.documents"
             android:exported="true"
             android:grantUriPermissions="true"
             android:permission="android.permission.MANAGE_DOCUMENTS">
@@ -36,7 +36,7 @@
         </provider>
 
         <activity
-            android:name="dev.twilitrealm.dusk.DuskActivity"
+            android:name="dev.bezide.dawnlight.DuskActivity"
             android:alwaysRetainTaskState="true"
             android:configChanges="layoutDirection|locale|grammaticalGender|fontScale|fontWeightAdjustment|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
             android:exported="true"

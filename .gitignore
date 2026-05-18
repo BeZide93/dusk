@@ -26,6 +26,9 @@ build/
 .ninja_*
 build.ninja
 
+# Local Android signing keys/secrets
+keystores/
+
 # decompctx output
 ctx.*
 *.ctx

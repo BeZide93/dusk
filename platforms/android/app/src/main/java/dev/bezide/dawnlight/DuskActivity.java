@@ -1,4 +1,4 @@
-package dev.twilitrealm.dusk;
+package dev.bezide.dawnlight;
 
 import android.app.ActionBar;
 import android.app.Activity;

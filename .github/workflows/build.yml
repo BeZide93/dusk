@@ -67,9 +67,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: dusklight-${{env.DUSK_VERSION}}-linux-${{matrix.preset}}-${{matrix.artifact_arch}}
+          name: dawnlight-${{env.DUSK_VERSION}}-linux-${{matrix.preset}}-${{matrix.artifact_arch}}
           path: |
-            build/install/Dusklight-*.AppImage
+            build/install/Dawnlight-*.AppImage
             build/install/debug.tar.*
 
   build-apple:
@@ -140,18 +140,18 @@ jobs:
         run: |
           set -euo pipefail
 
-          chmod +x build/install/Dusklight.app/Contents/MacOS/*
-          codesign --force --deep --sign - build/install/Dusklight.app
-          codesign --verify --deep --strict --verbose=2 build/install/Dusklight.app
+          chmod +x build/install/Dawnlight.app/Contents/MacOS/*
+          codesign --force --deep --sign - build/install/Dawnlight.app
+          codesign --verify --deep --strict --verbose=2 build/install/Dawnlight.app
           ditto -c -k --sequesterRsrc --keepParent \
-            build/install/Dusklight.app \
+            build/install/Dawnlight.app \
             "build/install/Dawnlight-${DUSK_VERSION}-${{ matrix.release_asset }}"
 
       - name: Upload macOS artifacts
         if: matrix.platform == 'macos'
         uses: actions/upload-artifact@v7
         with:
-          name: dusklight-${{env.DUSK_VERSION}}-${{matrix.artifact_name}}
+          name: dawnlight-${{env.DUSK_VERSION}}-${{matrix.artifact_name}}
           path: |
             build/install/Dawnlight-${{env.DUSK_VERSION}}-${{matrix.release_asset}}
             build/install/debug.tar.*
@@ -160,9 +160,9 @@ jobs:
         if: matrix.platform == 'ios'
         uses: actions/upload-artifact@v7
         with:
-          name: dusklight-${{env.DUSK_VERSION}}-${{matrix.artifact_name}}
+          name: dawnlight-${{env.DUSK_VERSION}}-${{matrix.artifact_name}}
           path: |
-            build/install/Dusklight.app
+            build/install/Dawnlight.app
             build/install/debug.tar.*
 
   build-android:
@@ -217,7 +217,7 @@ jobs:
         run: cmake --preset ${{matrix.preset}}
 
       - name: Build native library
-        run: cmake --build --preset ${{matrix.preset}} --target dusklight
+        run: cmake --build --preset ${{matrix.preset}} --target dawnlight
 
       - name: Stage stripped JNI library
         run: ANDROID_STAGE_ABIS="${{matrix.abi}}" platforms/android/scripts/stage-jni-libs.sh
@@ -229,7 +229,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: dusklight-${{env.DUSK_VERSION}}-android-${{matrix.artifact_arch}}
+          name: dawnlight-${{env.DUSK_VERSION}}-android-${{matrix.artifact_arch}}
           path: platforms/android/app/build/outputs/apk/release/app-${{matrix.abi}}-release-unsigned.apk
 
   build-windows:
@@ -291,7 +291,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: dusklight-${{env.DUSK_VERSION}}-win32-msvc-${{matrix.artifact_arch}}
+          name: dawnlight-${{env.DUSK_VERSION}}-win32-msvc-${{matrix.artifact_arch}}
           path: |
             build/install/*.exe
             build/install/*.dll

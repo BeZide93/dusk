@@ -1,9 +1,9 @@
 [Desktop Entry]
-Name=Dusklight
-GenericName=Dusklight
+Name=Dawnlight
+GenericName=Dawnlight
 Comment=PC port of a classic adventure game
-Exec=dusklight
-Icon=dusklight
+Exec=dawnlight
+Icon=dawnlight
 Terminal=false
 Type=Application
 Categories=Game;

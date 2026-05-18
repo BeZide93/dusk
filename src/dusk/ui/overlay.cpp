@@ -158,9 +158,9 @@ Rml::Element* create_menu_notification(Rml::Element* parent) {
     // Get name of button for action binding if the action is bound
     Rml::String padButton{};
     SDL_Gamepad* gamepad = gamepad_for_port(PAD_CHAN0);
-    if (isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, PAD_CHAN0) && gamepad != nullptr) {
+    if (isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, PAD_CHAN0) && gamepad != nullptr) {
         padButton = native_button_name(gamepad,
-            getActionBindButton(ActionBinds::OPEN_DUSKLIGHT_MENU, PAD_CHAN0));
+            getActionBindButton(ActionBinds::OPEN_DAWNLIGHT_MENU, PAD_CHAN0));
     } else {
         padButton = back_button_name();
     }

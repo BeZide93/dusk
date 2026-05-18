@@ -1,6 +1,6 @@
 # Dawnlight Platform README
 
-Dawnlight is based on Dusklight and keeps the upstream app identity internally for compatibility. This means saves, settings, and data folders still use `TwilitRealm/Dusklight` paths.
+Dawnlight uses its own app identity. This means saves, settings, and data folders are separated from upstream builds.
 
 Most Dawnlight patches are platform-independent because they live in the shared game and engine code. This includes the HUD layout editor, Wii U controller style, ZL jump, aim modes, New Game+, intro skip, NG+ save markers, and NG+ scaling. Android-specific code is only used for Android file picker support and Android URI import/export handling. Touch controls are shared code, but they are enabled by default only on Android and iOS.
 
@@ -40,13 +40,13 @@ The default iOS data location is the app's Documents folder. HUD layout export i
 
 1. Download `Dawnlight-*-win32-x86_64.zip`.
 2. Extract the ZIP.
-3. Run `dusklight.exe`.
+3. Run `dawnlight.exe`.
 4. Select a supported Twilight Princess GameCube disc image.
 
 HUD layout import:
 
 - Recommended: place `hud_layout_settings.json` anywhere convenient and import it with `Settings -> Overlay -> Import HUD Layout`.
-- Default data folder: `%APPDATA%\TwilitRealm\Dusklight\`
+- Default data folder: `%APPDATA%\BeZide93\Dawnlight\`
 - If you use a custom data folder in Dawnlight, use that folder instead.
 
 ### Linux
@@ -59,8 +59,8 @@ HUD layout import:
 HUD layout import:
 
 - Recommended: place `hud_layout_settings.json` anywhere convenient and import it with `Settings -> Overlay -> Import HUD Layout`.
-- Default data folder: `$XDG_DATA_HOME/TwilitRealm/Dusklight/`
-- If `XDG_DATA_HOME` is not set, the usual fallback is `~/.local/share/TwilitRealm/Dusklight/`.
+- Default data folder: `$XDG_DATA_HOME/BeZide93/Dawnlight/`
+- If `XDG_DATA_HOME` is not set, the usual fallback is `~/.local/share/BeZide93/Dawnlight/`.
 - If you use a custom data folder in Dawnlight, use that folder instead.
 
 ### macOS
@@ -69,13 +69,13 @@ HUD layout import:
    - Apple Silicon: `Dawnlight-*-macos-arm64.zip`
    - Intel Mac: `Dawnlight-*-macos-x86_64.zip`
 2. Extract the ZIP.
-3. Open `Dusklight.app`. If macOS blocks it, right-click the app and choose Open.
+3. Open `Dawnlight.app`. If macOS blocks it, right-click the app and choose Open.
 4. Select a supported Twilight Princess GameCube disc image.
 
 HUD layout import:
 
 - Recommended: place `hud_layout_settings.json` anywhere convenient and import it with `Settings -> Overlay -> Import HUD Layout`.
-- Default data folder: `~/Library/Application Support/TwilitRealm/Dusklight/`
+- Default data folder: `~/Library/Application Support/BeZide93/Dawnlight/`
 - If you use a custom data folder in Dawnlight, use that folder instead.
 
 ## HUD Layout Files

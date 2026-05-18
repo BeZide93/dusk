@@ -101,7 +101,7 @@ MenuBar::MenuBar() : Document(kDocumentSource), mRoot(mDocument->GetElementById(
         mTabBar->set_active_tab(-1);
         const auto dismiss = [](Modal& modal) { modal.pop(); };
         push(std::make_unique<Modal>(Modal::Props{
-            .title = "Quit Dusklight",
+            .title = "Quit Dawnlight",
             .bodyRml = "Unsaved progress will be lost.",
             .actions =
                 {

@@ -206,7 +206,7 @@ Rml::Input::KeyIdentifier map_raw_gamepad_button(SDL_GamepadButton button) noexc
     case SDL_GAMEPAD_BUTTON_SOUTH:
         return Rml::Input::KI_RETURN;
     case SDL_GAMEPAD_BUTTON_BACK:
-        if (isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, PAD_CHAN0)) {
+        if (isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, PAD_CHAN0)) {
             return Rml::Input::KI_UNKNOWN;
         }
         return Rml::Input::KI_F1;
@@ -222,7 +222,7 @@ Rml::Input::KeyIdentifier map_raw_gamepad_button(SDL_GamepadButton button) noexc
 Rml::Input::KeyIdentifier map_raw_button_alias(SDL_GamepadButton button) noexcept {
     switch (button) {
     case SDL_GAMEPAD_BUTTON_BACK:
-        if (isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, PAD_CHAN0)) {
+        if (isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, PAD_CHAN0)) {
             return Rml::Input::KI_UNKNOWN;
         }
         return Rml::Input::KI_F1;
@@ -330,13 +330,13 @@ Rml::Input::KeyIdentifier map_gamepad_button(const SDL_GamepadButtonEvent& event
     u32 port = 0;
     bool foundEventPort = find_event_port(event.which, port);
     if (foundEventPort) {
-        int openMenuButton = getActionBindButton(ActionBinds::OPEN_DUSKLIGHT_MENU, port);
+        int openMenuButton = getActionBindButton(ActionBinds::OPEN_DAWNLIGHT_MENU, port);
         if (openMenuButton != PAD_NATIVE_BUTTON_INVALID && openMenuButton == nativeButton) {
             return Rml::Input::KI_F1;
         }
     }
 
-    if (nativeButton == SDL_GAMEPAD_BUTTON_BACK && !isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, port)) {
+    if (nativeButton == SDL_GAMEPAD_BUTTON_BACK && !isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, port)) {
         return Rml::Input::KI_F1;
     }
 
@@ -658,7 +658,7 @@ void process_axis_direction(
     if (chorded) {
         consume_menu_chord(port, context);
     }
-    const auto key = chorded && !isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, port) ? Rml::Input::KI_F1 : map_gamepad_axis(event, sign);
+    const auto key = chorded && !isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, port) ? Rml::Input::KI_F1 : map_gamepad_axis(event, sign);
     if (key == Rml::Input::KI_UNKNOWN) {
         return;
     }
@@ -751,7 +751,7 @@ void handle_event(const SDL_Event& event) noexcept {
         if (chorded) {
             consume_menu_chord(port, *context);
         }
-        const auto key = chorded && !isActionBound(ActionBinds::OPEN_DUSKLIGHT_MENU, port) ? Rml::Input::KI_F1 : map_gamepad_button(event.gbutton);
+        const auto key = chorded && !isActionBound(ActionBinds::OPEN_DAWNLIGHT_MENU, port) ? Rml::Input::KI_F1 : map_gamepad_button(event.gbutton);
         if (key != Rml::Input::KI_UNKNOWN) {
             bool deferred = false;
             if (repeat != nullptr) {

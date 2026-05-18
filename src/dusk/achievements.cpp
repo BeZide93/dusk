@@ -695,7 +695,7 @@ std::vector<AchievementSystem::Entry> AchievementSystem::makeEntries() {
                     return;
                 }
 
-                // prevent stuff like https://github.com/TwilitRealm/dusklight/issues/949
+                // Prevent repeated user-error achievements from firing at the same time.
                 if (link->getDemoMode() != 0) {
                     inJump = false;
                     return;

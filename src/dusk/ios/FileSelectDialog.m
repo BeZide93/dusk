@@ -23,7 +23,7 @@ static void RunOnMainThread(void (^block)(void))
 
 static NSError *MakeError(NSString *message)
 {
-    return [NSError errorWithDomain:@"dev.twilitrealm.dusk.file-select"
+    return [NSError errorWithDomain:@"dev.bezide.dawnlight.file-select"
                                code:1
                            userInfo:@{NSLocalizedDescriptionKey: message}];
 }

@@ -9,7 +9,7 @@ namespace dusk {
 enum class ActionBinds {
     FIRST_PERSON_CAMERA,
     CALL_MIDNA,
-    OPEN_DUSKLIGHT_MENU,
+    OPEN_DAWNLIGHT_MENU,
     TURBO_SPEED_BUTTON,
     COUNT,
 };

@@ -318,12 +318,12 @@ namespace dusk {
                 ImGui::Image(ImGuiEngine::duskLogo, ImVec2{width, iconSize});
             } else {
                 ImGui::PushFont(ImGuiEngine::fontExtraLarge);
-                ImGuiTextCenter("Dusklight");
+                ImGuiTextCenter("Dawnlight");
                 ImGui::PopFont();
             }
             ImGui::PushFont(ImGuiEngine::fontLarge);
             ImGuiTextCenter("Failed to initialize any graphics backend.");
-            ImGuiTextCenter("\nDusklight requires Vulkan 1.1+, or Direct X 12.0.");
+            ImGuiTextCenter("\nDawnlight requires Vulkan 1.1+, or Direct X 12.0.");
             ImGuiTextCenter("\nTry updating your Operating System and GPU drivers.");
             const auto& style = ImGui::GetStyle();
             const auto retrySize = ImGui::CalcTextSize("Retry (Auto backend)");

@@ -474,7 +474,7 @@ const Rml::String kShadowResolutionHelpText =
 const Rml::String kResamplerHelpText =
     "Configure the sampling method used when scaling the internal resolution for final presentation.";
 const Rml::String kBloomHelpText =
-    "Configure the post-processing bloom effect. Classic uses the original bloom pass; Dusklight uses "
+    "Configure the post-processing bloom effect. Classic uses the original bloom pass; Dawnlight uses "
     "a higher-quality bloom pass.";
 const Rml::String kBloomBrightnessHelpText =
     "Configure bloom intensity. Higher values make bright areas glow more strongly.";
@@ -2021,7 +2021,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     })
                     .on_pressed([] { open_iso_picker(); }),
                 rightPane, [](Pane& pane) {
-                    pane.add_rml("Set the disc image that Dusklight uses to launch the game.<br/><br/>"
+                    pane.add_rml("Set the disc image that Dawnlight uses to launch the game.<br/><br/>"
                                  "Changes require a restart.");
                 });
 #if DUSK_CAN_CHANGE_DATA_FOLDER
@@ -2032,7 +2032,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                     .isModified = [] { return data::is_data_path_restart_pending(); },
                 }),
                 rightPane, [](Pane& pane) {
-                    pane.add_text("The data folder is where Dusklight stores settings, saves, "
+                    pane.add_text("The data folder is where Dawnlight stores settings, saves, "
                                   "logs, texture replacements, and other app data.");
                     pane.add_child<DataFolderPathText>();
 #if DUSK_CAN_OPEN_DATA_FOLDER
@@ -2599,8 +2599,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             });
         config_bool_select(leftPane, rightPane, getSettings().audio.menuSounds,
             {
-                .key = "Dusklight Menu Sounds",
-                .helpText = "Play sound effects when navigating the Dusklight menu.",
+                .key = "Dawnlight Menu Sounds",
+                .helpText = "Play sound effects when navigating the Dawnlight menu.",
             });
 
         leftPane.add_section("Tweaks");
@@ -2832,7 +2832,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         auto& leftPane = add_child<Pane>(content, Pane::Type::Controlled);
         auto& rightPane = add_child<Pane>(content, Pane::Type::Uncontrolled);
 
-        leftPane.add_section("Dusklight");
+        leftPane.add_section("Dawnlight");
 #if DUSK_CAN_OPEN_DATA_FOLDER
         leftPane.register_control(
             leftPane.add_button("Open Data Folder").on_pressed([] {
@@ -2841,7 +2841,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             }),
             rightPane, [](Pane& pane) {
                 pane.add_text(
-                    "Open the folder where Dusklight stores settings, saves, logs, texture "
+                    "Open the folder where Dawnlight stores settings, saves, logs, texture "
                     "replacements, and other app data.");
             });
 #endif
@@ -2923,7 +2923,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         });
         leftPane.register_control(crashReporting, rightPane, [](Pane& pane) {
             pane.clear();
-            pane.add_rml("Dusklight can automatically send crash reports to the developers. Crash "
+            pane.add_rml("Dawnlight can automatically send crash reports to the developers. Crash "
                          "reports contain the following:<br/>• Operating system version<br/>• CPU "
                          "architecture<br/>• GPU model & driver version<br/>• File paths (may "
                          "include account username)<br/>• Stack trace");
@@ -2931,8 +2931,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
 #endif
         config_bool_select(leftPane, rightPane, getSettings().backend.skipPreLaunchUI,
             {
-                .key = "Skip Dusklight Main Menu",
-                .helpText = "When starting Dusklight, skip the main menu and boot straight into the "
+                .key = "Skip Dawnlight Main Menu",
+                .helpText = "When starting Dawnlight, skip the main menu and boot straight into the "
                             "game if a disc image is available.",
             });
         config_bool_select(leftPane, rightPane, getSettings().backend.showPipelineCompilation,
@@ -2943,14 +2943,14 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         config_bool_select(leftPane, rightPane, getSettings().backend.checkForUpdates,
             {
                 .key = "Check for Updates",
-                .helpText = "Checks GitHub releases for a new Dusklight version on startup.<br/><br/>"
+                .helpText = "Checks GitHub releases for a new Dawnlight version on startup.<br/><br/>"
                             "No personal information is transmitted or collected.",
             });
 #ifdef DUSK_DISCORD
         config_bool_select(leftPane, rightPane, getSettings().game.enableDiscordPresence,
             {
                 .key = "Enable Discord Rich Presence",
-                .helpText = "Enable Dusklight to integrate with Discord Rich Presence. This allows Discord to show your status in-game.",
+                .helpText = "Enable Dawnlight to integrate with Discord Rich Presence. This allows Discord to show your status in-game.",
                 .onChange = [](bool enabled) {
                     if (enabled) {
                         dusk::discord::initialize();

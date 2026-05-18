@@ -1,4 +1,4 @@
-# Building Dusklight
+# Building Dawnlight
 
 ## Dependencies
 
@@ -151,12 +151,12 @@ Recommended IDEs:
 
 ## Building
 
-* Clone and initialize the Dusklight repository:
+* Clone and initialize the Dawnlight repository:
 
 ```sh
-git clone --recursive https://github.com/TwilitRealm/dusklight.git
+git clone --recursive https://github.com/BeZide93/dusk.git
 git pull
-cd dusklight
+cd dawnlight
 git submodule update --init --recursive
 ```
 
@@ -214,7 +214,7 @@ Alternate presets available:
 * Pass the disc image as a positional argument using the `--dvd` flag. Supported formats are: ISO (GCM), RVZ, WIA, WBFS, CISO, GCZ
 
 ```sh
-build/{preset}/dusklight --dvd /path/to/game.iso
+build/{preset}/dawnlight --dvd /path/to/game.iso
 ```
 
 **macOS**
@@ -224,5 +224,5 @@ macOS builds an `.app` bundle which contains the executable and all necessary re
 * Pass the disc image as a positional argument using the `--dvd` flag. Supported formats are: ISO (GCM), RVZ, WIA, WBFS, CISO, GCZ
 
 ```sh
-build/{preset}/Dusklight.app/Contents/MacOS/Dusklight --dvd /path/to/game.iso
+build/{preset}/Dawnlight.app/Contents/MacOS/Dawnlight --dvd /path/to/game.iso
 ```

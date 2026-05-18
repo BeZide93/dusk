@@ -337,7 +337,7 @@ Result get(const Request& request) {
     }
 
     jclass clientClass =
-        load_dusk_class(env, activity, "dev.twilitrealm.dusk.DuskHttpClient");
+        load_dusk_class(env, activity, "dev.bezide.dawnlight.DuskHttpClient");
     env->DeleteLocalRef(activity);
     if (clientClass == nullptr) {
         return {
@@ -348,7 +348,7 @@ Result get(const Request& request) {
 
     jmethodID getMethod = env->GetStaticMethodID(clientClass, "get",
         "(Ljava/lang/String;[Ljava/lang/String;[Ljava/lang/String;IJ)"
-        "Ldev/twilitrealm/dusk/DuskHttpClient$Response;");
+        "Ldev/bezide/dawnlight/DuskHttpClient$Response;");
     if (getMethod == nullptr || clear_pending_exception(env)) {
         env->DeleteLocalRef(clientClass);
         return {

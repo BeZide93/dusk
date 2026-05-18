@@ -3,7 +3,12 @@ plugins {
 }
 
 def duskRepoDir = rootProject.projectDir.parentFile.parentFile
-def duskGeneratedAssetsDir = layout.buildDirectory.dir('generated/assets/dusklight').get().asFile
+def duskGeneratedAssetsDir = layout.buildDirectory.dir('generated/assets/dawnlight').get().asFile
+def releaseSigningPropsFile = new File(duskRepoDir, 'keystores/release-signing.properties')
+def releaseSigningProps = new Properties()
+if (releaseSigningPropsFile.exists()) {
+    releaseSigningPropsFile.withInputStream { releaseSigningProps.load(it) }
+}
 def syncDuskAssets = tasks.register('syncDuskAssets', Sync) {
     from(new File(duskRepoDir, 'res')) {
         into 'res'
@@ -13,15 +18,32 @@ def syncDuskAssets = tasks.register('syncDuskAssets', Sync) {
 }
 
 android {
-    namespace 'dev.twilitrealm.dusk'
+    namespace 'dev.bezide.dawnlight'
     compileSdk 36
 
     defaultConfig {
-        applicationId 'dev.twilitrealm.dusk'
+        applicationId 'dev.bezide.dawnlight'
         minSdk 26
         targetSdk 36
         versionCode 1
         versionName '0.1.0'
+    }
+
+    signingConfigs {
+        if (releaseSigningPropsFile.exists()) {
+            release {
+                def configuredStoreFile = releaseSigningProps.getProperty('storeFile')
+                def storeFilePath = new File(configuredStoreFile)
+                if (!storeFilePath.isAbsolute()) {
+                    storeFilePath = new File(duskRepoDir, configuredStoreFile)
+                }
+
+                storeFile storeFilePath
+                storePassword releaseSigningProps.getProperty('storePassword')
+                keyAlias releaseSigningProps.getProperty('keyAlias')
+                keyPassword releaseSigningProps.getProperty('keyPassword')
+            }
+        }
     }
 
     buildTypes {
@@ -30,6 +52,9 @@ android {
         }
         release {
             minifyEnabled false
+            if (releaseSigningPropsFile.exists()) {
+                signingConfig signingConfigs.release
+            }
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

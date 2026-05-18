@@ -59,7 +59,7 @@ PresetWindow::PresetWindow() : WindowSmall("modal", "modal-dialog") {
 
     auto* title = append(header, "div");
     title->SetClass("modal-title", true);
-    title->SetInnerRML("Welcome to Dusklight");
+    title->SetInnerRML("Welcome to Dawnlight");
 
     auto* headIcon = append(header, "icon");
     headIcon->SetClass("celebration", true);
@@ -83,7 +83,7 @@ PresetWindow::PresetWindow() : WindowSmall("modal", "modal-dialog") {
          "Enhancements disabled to match the GameCube version. "
          "Good for speedrunning or simple nostalgia!",
          applyPresetClassic},
-        {"Dusklight",
+        {"Dawnlight",
          "Graphics & quality of life tweaks, including some from the Wii U version. "
          "Our recommended way to play!",
          applyPresetDusk},

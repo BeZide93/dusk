@@ -42,15 +42,15 @@
         };
       };
 
-      # Dusklight Actual (Linux x86_64 only — relies on prebuilt dawn/nod binaries)
-      mkDusklight = pkgs:
+      # Dawnlight Actual (Linux x86_64 only — relies on prebuilt dawn/nod binaries)
+      mkDawnlight = pkgs:
         let srcs = buildSources pkgs;
           versionSuffix = if self ? shortRev && self.shortRev != null
             then "nix-${self.shortRev}"
             else "nix-dirty";
         in
         pkgs.stdenv.mkDerivation {
-          name = "dusklight";
+          name = "dawnlight";
           src = ./.;
           postUnpack = ''
             sed -i '/add_subdirectory(tests)/d' $sourceRoot/extern/aurora/CMakeLists.txt
@@ -77,15 +77,15 @@
           ];
           installPhase = ''
             mkdir -p $out/bin
-            cp dusklight $out/bin/dusklight
+            cp dawnlight $out/bin/dawnlight
             cp -r ./res $out/bin/res
 
             mkdir -p $out/share/applications
-            cp $src/platforms/freedesktop/dusklight.desktop $out/share/applications/dusklight.desktop
+            cp $src/platforms/freedesktop/dawnlight.desktop $out/share/applications/dawnlight.desktop
 
             for size in 16 32 48 64 128 256 512 1024; do
-              install -Dm644 $src/platforms/freedesktop/''${size}x''${size}/apps/dusklight.png \
-                $out/share/icons/hicolor/''${size}x''${size}/apps/dusklight.png
+              install -Dm644 $src/platforms/freedesktop/''${size}x''${size}/apps/dawnlight.png \
+                $out/share/icons/hicolor/''${size}x''${size}/apps/dawnlight.png
             done
           '';
           nativeBuildInputs = [
@@ -187,7 +187,7 @@
         pkgs.mkShellNoCC {
           packages = commonDevTools pkgs;
           shellHook = ''
-            echo "Dusklight dev shell (macOS)"
+            echo "Dawnlight dev shell (macOS)"
             echo "Requires Xcode Command Line Tools for Apple Clang and the macOS SDK."
             echo "Configure: cmake --preset macos-default-relwithdebinfo"
             echo "Build:     cmake --build --preset macos-default-relwithdebinfo"
@@ -198,7 +198,7 @@
         pkgs.mkShell {
           packages = (commonDevTools pkgs) ++ (linuxDevDeps pkgs);
           shellHook = ''
-            echo "Dusklight dev shell (Linux)"
+            echo "Dawnlight dev shell (Linux)"
             echo "Configure: cmake --preset linux-default-relwithdebinfo"
             echo "           cmake --preset linux-clang-relwithdebinfo"
             echo "Build:     cmake --build --preset <preset>"
@@ -210,7 +210,7 @@
         then mkDarwinShell pkgs
         else mkLinuxShell pkgs;
     in {
-      packages.x86_64-linux.default = mkDusklight (pkgsFor "x86_64-linux");
+      packages.x86_64-linux.default = mkDawnlight (pkgsFor "x86_64-linux");
 
       devShells = forAllSystems (system: {
         default = mkDevShell (pkgsFor system);

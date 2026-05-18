@@ -12,7 +12,7 @@ ActionBindsMap& getActionBinds() {
     static ActionBindsMap actionBinds = {
         {ActionBinds::FIRST_PERSON_CAMERA, {&getSettings().actionBindings.firstPersonCamera, "First Person Camera"}},
         {ActionBinds::CALL_MIDNA,          {&getSettings().actionBindings.callMidna,         "Call Midna"}},
-        {ActionBinds::OPEN_DUSKLIGHT_MENU, {&getSettings().actionBindings.openDusklightMenu, "Open Dusklight Menu"}},
+        {ActionBinds::OPEN_DAWNLIGHT_MENU, {&getSettings().actionBindings.openDawnlightMenu, "Open Dawnlight Menu"}},
         {ActionBinds::TURBO_SPEED_BUTTON,  {&getSettings().actionBindings.turboSpeedButton,  "Turbo Speed Button"}},
     };
     return actionBinds;
@@ -39,10 +39,10 @@ void updateActionBindings() {
         // Update current frame with whether action button is pressed
         for (auto& [action, boundAction] : getActionBinds()) {
             // If the action isn't bound, or if documents are visible and the action isn't
-            // opening the dusklight menu, don't update. Otherwise, we may accidentally
-            // perform actions while the dusklight menu is open.
+            // opening the dawnlight menu, don't update. Otherwise, we may accidentally
+            // perform actions while the dawnlight menu is open.
             if (!isActionBound(action, port) ||
-                (ui::any_document_visible() && action != ActionBinds::OPEN_DUSKLIGHT_MENU)) {
+                (ui::any_document_visible() && action != ActionBinds::OPEN_DAWNLIGHT_MENU)) {
                 continue;
             }
 

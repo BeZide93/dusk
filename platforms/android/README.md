@@ -1,6 +1,6 @@
 # Android Shell
 
-This directory contains a minimal SDLActivity-based Android app wrapper for Dusklight.
+This directory contains a minimal SDLActivity-based Android app wrapper for Dawnlight.
 
 ## Prerequisites
 
@@ -66,7 +66,7 @@ Output APK:
 You can pass command-line args through the activity intent:
 
 ```bash
-adb shell am start -n dev.twilitrealm.dusk/.DuskActivity \
+adb shell am start -n dev.bezide.dawnlight/.DuskActivity \
   --es dusk_args "--backend vulkan"
 ```
 

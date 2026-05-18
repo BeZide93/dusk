@@ -14,7 +14,7 @@ if (DUSK_VERSION_OVERRIDE)
     set(DUSK_WC_REVISION "")
     set(DUSK_WC_BRANCH "")
     set(DUSK_WC_DATE "")
-    message(STATUS "Dusklight version overridden to ${DUSK_WC_DESCRIBE}")
+    message(STATUS "Dawnlight version overridden to ${DUSK_WC_DESCRIBE}")
 else ()
     # obtain revision info from git
     find_package(Git)
@@ -80,9 +80,9 @@ endif ()
 if(DEFINED ENV{GITHUB_ENV})
     file(APPEND "$ENV{GITHUB_ENV}" "DUSK_VERSION=${DUSK_WC_DESCRIBE}\n")
 endif()
-message(STATUS "Dusklight version set to ${DUSK_WC_DESCRIBE}")
+message(STATUS "Dawnlight version set to ${DUSK_WC_DESCRIBE}")
 message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
-project(dusklight LANGUAGES C CXX VERSION ${DUSK_VERSION_STRING})
+project(dawnlight LANGUAGES C CXX VERSION ${DUSK_VERSION_STRING})
 if (APPLE)
     enable_language(OBJC OBJCXX)
 endif ()
@@ -142,9 +142,9 @@ endif ()
 if (DUSK_MOVIE_SUPPORT)
     find_package(libjpeg-turbo 3.0 CONFIG QUIET)
     if (libjpeg-turbo_FOUND)
-        message(STATUS "dusklight: Using system libjpeg-turbo")
+        message(STATUS "dawnlight: Using system libjpeg-turbo")
     else ()
-        message(STATUS "dusklight: Fetching libjpeg-turbo")
+        message(STATUS "dawnlight: Fetching libjpeg-turbo")
         include(ExternalProject)
         set(_jpeg_install_dir ${CMAKE_BINARY_DIR}/libjpeg-turbo-install)
         if (WIN32)
@@ -236,13 +236,13 @@ endif ()
 include(FetchContent)
 
 # Declare all dependencies first so CMake can download them in parallel
-message(STATUS "dusklight: Fetching cxxopts")
+message(STATUS "dawnlight: Fetching cxxopts")
 FetchContent_Declare(cxxopts
     URL https://github.com/jarro2783/cxxopts/archive/refs/tags/v3.3.1.tar.gz
     URL_HASH SHA256=3bfc70542c521d4b55a46429d808178916a579b28d048bd8c727ee76c39e2072
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
 )
-message(STATUS "dusklight: Fetching nlohmann/json")
+message(STATUS "dawnlight: Fetching nlohmann/json")
 FetchContent_Declare(json
     URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
     URL_HASH SHA256=42f6e95cad6ec532fd372391373363b62a14af6d771056dbfc86160e6dfff7aa
@@ -251,7 +251,7 @@ FetchContent_Declare(json
 FetchContent_MakeAvailable(cxxopts json)
 
 if (DUSK_ENABLE_SENTRY_NATIVE)
-    message(STATUS "dusklight: Fetching sentry-native")
+    message(STATUS "dawnlight: Fetching sentry-native")
     set(SENTRY_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     set(SENTRY_BACKEND crashpad CACHE STRING "" FORCE)
     if (WIN32)
@@ -302,15 +302,15 @@ include(files.cmake)
 
 # TODO: version handling for res includes
 
-set(DUSK_BUNDLE_NAME Dusklight)
-set(DUSK_BUNDLE_IDENTIFIER dev.twilitrealm.dusk)
-set(DUSK_COMPANY_NAME "Twilit Realm")
-set(DUSK_FILE_DESCRIPTION "Dusklight")
-set(DUSK_PRODUCT_NAME "Dusklight")
-set(DUSK_COPYRIGHT "Copyright (C) Twilit Realm contributors")
+set(DUSK_BUNDLE_NAME Dawnlight)
+set(DUSK_BUNDLE_IDENTIFIER dev.bezide.dawnlight)
+set(DUSK_COMPANY_NAME "Dawnlight contributors")
+set(DUSK_FILE_DESCRIPTION "Dawnlight")
+set(DUSK_PRODUCT_NAME "Dawnlight")
+set(DUSK_COPYRIGHT "Copyright (C) Dawnlight contributors")
 
 source_group("dolzel" FILES ${DOLZEL_FILES} ${Z2AUDIOLIB_FILES} ${REL_FILES})
-source_group("dusklight" FILES ${DUSK_FILES} ${DUSK_HTTP_BACKEND_FILES})
+source_group("dawnlight" FILES ${DUSK_FILES} ${DUSK_HTTP_BACKEND_FILES})
 
 set(GAME_COMPILE_DEFS TARGET_PC WIDESCREEN_SUPPORT=1 AVOID_UB=1 VERSION=0 MTX_USE_PS=1)
 
@@ -347,30 +347,30 @@ if (DUSK_ENABLE_UPDATE_CHECKER)
         set(DUSK_HTTP_BACKEND_SOURCE src/dusk/http/winhttp.cpp)
         list(APPEND GAME_LIBS winhttp)
         list(APPEND GAME_COMPILE_DEFS DUSK_HTTP_BACKEND_WINHTTP=1)
-        message(STATUS "dusklight: Enabled update checker (WinHTTP)")
+        message(STATUS "dawnlight: Enabled update checker (WinHTTP)")
     elseif (ANDROID)
         set(DUSK_HTTP_BACKEND_SOURCE src/dusk/http/android.cpp)
         list(APPEND GAME_COMPILE_DEFS DUSK_HTTP_BACKEND_ANDROID=1)
-        message(STATUS "dusklight: Enabled update checker (Android)")
+        message(STATUS "dawnlight: Enabled update checker (Android)")
     elseif (APPLE)
         find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
         set(DUSK_HTTP_BACKEND_SOURCE src/dusk/http/url_session.mm)
         set_source_files_properties(src/dusk/http/url_session.mm PROPERTIES COMPILE_FLAGS -fobjc-arc)
         list(APPEND GAME_LIBS ${FOUNDATION_FRAMEWORK})
         list(APPEND GAME_COMPILE_DEFS DUSK_HTTP_BACKEND_URLSESSION=1)
-        message(STATUS "dusklight: Enabled update checker (NSURLSession)")
+        message(STATUS "dawnlight: Enabled update checker (NSURLSession)")
     elseif (CMAKE_SYSTEM_NAME STREQUAL Linux)
         find_package(CURL QUIET OPTIONAL_COMPONENTS HTTPS SSL)
         if (CURL_FOUND AND CURL_HTTPS_FOUND AND CURL_SSL_FOUND)
             set(DUSK_HTTP_BACKEND_SOURCE src/dusk/http/curl.cpp)
             list(APPEND GAME_LIBS CURL::libcurl)
             list(APPEND GAME_COMPILE_DEFS DUSK_HTTP_BACKEND_LIBCURL=1)
-            message(STATUS "dusklight: Enabled update checker (libcurl)")
+            message(STATUS "dawnlight: Enabled update checker (libcurl)")
         else ()
-            message(STATUS "dusklight: Disabled update checker (libcurl + HTTPS/SSL not found)")
+            message(STATUS "dawnlight: Disabled update checker (libcurl + HTTPS/SSL not found)")
         endif ()
     else ()
-        message(STATUS "dusklight: Disabled update checker (unsupported platform)")
+        message(STATUS "dawnlight: Disabled update checker (unsupported platform)")
     endif ()
 endif ()
 list(APPEND DUSK_FILES ${DUSK_HTTP_BACKEND_SOURCE})
@@ -448,22 +448,22 @@ endif ()
 
 set(DUSK_FILES src/dusk/main.cpp ${GAME_BASE_FILES} ${GAME_DEBUG_FILES})
 if(ANDROID)
-    add_library(dusklight SHARED ${DUSK_FILES})
-    set_target_properties(dusklight PROPERTIES OUTPUT_NAME main)
+    add_library(dawnlight SHARED ${DUSK_FILES})
+    set_target_properties(dawnlight PROPERTIES OUTPUT_NAME main)
 else ()
-    add_executable(dusklight ${DUSK_FILES})
+    add_executable(dawnlight ${DUSK_FILES})
 endif ()
 
-target_compile_definitions(dusklight PRIVATE ${GAME_COMPILE_DEFS})
-target_include_directories(dusklight PRIVATE ${GAME_INCLUDE_DIRS})
-target_link_libraries(dusklight PRIVATE aurora::main ${GAME_LIBS} ${JSYSTEM_LINK_LIBRARIES})
-target_precompile_headers(dusklight PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/include/dusk_pch.hpp>")
+target_compile_definitions(dawnlight PRIVATE ${GAME_COMPILE_DEFS})
+target_include_directories(dawnlight PRIVATE ${GAME_INCLUDE_DIRS})
+target_link_libraries(dawnlight PRIVATE aurora::main ${GAME_LIBS} ${JSYSTEM_LINK_LIBRARIES})
+target_precompile_headers(dawnlight PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/include/dusk_pch.hpp>")
 if (TARGET crashpad_handler)
-    add_dependencies(dusklight crashpad_handler)
-    add_custom_command(TARGET dusklight POST_BUILD
+    add_dependencies(dawnlight crashpad_handler)
+    add_custom_command(TARGET dawnlight POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "$<TARGET_FILE:crashpad_handler>"
-            "$<TARGET_FILE_DIR:dusklight>"
+            "$<TARGET_FILE_DIR:dawnlight>"
         COMMENT "Copying crashpad handler"
     )
 endif ()
@@ -471,14 +471,14 @@ endif ()
 if (ANDROID)
     # SDLActivity loads SDL_main via dlsym on Android. Since aurora::main is a static
     # archive, force an undefined reference so the linker keeps the SDL_main object.
-    target_link_options(dusklight PRIVATE "-Wl,-u,SDL_main")
+    target_link_options(dawnlight PRIVATE "-Wl,-u,SDL_main")
 endif ()
 
 if (NOT APPLE)
-    add_custom_command(TARGET dusklight POST_BUILD
+    add_custom_command(TARGET dawnlight POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_SOURCE_DIR}/res"
-            "$<TARGET_FILE_DIR:dusklight>/res"
+            "$<TARGET_FILE_DIR:dawnlight>/res"
         COMMENT "Copying resources"
     )
 endif ()
@@ -486,9 +486,9 @@ endif ()
 if (WIN32)
     set(DUSK_WINDOWS_RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/platforms/windows)
     set(DUSK_WINDOWS_ICON_PNG ${CMAKE_CURRENT_SOURCE_DIR}/res/icon.png)
-    set(DUSK_WINDOWS_ICON_ICO ${CMAKE_CURRENT_BINARY_DIR}/dusklight.ico)
-    set(DUSK_WINDOWS_RC ${CMAKE_CURRENT_BINARY_DIR}/dusklight.rc)
-    set(DUSK_WINDOWS_MANIFEST ${CMAKE_CURRENT_BINARY_DIR}/dusklight.manifest)
+    set(DUSK_WINDOWS_ICON_ICO ${CMAKE_CURRENT_BINARY_DIR}/dawnlight.ico)
+    set(DUSK_WINDOWS_RC ${CMAKE_CURRENT_BINARY_DIR}/dawnlight.rc)
+    set(DUSK_WINDOWS_MANIFEST ${CMAKE_CURRENT_BINARY_DIR}/dawnlight.manifest)
 
     add_custom_command(
             OUTPUT ${DUSK_WINDOWS_ICON_ICO}
@@ -501,14 +501,14 @@ if (WIN32)
             COMMENT "Generating Windows icon"
     )
 
-    configure_file(${DUSK_WINDOWS_RESOURCE_DIR}/dusklight.manifest.in ${DUSK_WINDOWS_MANIFEST} @ONLY)
-    configure_file(${DUSK_WINDOWS_RESOURCE_DIR}/dusklight.rc.in ${DUSK_WINDOWS_RC} @ONLY)
+    configure_file(${DUSK_WINDOWS_RESOURCE_DIR}/dawnlight.manifest.in ${DUSK_WINDOWS_MANIFEST} @ONLY)
+    configure_file(${DUSK_WINDOWS_RESOURCE_DIR}/dawnlight.rc.in ${DUSK_WINDOWS_RC} @ONLY)
 
-    target_sources(dusklight PRIVATE ${DUSK_WINDOWS_ICON_ICO} ${DUSK_WINDOWS_RC})
-    set_target_properties(dusklight PROPERTIES WIN32_EXECUTABLE TRUE)
+    target_sources(dawnlight PRIVATE ${DUSK_WINDOWS_ICON_ICO} ${DUSK_WINDOWS_RC})
+    set_target_properties(dawnlight PROPERTIES WIN32_EXECUTABLE TRUE)
 
     if (MSVC)
-        target_link_options(dusklight PRIVATE /MANIFEST:NO)
+        target_link_options(dawnlight PRIVATE /MANIFEST:NO)
     endif ()
 endif ()
 
@@ -524,10 +524,10 @@ if (APPLE)
     file(GLOB_RECURSE DUSK_RESOURCE_FILES
         "${DUSK_RESOURCE_DIR}/Assets.car"
         "${DUSK_RESOURCE_DIR}/Base.lproj/*"
-        "${DUSK_RESOURCE_DIR}/Dusklight.icns")
+        "${DUSK_RESOURCE_DIR}/Dawnlight.icns")
     file(GLOB_RECURSE DUSK_APP_RESOURCE_FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/*")
-    target_sources(dusklight PRIVATE ${DUSK_RESOURCE_FILES})
-    target_sources(dusklight PRIVATE ${DUSK_APP_RESOURCE_FILES})
+    target_sources(dawnlight PRIVATE ${DUSK_RESOURCE_FILES})
+    target_sources(dawnlight PRIVATE ${DUSK_APP_RESOURCE_FILES})
     foreach (FILE ${DUSK_RESOURCE_FILES})
         file(RELATIVE_PATH NEW_FILE "${DUSK_RESOURCE_DIR}" ${FILE})
         get_filename_component(NEW_FILE_PATH ${NEW_FILE} DIRECTORY)
@@ -539,14 +539,14 @@ if (APPLE)
         set_property(SOURCE ${FILE} PROPERTY MACOSX_PACKAGE_LOCATION "Resources/${NEW_FILE_PATH}")
     endforeach ()
     set_target_properties(
-        dusklight PROPERTIES
+        dawnlight PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_BUNDLE_NAME ${DUSK_BUNDLE_NAME}
         MACOSX_BUNDLE_GUI_IDENTIFIER ${DUSK_BUNDLE_IDENTIFIER}
         MACOSX_BUNDLE_BUNDLE_VERSION ${DUSK_VERSION_STRING}
         MACOSX_BUNDLE_SHORT_VERSION_STRING ${DUSK_SHORT_VERSION_STRING}
         MACOSX_BUNDLE_INFO_PLIST ${DUSK_INFO_PLIST}
-        OUTPUT_NAME Dusklight
+        OUTPUT_NAME Dawnlight
         XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "YES"
         XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "YES"
     )
@@ -554,21 +554,21 @@ endif ()
 
 if (APPLE AND NOT IOS AND NOT TVOS)
     find_library(APPKIT_FRAMEWORK AppKit REQUIRED)
-    target_sources(dusklight PRIVATE src/dusk/file_select_macos.mm)
+    target_sources(dawnlight PRIVATE src/dusk/file_select_macos.mm)
     set_source_files_properties(src/dusk/file_select_macos.mm PROPERTIES COMPILE_FLAGS -fobjc-arc)
-    target_link_libraries(dusklight PRIVATE ${APPKIT_FRAMEWORK})
+    target_link_libraries(dawnlight PRIVATE ${APPKIT_FRAMEWORK})
 endif ()
 
 if (IOS)
     find_library(UIKIT_FRAMEWORK UIKit REQUIRED)
     find_library(UNIFORM_TYPE_IDENTIFIERS_FRAMEWORK UniformTypeIdentifiers REQUIRED)
-    target_sources(dusklight PRIVATE src/dusk/ios/FileSelectDialog.m)
+    target_sources(dawnlight PRIVATE src/dusk/ios/FileSelectDialog.m)
     set_source_files_properties(src/dusk/ios/FileSelectDialog.m PROPERTIES COMPILE_FLAGS -fobjc-arc)
-    target_link_libraries(dusklight PRIVATE ${UIKIT_FRAMEWORK} ${UNIFORM_TYPE_IDENTIFIERS_FRAMEWORK})
+    target_link_libraries(dawnlight PRIVATE ${UIKIT_FRAMEWORK} ${UNIFORM_TYPE_IDENTIFIERS_FRAMEWORK})
 endif ()
 
 include(extern/aurora/cmake/AuroraCopyRuntimeDLLs.cmake)
-aurora_copy_runtime_dlls(dusklight)
+aurora_copy_runtime_dlls(dawnlight)
 
 if (DUSK_SELECTED_OPT)
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
@@ -606,13 +606,13 @@ function(get_target_prefix target result_var)
         endif ()
     endif ()
 endfunction()
-list(APPEND BINARY_TARGETS dusklight)
+list(APPEND BINARY_TARGETS dawnlight)
 set(EXTRA_TARGETS "")
 if (TARGET crashpad_handler)
     list(APPEND EXTRA_TARGETS crashpad_handler)
 endif ()
 install(TARGETS ${BINARY_TARGETS} ${EXTRA_TARGETS} DESTINATION ${CMAKE_INSTALL_PREFIX})
-aurora_install_runtime_dlls(dusklight ${CMAKE_INSTALL_PREFIX})
+aurora_install_runtime_dlls(dawnlight ${CMAKE_INSTALL_PREFIX})
 if (NOT APPLE)
     install(DIRECTORY ${CMAKE_SOURCE_DIR}/res DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif ()
