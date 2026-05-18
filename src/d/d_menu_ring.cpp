@@ -1134,7 +1134,89 @@ void dMenu_Ring_c::setItem() {
     }
 
     checkExplainForce();
-    if (field_0x6b3 == 0) {
+    if (dMenuRing_wiiuControllerStyle() && field_0x6b3 < 3) {
+        u8 selectedItems[3] = {uVar1, uVar2, uVar3};
+        u8 selectedSlots[3] = {mXButtonSlot, mYButtonSlot, field_0x6ac};
+        u8 selectedMixItems[3] = {mixItemIndex0, mixItemIndex1, mixItemIndex2};
+        u8 selectedItem = mItemSlots[mCurrentSlot];
+        u8 targetSlot = field_0x6b3;
+        u8 sourceSlot = dItemNo_NONE_e;
+        bool selectedWasMixItem = false;
+
+        for (u8 i = 0; i < 3; i++) {
+            if (i == targetSlot) {
+                continue;
+            }
+
+            if (selectedItems[i] == selectedItem) {
+                sourceSlot = i;
+                break;
+            }
+
+            if (selectedMixItems[i] == selectedItem) {
+                sourceSlot = i;
+                selectedWasMixItem = true;
+                break;
+            }
+        }
+
+        u8 targetItem = selectedItems[targetSlot];
+        u8 targetItemSlot = selectedSlots[targetSlot];
+        u8 targetMixItem = selectedMixItems[targetSlot];
+        bool targetAlreadyHadSelectedItem = targetItem == selectedItem;
+
+        selectedItems[targetSlot] = selectedItem;
+        selectedSlots[targetSlot] = mCurrentSlot;
+        selectedMixItems[targetSlot] = dItemNo_NONE_e;
+
+        if (sourceSlot != dItemNo_NONE_e) {
+            if (targetAlreadyHadSelectedItem) {
+                if (selectedWasMixItem) {
+                    selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+                } else {
+                    selectedItems[sourceSlot] = dItemNo_NONE_e;
+                    selectedSlots[sourceSlot] = dItemNo_NONE_e;
+                    selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+                }
+            } else {
+                selectedItems[sourceSlot] = targetItem;
+                selectedSlots[sourceSlot] =
+                    targetItem == dItemNo_NONE_e ? dItemNo_NONE_e : targetItemSlot;
+                selectedMixItems[sourceSlot] =
+                    targetItem == dItemNo_NONE_e ? dItemNo_NONE_e : targetMixItem;
+            }
+        }
+
+        for (u8 i = 0; i < 3; i++) {
+            if (i == targetSlot || i == sourceSlot) {
+                continue;
+            }
+
+            if (selectedItems[i] == selectedItem) {
+                selectedItems[i] = dItemNo_NONE_e;
+                selectedSlots[i] = dItemNo_NONE_e;
+                selectedMixItems[i] = dItemNo_NONE_e;
+            } else if (selectedMixItems[i] == selectedItem) {
+                selectedMixItems[i] = dItemNo_NONE_e;
+            }
+        }
+
+        if (selectedWasMixItem && sourceSlot != dItemNo_NONE_e &&
+            selectedItems[sourceSlot] == targetItem)
+        {
+            selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+        }
+
+        uVar1 = selectedItems[0];
+        uVar2 = selectedItems[1];
+        uVar3 = selectedItems[2];
+        mXButtonSlot = selectedSlots[0];
+        mYButtonSlot = selectedSlots[1];
+        field_0x6ac = selectedSlots[2];
+        mixItemIndex0 = selectedMixItems[0];
+        mixItemIndex1 = selectedMixItems[1];
+        mixItemIndex2 = selectedMixItems[2];
+    } else if (field_0x6b3 == 0) {
         uVar1 = dComIfGs_getSelectItemIndex(1);
         if (mItemSlots[mCurrentSlot] == uVar1) {
             uVar2 = dComIfGs_getSelectItemIndex(0);
@@ -1289,6 +1371,19 @@ void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
 #if TARGET_PC
             mSelectItemSlideElapsed[2] = 0.0f;
 #endif
+        }
+    }
+    if (dMenuRing_wiiuControllerStyle() && field_0x6b3 < 3) {
+        for (int i = 0; i < 3; i++) {
+            if (field_0x6b4[i] != dComIfGs_getSelectItemIndex(i) ||
+                field_0x6b8[i] != dComIfGs_getMixItemIndex(i))
+            {
+                field_0x674[field_0x6b3] = 1;
+#if TARGET_PC
+                mSelectItemSlideElapsed[field_0x6b3] = 0.0f;
+#endif
+                break;
+            }
         }
     }
     if (field_0x674[0] == 1) {
@@ -1890,7 +1985,18 @@ void dMenu_Ring_c::drawSelectItem() {
 }
 
 void dMenu_Ring_c::setSelectItemForce(int i_idx) {
-    if (i_idx == 2) {
+    if (dMenuRing_wiiuControllerStyle() && i_idx < 3) {
+        if (field_0x674[i_idx] != 0) {
+            for (int i = 0; i < 3; i++) {
+                dComIfGs_setMixItemIndex(i, field_0x6b8[i]);
+                dComIfGs_setSelectItemIndex(i, field_0x6b4[i]);
+            }
+            field_0x674[i_idx] = 0;
+#if TARGET_PC
+            mSelectItemSlideElapsed[i_idx] = 0.0f;
+#endif
+        }
+    } else if (i_idx == 2) {
         if (field_0x674[i_idx] != 0) {
             dComIfGs_setSelectItemIndex(i_idx, field_0x6b4[i_idx]);
             if (dMenuRing_wiiuControllerStyle()) {
