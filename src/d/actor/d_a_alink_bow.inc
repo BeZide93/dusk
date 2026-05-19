@@ -433,7 +433,13 @@ BOOL daAlink_c::checkUpperItemActionBow() {
 void daAlink_c::checkUpperItemActionBowFly() {
     if (checkBowAnime()) {
         checkUpperItemActionBow();
+#if TARGET_PC
+        if (!dusk::IsBulletTimeActiveForLink(this)) {
+            setBodyAngleXReadyAnime(0);
+        }
+#else
         setBodyAngleXReadyAnime(0);
+#endif
     } else if (checkReadyItem() && itemTrigger()) {
         setBowReadyAnime();
         mItemMode = 0;

@@ -7,6 +7,9 @@
 #include "JSystem/JUtility/JUTAssert.h"
 #include <cmath>
 #include "os_report.h"
+#if TARGET_PC
+#include "dusk/combat_time.hpp"
+#endif
 
 #define CHECK_FLOAT_CLASS(line, x) JUT_ASSERT(line, !std::isnan(x));
 #define CHECK_FLOAT_RANGE(line, x) JUT_ASSERT(line, -1.0e32f < x && x < 1.0e32f);
@@ -54,6 +57,10 @@ WeightType cCcS::GetWt(u8 param_0) const {
 }
 
 void cCcS::Set(cCcD_Obj* obj) {
+#if TARGET_PC
+    dusk::RememberCombatTimeCollider(obj);
+#endif
+
     if (obj->ChkAtSet()) {
         if (mObjAtCount >= ARRAY_SIZEU(mpObjAt)) {
             OS_REPORT("\x1b[43;30m");

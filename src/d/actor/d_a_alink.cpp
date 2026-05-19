@@ -54,6 +54,7 @@
 #if TARGET_PC
 #include "dusk/action_bindings.h"
 #include "dusk/bossrush.hpp"
+#include "dusk/combat_time.hpp"
 #include "dusk/frame_interpolation.h"
 #include "dusk/settings.h"
 #include "res/Object/Alink.h"
@@ -10957,6 +10958,9 @@ BOOL daAlink_c::checkWiiUManualJumpAction() {
 
     if (mEquipItem == 0x103 && (mDoCPd_c::getHoldB(PAD_1) || mDoCPd_c::getTrigB(PAD_1))) {
         if (procCutJumpInit(FALSE)) {
+#if TARGET_PC
+            dusk::MarkManualJumpStarted(this);
+#endif
             applyWiiUManualJumpMovement();
             return true;
         }
@@ -10964,6 +10968,9 @@ BOOL daAlink_c::checkWiiUManualJumpAction() {
     }
 
     if (procAutoJumpInit(1)) {
+#if TARGET_PC
+        dusk::MarkManualJumpStarted(this);
+#endif
         applyWiiUManualJumpMovement();
         return true;
     }
@@ -15220,6 +15227,12 @@ void daAlink_c::changeWarpMaterial(daAlink_c::daAlink_WARP_MAT_MODE i_matMode) {
 void daAlink_c::commonProcInit(daAlink_c::daAlink_PROC i_procID) {
     int i;
 
+#if TARGET_PC
+    if (mProcID == PROC_AUTO_JUMP && i_procID != PROC_AUTO_JUMP) {
+        dusk::ClearManualJump(this);
+    }
+#endif
+
     if (mProcID == PROC_TOOL_DEMO) {
         speed.y = 0.0f;
         resetDemoBck();
@@ -17038,6 +17051,9 @@ int daAlink_c::procAutoJump() {
     {
         setWiiUManualJumpDirection();
         if (procCutJumpInit(TRUE)) {
+#if TARGET_PC
+            dusk::MarkManualJumpStarted(this);
+#endif
             applyWiiUManualJumpMovement();
         }
         return 1;
@@ -17074,11 +17090,113 @@ int daAlink_c::procAutoJump() {
         setHeavyBoots(1);
     }
 
+#if TARGET_PC
+    auto applyBulletTimeFall = [&]() {
+        if (!dusk::IsBulletTimeActiveForLink(this)) {
+            return;
+        }
+
+        constexpr f32 fallScale = 0.025f;
+        setSpecialGravity(mpHIO->mAutoJump.m.mGravity * fallScale,
+                          mpHIO->mAutoJump.m.mMaxFallSpeed * fallScale, FALSE);
+
+        const f32 gravity_abs = -mpHIO->mAutoJump.m.mGravity;
+        if (gravity_abs > 0.001f && speed.y > 0.0f) {
+            const f32 jump_speed_y =
+                mpHIO->mAutoJump.m.mMaxJumpSpeed *
+                mpHIO->mAutoJump.m.mJumpSpeedRate *
+                cM_ssin(mpHIO->mAutoJump.m.mJumpAngle);
+            const f32 normal_jump_height = SQUARE(jump_speed_y) / (2.0f * gravity_abs);
+            const f32 bullet_time_jump_cap_y = mLastJumpPos.y + normal_jump_height * 2.0f;
+
+            if (current.pos.y >= bullet_time_jump_cap_y) {
+                current.pos.y = bullet_time_jump_cap_y;
+                speed.y = 0.0f;
+            }
+        }
+
+        if (speed.y < maxFallSpeed) {
+            speed.y = maxFallSpeed;
+        }
+    };
+
+    auto prepareBulletTimeBowAim = [&]() {
+        if (!dusk::IsBulletTimeActiveForLink(this) ||
+            !checkBowItem(mEquipItem) || !checkReadyItem())
+        {
+            return;
+        }
+
+        if (!checkBowAnime()) {
+            if (dusk::UseCinemaAim()) {
+                if (mEquipItem == dItemNo_HAWK_ARROW_e) {
+                    setBodyAngleToCameraView();
+                } else {
+                    setBodyAngleToCameraViewYaw();
+                }
+            }
+
+            setBowReadyAnime();
+            mItemMode = 0;
+        }
+
+        setBowOrSlingStatus();
+    };
+
+    auto updateBulletTimeBowSight = [&]() {
+        if (!dusk::IsBulletTimeActiveForLink(this) ||
+            !checkBowItem(mEquipItem))
+        {
+            return;
+        }
+
+        if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseCinemaAim()) {
+            if (setBodyAngleToCameraCStick()) {
+                setBowSight();
+            }
+        } else if (mEquipItem != dItemNo_HAWK_ARROW_e && dusk::UseThirdPersonAim()) {
+            if (setBodyAngleToCameraView()) {
+                setBowSight();
+            }
+        } else if (setBodyAngleToCamera()) {
+            setBowSight();
+        }
+    };
+
+    bool bullet_time_cancel_requested = dusk::IsBulletTimeActiveForLink(this) && doTrigger();
+    bool bullet_time_ended = dusk::UpdateBulletTime(this,
+        mProcID == PROC_AUTO_JUMP && !mLinkAcch.ChkGroundHit(),
+        checkBowItem(mEquipItem) && (itemTrigger() || itemButton()),
+        bullet_time_cancel_requested);
+
+    if (dusk::IsBulletTimeActiveForLink(this)) {
+        setDoStatus(BUTTON_STATUS_BACK);
+        applyBulletTimeFall();
+        prepareBulletTimeBowAim();
+    } else {
+        offNoResetFlg3(FLG3_UNK_4000);
+
+        if (bullet_time_ended) {
+            deleteArrow();
+            resetUpperAnime(UPPER_2, 3.0f);
+            dComIfGp_clearPlayerStatus0(0, 0x1040);
+        }
+    }
+#endif
+
     if (checkUpperItemActionFly()) {
+#if TARGET_PC
+        applyBulletTimeFall();
+        updateBulletTimeBowSight();
+#endif
         return 1;
     }
 
     if (mLinkAcch.ChkGroundHit()) {
+#if TARGET_PC
+        offNoResetFlg3(FLG3_UNK_4000);
+        dusk::ClearManualJump(this);
+#endif
         return checkLandAction(0);
     }
 
@@ -17142,6 +17260,11 @@ int daAlink_c::procAutoJump() {
             cLib_addCalcAngleS(&field_0x308a, -diff * 12, 10, 1000, 50);
         }
     }
+
+#if TARGET_PC
+    applyBulletTimeFall();
+    updateBulletTimeBowSight();
+#endif
 
     setFallVoice();
 

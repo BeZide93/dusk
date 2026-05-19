@@ -2726,6 +2726,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Link will not recoil when his sword hits walls.");
         addOption("Jump Button", getSettings().game.enableJumpButton,
             "Enables the Wii U style ZL jump button and ZL+B jump attack.");
+        addOption("Bullet Time", getSettings().game.enableBulletTime,
+            "Slows nearby action for up to five seconds when aiming the Bow during a manual jump.");
         addOption("Manual Shielding", getSettings().game.manualShielding,
             "Requires Target+ZR to shield. With Lock-on Type set to Switch, ZR alone shields "
             "while locked on. Shield Attack becomes ZR+B while shielding.");
