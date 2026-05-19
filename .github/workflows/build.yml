@@ -1,6 +1,7 @@
 name: Build
 
 on:
+  workflow_dispatch:
   push:
     paths-ignore:
       - '*.md'
@@ -93,6 +94,7 @@ jobs:
             platform: ios
             preset: x-ios-ci
             artifact_name: ios-appleclang-arm64
+            release_asset: ios-arm64.ipa
           # - name: AppleClang tvOS arm64
           #   platform: tvos
           #   preset: x-tvos-ci
@@ -156,13 +158,27 @@ jobs:
             build/install/Dawnlight-${{env.DUSK_VERSION}}-${{matrix.release_asset}}
             build/install/debug.tar.*
 
+      - name: Package iOS app
+        if: matrix.platform == 'ios'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          chmod +x build/install/Dawnlight.app/Dawnlight
+          rm -rf build/install/Payload
+          mkdir -p build/install/Payload
+          cp -R build/install/Dawnlight.app build/install/Payload/
+          ditto -c -k --sequesterRsrc \
+            build/install/Payload \
+            "build/install/Dawnlight-${DUSK_VERSION}-${{ matrix.release_asset }}"
+
       - name: Upload iOS artifacts
         if: matrix.platform == 'ios'
         uses: actions/upload-artifact@v7
         with:
           name: dawnlight-${{env.DUSK_VERSION}}-${{matrix.artifact_name}}
           path: |
-            build/install/Dawnlight.app
+            build/install/Dawnlight-${{env.DUSK_VERSION}}-${{matrix.release_asset}}
             build/install/debug.tar.*
 
   build-android:

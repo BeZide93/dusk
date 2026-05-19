@@ -26,6 +26,14 @@ build/
 .ninja_*
 build.ninja
 
+# Local packaged artifacts
+apk/
+local-builds/
+.gradle-user/
+.codex_release_artifacts/
+.codex_release_artifact_zips/
+.codex_release_uploads/
+
 # Local Android signing keys/secrets
 keystores/
 
