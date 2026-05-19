@@ -1414,12 +1414,14 @@ set(DUSK_FILES
         include/dusk/action_bindings.h
         include/dusk/endian_gx.hpp
         include/dusk/config.hpp
+        include/dusk/combat_time.hpp
         include/dusk/dvd_asset.hpp
         include/dusk/scope_guard.hpp
         src/dusk/dvd_asset.cpp
         src/d/actor/d_a_alink_dusk.cpp
         src/dusk/asserts.cpp
         src/dusk/config.cpp
+        src/dusk/combat_time.cpp
         src/dusk/crash_reporting.cpp
         src/dusk/data.cpp
         src/dusk/data.hpp

@@ -1626,6 +1626,9 @@ int daAlink_c::procCutJump() {
 }
 
 int daAlink_c::procCutJumpLandInit(int param_0) {
+#if TARGET_PC
+    dusk::ClearManualJump(this);
+#endif
     commonProcInit(PROC_CUT_JUMP_LAND);
     checkCutLandDamage();
     setSingleAnimeParam(ANM_CUT_JUMP_LAND, &mpHIO->mCut.mCutJump.m.mLandAnm);

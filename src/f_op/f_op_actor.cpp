@@ -18,6 +18,9 @@
 #include "f_pc/f_pc_manager.h"
 #include "f_pc/f_pc_debug_sv.h"
 #include "c/c_dylink.h"
+#if TARGET_PC
+#include "dusk/combat_time.hpp"
+#endif
 #include "dusk/settings.h"
 #include "m_Do/m_Do_printf.h"
 
@@ -329,6 +332,14 @@ static int fopAc_Execute(void* i_this) {
                 (move != 0 && !fopAcM_CheckStatus(actor, fopAc_ac_c::getStopStatus()) &&
                 (!fopAcM_CheckStatus(actor, fopAcStts_NOEXEC_e) || !fopAcM_CheckCondition(actor, fopAcCnd_NODRAW_e)))))
         {
+#if TARGET_PC
+            if (dusk::ShouldSkipCombatTimeActor(actor)) {
+                dusk::PrimeCombatTimeActorColliders(actor);
+                actor->old = actor->current;
+                return ret;
+            }
+#endif
+
             fopAcM_OffCondition(actor, fopAcCnd_NOEXEC_e);
             actor->old = actor->current;
 

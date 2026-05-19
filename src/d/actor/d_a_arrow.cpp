@@ -19,6 +19,7 @@
 #include "d/actor/d_a_hozelda.h"
 #if TARGET_PC
 #include "dusk/achievements.h"
+#include "dusk/combat_time.hpp"
 #endif
 
 int daArrow_c::createHeap() {
@@ -84,6 +85,11 @@ const static dCcD_SrcSph l_coSphSrc = {
 };
 
 void daArrow_c::atHitCallBack(dCcD_GObjInf* i_atObjInf, fopAc_ac_c* i_tgActor, dCcD_GObjInf* i_tgObjInf) {
+#if TARGET_PC
+    dusk::MarkCombatTimeProjectileActive();
+    dusk::MarkCombatTimeActorHit(i_tgActor);
+#endif
+
     if (i_tgObjInf->ChkTgArrowThrough()) {
         if (i_tgActor != NULL && fopAcM_GetName(i_tgActor) == fpcNm_E_PZ_e) {
             ((daE_PZ_c*)i_tgActor)->onBombArrowHit();
@@ -548,6 +554,10 @@ int daArrow_c::procWait() {
 }
 
 int daArrow_c::procMove() {
+#if TARGET_PC
+    dusk::MarkCombatTimeProjectileActive();
+#endif
+
     if (fopAcM_GetParam(this) == 6) {
         setBlur();
         mProcFunc = &daArrow_c::procActorControllStop;

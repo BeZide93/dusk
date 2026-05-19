@@ -169,6 +169,7 @@ struct UserSettings {
         ConfigVar<bool> disableRupeeCutscenes;
         ConfigVar<bool> noSwordRecoil;
         ConfigVar<bool> enableJumpButton;
+        ConfigVar<bool> enableBulletTime;
         ConfigVar<bool> manualShielding;
         ConfigVar<int> damageMultiplier;
         ConfigVar<int> newGamePlusHealthScalePercent;
