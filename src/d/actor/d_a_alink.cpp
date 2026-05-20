@@ -11633,7 +11633,11 @@ void daAlink_c::orderPeep() {
 }
 
 int daAlink_c::orderTalk(int i_checkZTalk) {
-    static const u16 itemTalkType[2] = {6, 7};
+    static const u16 itemTalkType[3] = {
+        dEvt_type_SHOWITEM_X_e,
+        dEvt_type_SHOWITEM_Y_e,
+        dEvt_type_SHOWITEM_Z_e,
+    };
 
     if (notTalk()) {
         return 0;
@@ -11653,8 +11657,7 @@ int daAlink_c::orderTalk(int i_checkZTalk) {
     }
 
     if (!checkWolf() && checkRequestTalkActor(mAttList2, field_0x27f8)) {
-        for (int i = 0; i < 2; i++) {
-            // check if pressed X or Y and if item on button is a trade item
+        for (int i = 0; i < daAlink_selectItemButtonCount(); i++) {
             if (checkTradeItem(dComIfGp_getSelectItem(i)) && itemTriggerCheck(1 << i)) {
                 fopAcM_orderTalkItemBtnEvent(itemTalkType[i], this, field_0x27f8, 0, 0);
                 return 1;
@@ -17101,17 +17104,43 @@ int daAlink_c::procAutoJump() {
                           mpHIO->mAutoJump.m.mMaxFallSpeed * fallScale, FALSE);
 
         const f32 gravity_abs = -mpHIO->mAutoJump.m.mGravity;
-        if (gravity_abs > 0.001f && speed.y > 0.0f) {
-            const f32 jump_speed_y =
+        if (gravity_abs > 0.001f) {
+            const f32 jump_speed =
                 mpHIO->mAutoJump.m.mMaxJumpSpeed *
-                mpHIO->mAutoJump.m.mJumpSpeedRate *
-                cM_ssin(mpHIO->mAutoJump.m.mJumpAngle);
-            const f32 normal_jump_height = SQUARE(jump_speed_y) / (2.0f * gravity_abs);
-            const f32 bullet_time_jump_cap_y = mLastJumpPos.y + normal_jump_height * 2.0f;
+                mpHIO->mAutoJump.m.mJumpSpeedRate;
+            const f32 jump_speed_y = jump_speed * cM_ssin(mpHIO->mAutoJump.m.mJumpAngle);
 
-            if (current.pos.y >= bullet_time_jump_cap_y) {
-                current.pos.y = bullet_time_jump_cap_y;
-                speed.y = 0.0f;
+            if (speed.y > 0.0f) {
+                const f32 normal_jump_height = SQUARE(jump_speed_y) / (2.0f * gravity_abs);
+                const f32 bullet_time_jump_cap_y = mLastJumpPos.y + normal_jump_height * 2.0f;
+
+                if (current.pos.y >= bullet_time_jump_cap_y) {
+                    current.pos.y = bullet_time_jump_cap_y;
+                    speed.y = 0.0f;
+                }
+            }
+
+            if (jump_speed_y > 0.001f) {
+                const f32 jump_speed_xz = jump_speed * cM_scos(mpHIO->mAutoJump.m.mJumpAngle);
+                const f32 normal_jump_distance =
+                    jump_speed_xz * ((jump_speed_y * 2.0f) / gravity_abs);
+                const f32 bullet_time_jump_cap_xz = normal_jump_distance * 2.0f;
+                const f32 jump_delta_x = current.pos.x - mLastJumpPos.x;
+                const f32 jump_delta_z = current.pos.z - mLastJumpPos.z;
+                const f32 jump_delta_sq = SQUARE(jump_delta_x) + SQUARE(jump_delta_z);
+
+                if (bullet_time_jump_cap_xz > 0.001f &&
+                    jump_delta_sq > SQUARE(bullet_time_jump_cap_xz))
+                {
+                    const f32 jump_delta = JMAFastSqrt(jump_delta_sq);
+                    const f32 jump_cap_scale = bullet_time_jump_cap_xz / jump_delta;
+                    current.pos.x = mLastJumpPos.x + jump_delta_x * jump_cap_scale;
+                    current.pos.z = mLastJumpPos.z + jump_delta_z * jump_cap_scale;
+                    speed.x = 0.0f;
+                    speed.z = 0.0f;
+                    speedF = 0.0f;
+                    mNormalSpeed = 0.0f;
+                }
             }
         }
 

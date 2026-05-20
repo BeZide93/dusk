@@ -47,6 +47,7 @@ enum dEvt_type_e {
     /* 0x5 */ dEvt_type_ITEM_e,
     /* 0x6 */ dEvt_type_SHOWITEM_X_e,
     /* 0x7 */ dEvt_type_SHOWITEM_Y_e,
+    /* 0x8 */ dEvt_type_SHOWITEM_Z_e,
     /* 0xA */ dEvt_type_CATCH_e = 10,
     /* 0xB */ dEvt_type_TREASURE_e,
 };
@@ -145,7 +146,7 @@ public:
     void setDebugStb(u8 stb) { mDebugStb = stb; }
     u8 getMapToolId() { return mMapToolId; }
     BOOL chkTalkXY() {
-#if PLATFORM_WII || PLATFORM_SHIELD
+#if TARGET_PC || PLATFORM_WII || PLATFORM_SHIELD
         return mTalkXyType == 1 || mTalkXyType == 2 || mTalkXyType == 3 || mTalkXyType == 4;
 #else
         return mTalkXyType == 1 || mTalkXyType == 2;

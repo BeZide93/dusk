@@ -26,9 +26,98 @@
 
 namespace {
 
+daAlink_c* hud_player() {
+    return (daAlink_c*)dComIfGp_getPlayer(0);
+}
+
+bool hud_player_in_crawl_context(daAlink_c const* player) {
+    if (player == NULL) {
+        return false;
+    }
+
+    switch (player->mProcID) {
+    case daAlink_c::PROC_CRAWL_START:
+    case daAlink_c::PROC_CRAWL_MOVE:
+    case daAlink_c::PROC_CRAWL_AUTO_MOVE:
+    case daAlink_c::PROC_CRAWL_END:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool hud_player_in_climb_or_ledge_context(daAlink_c const* player) {
+    if (player == NULL) {
+        return false;
+    }
+
+    switch (player->mProcID) {
+    case daAlink_c::PROC_HANG_START:
+    case daAlink_c::PROC_HANG_FALL_START:
+    case daAlink_c::PROC_HANG_UP:
+    case daAlink_c::PROC_HANG_WAIT:
+    case daAlink_c::PROC_HANG_MOVE:
+    case daAlink_c::PROC_HANG_CLIMB:
+    case daAlink_c::PROC_HANG_WALL_CATCH:
+    case daAlink_c::PROC_HANG_READY:
+    case daAlink_c::PROC_LADDER_UP_START:
+    case daAlink_c::PROC_LADDER_UP_END:
+    case daAlink_c::PROC_LADDER_DOWN_START:
+    case daAlink_c::PROC_LADDER_DOWN_END:
+    case daAlink_c::PROC_LADDER_MOVE:
+    case daAlink_c::PROC_CLIMB_UP_START:
+    case daAlink_c::PROC_CLIMB_DOWN_START:
+    case daAlink_c::PROC_CLIMB_MOVE_UPDOWN:
+    case daAlink_c::PROC_CLIMB_MOVE_SIDE:
+    case daAlink_c::PROC_CLIMB_WAIT:
+    case daAlink_c::PROC_CLIMB_TO_ROOF:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool hud_player_in_item_aim_proc(daAlink_c const* player) {
+    if (player == NULL) {
+        return false;
+    }
+
+    switch (player->mProcID) {
+    case daAlink_c::PROC_BOW_SUBJECT:
+    case daAlink_c::PROC_BOOMERANG_SUBJECT:
+    case daAlink_c::PROC_COPY_ROD_SUBJECT:
+    case daAlink_c::PROC_HOOKSHOT_SUBJECT:
+    case daAlink_c::PROC_IRON_BALL_SUBJECT:
+    case daAlink_c::PROC_HORSE_BOW_SUBJECT:
+    case daAlink_c::PROC_HORSE_BOOMERANG_SUBJECT:
+    case daAlink_c::PROC_HORSE_HOOKSHOT_SUBJECT:
+    case daAlink_c::PROC_SWIM_HOOKSHOT_SUBJECT:
+    case daAlink_c::PROC_CANOE_BOW_SUBJECT:
+    case daAlink_c::PROC_CANOE_BOOMERANG_SUBJECT:
+    case daAlink_c::PROC_CANOE_HOOKSHOT_SUBJECT:
+    case daAlink_c::PROC_BOARD_SUBJECTIVITY:
+    case daAlink_c::PROC_HAWK_SUBJECT:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool hud_player_in_vanilla_aim_context(daAlink_c const* player) {
+    return !dusk::UseThirdPersonAim() && !dusk::UseCinemaAim() &&
+           hud_player_in_item_aim_proc(player);
+}
+
+bool hud_player_in_midna_hidden_aim_context(daAlink_c const* player) {
+    return !dusk::UseThirdPersonAim() && hud_player_in_item_aim_proc(player);
+}
+
+bool hud_button_background_overlay_visible() {
+    return dMeter2Info_getWindowStatus() == 2;
+}
+
 bool hud_common_button_context_hidden() {
-    if (dComIfGp_isPauseFlag() || dMeter2Info_isSub2DStatus(1) ||
-        !dComIfGp_2dShowCheck())
+    if (dComIfGp_isPauseFlag() || dMeter2Info_isSub2DStatus(1) || !dComIfGp_2dShowCheck())
     {
         return true;
     }
@@ -38,22 +127,24 @@ bool hud_common_button_context_hidden() {
         return true;
     }
 
-    if (dCam_getBody()->Mode() == 4 || dComIfGp_checkPlayerStatus0(0, 0x8000000) ||
-        dComIfGp_checkPlayerStatus0(0, 0x2000108))
+    if (dCam_getBody()->Mode() == 4 || dComIfGp_checkPlayerStatus0(0, 0x8000000))
     {
         return true;
     }
 
-    daAlink_c* player = (daAlink_c*)dComIfGp_getPlayer(0);
-    return player != NULL && player->checkPlayerDemoMode();
+    daAlink_c* player = hud_player();
+    return player != NULL && (player->checkPlayerDemoMode() || hud_player_in_crawl_context(player));
 }
 
 bool hud_button_background_hidden_by_context() {
-    return hud_common_button_context_hidden() || dComIfGp_event_runCheck();
+    daAlink_c const* player = hud_player();
+    return hud_common_button_context_hidden() || hud_player_in_vanilla_aim_context(player) ||
+           (dComIfGp_event_runCheck() && !hud_button_background_overlay_visible());
 }
 
 bool hud_midna_icon_hidden_by_context() {
-    if (hud_common_button_context_hidden()) {
+    daAlink_c const* player = hud_player();
+    if (hud_common_button_context_hidden() || hud_player_in_midna_hidden_aim_context(player)) {
         return true;
     }
 
@@ -3774,7 +3865,9 @@ void dMeter2Draw_c::setButtonIconBAlpha(u8 unused0, u32 unused1, bool param_2) {
 
 void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
     const bool wiiuStyle = dusk::UseWiiUControllerStyle();
-    const bool keepWiiUWolfMidnaVisible = wiiuStyle && daPy_py_c::checkNowWolf();
+    daAlink_c const* player = hud_player();
+    const bool keepWiiUMidnaVisible = wiiuStyle &&
+        (daPy_py_c::checkNowWolf() || hud_player_in_climb_or_ledge_context(player));
     const auto hudTransform = wiiuStyle ?
         dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::DPad) :
         dusk::hud_layout::ButtonTransform(dusk::hud_layout::Button::Z);
@@ -3832,7 +3925,7 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
         if (hud_midna_icon_hidden_by_context() || getCanoeFishing() ||
               /*dSv_event_flag_c::M_009 - Cutscene - [cutscene: 6B] Prison escape - Midna rides on back */
             (!dComIfGs_isEventBit(0x0540) && !dMeter2Info_isUseButton(0x800) &&
-             !keepWiiUWolfMidnaVisible) ||
+             !keepWiiUMidnaVisible) ||
              /* dSv_event_flag_c::M_067 - Main Event - Midna riding / not riding (ON == riding) */
             !dComIfGs_isEventBit(0x0C10) ||
             /* dSv_event_flag_c::F_0800 - Cutscene - After returning to Ordon Woods, until Midna comes out of the shadows 
@@ -3840,7 +3933,7 @@ void dMeter2Draw_c::setButtonIconMidonaAlpha(u32 param_0) {
             dComIfGs_isEventBit(0x6140))
         {
             var_f29 = 0.0f;
-        } else if (!dMeter2Info_isUseButton(0x800) && !keepWiiUWolfMidnaVisible) {
+        } else if (!dMeter2Info_isUseButton(0x800) && !keepWiiUMidnaVisible) {
             var_f29 = g_drawHIO.mButtonXYItemDimAlpha / 255.0f;
         } else if (isEmphasisZ() && !(param_0 & 0x40000000) && temp_f31 > 0.0f) {
             if (field_0x738 == 0.0f) {

@@ -1513,18 +1513,9 @@ int daAlink_c::procHookshotSubject() {
         !dusk::UseThirdPersonAim() &&
         !dusk::UseCinemaAim())
     {
-        f32 stick_value = mStickValue;
-        f32 move_value = mMoveValue;
-        s16 stick_angle = mStickAngle;
-        s16 move_angle = mMoveAngle;
         s16 shape_angle_y = shape_angle.y;
-        setAimCStickMovementData();
         setSpeedAndAngleAtn();
         shape_angle.y = shape_angle_y;
-        mStickValue = stick_value;
-        mMoveValue = move_value;
-        mStickAngle = stick_angle;
-        mMoveAngle = move_angle;
     }
 
     if (dusk::getSettings().game.enableAimMovement &&
@@ -1542,7 +1533,9 @@ int daAlink_c::procHookshotSubject() {
     if (!checkNextAction(0)) {
         if (checkHookshotWait()) {
 #if TARGET_PC
-            if (dusk::UseCinemaAim()) {
+            if (dusk::UseCinemaAim() ||
+                (dusk::getSettings().game.enableAimMovement && !dusk::UseThirdPersonAim()))
+            {
                 if (setBodyAngleToCameraCStick()) {
                     setHookshotSight();
                 }
