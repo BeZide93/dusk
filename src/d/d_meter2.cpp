@@ -931,6 +931,13 @@ void dMeter2_c::moveOxygen() {
     var_r7 = 0;
     draw_oxygen = false;
 
+    static u32 sOxygenLayoutStamp = 0;
+    const u32 hudLayoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sOxygenLayoutStamp != hudLayoutStamp) {
+        sOxygenLayoutStamp = hudLayoutStamp;
+        draw_oxygen = true;
+    }
+
     if (dComIfGp_getMaxOxygenCount() != 0) {
         var_r7 = dComIfGp_getMaxOxygen() + dComIfGp_getMaxOxygenCount();
         if (var_r7 > var_r4) {
@@ -3180,6 +3187,14 @@ void dMeter2_c::alphaAnimeButton() {
         } else {
             mpMeterDraw->drawItemNum(dMeter2Draw_c::SELECT_Z_e, 0.0f);
         }
+
+        if (field_0x128 == 0 && rItem == dItemNo_KANTERA_e) {
+            mpMeterDraw->drawKanteraMeter(dMeter2Draw_c::SELECT_Z_e, 1.0f);
+        } else {
+            mpMeterDraw->drawKanteraMeter(dMeter2Draw_c::SELECT_Z_e, 0.0f);
+        }
+    } else {
+        mpMeterDraw->drawKanteraMeter(dMeter2Draw_c::SELECT_Z_e, 0.0f);
     }
 
     mpMeterDraw->setAlphaButtonChange(false);

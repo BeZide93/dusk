@@ -163,6 +163,7 @@ constexpr std::array kHudElementNames = {
     "D-Pad",
     "Minimap",
     "Oil",
+    "Oxygen",
     "Button Backing",
     "Midna",
 };
@@ -523,8 +524,10 @@ hud_layout::Element hud_element_id(int index) {
     case 10:
         return hud_layout::Element::Oil;
     case 11:
-        return hud_layout::Element::ButtonBackground;
+        return hud_layout::Element::Oxygen;
     case 12:
+        return hud_layout::Element::ButtonBackground;
+    case 13:
         return hud_layout::Element::Midna;
     case 0:
     default:
@@ -588,8 +591,10 @@ ConfigVar<float>& hud_element_offset_x(int index) {
     case 10:
         return game.hudOilOffsetX;
     case 11:
-        return game.hudButtonBackgroundOffsetX;
+        return game.hudOxygenOffsetX;
     case 12:
+        return game.hudButtonBackgroundOffsetX;
+    case 13:
         return game.hudMidnaOffsetX;
     case 0:
     default:
@@ -621,8 +626,10 @@ ConfigVar<float>& hud_element_offset_y(int index) {
     case 10:
         return game.hudOilOffsetY;
     case 11:
-        return game.hudButtonBackgroundOffsetY;
+        return game.hudOxygenOffsetY;
     case 12:
+        return game.hudButtonBackgroundOffsetY;
+    case 13:
         return game.hudMidnaOffsetY;
     case 0:
     default:
@@ -654,8 +661,10 @@ ConfigVar<float>& hud_element_scale(int index) {
     case 10:
         return game.hudOilScale;
     case 11:
-        return game.hudButtonBackgroundScale;
+        return game.hudOxygenScale;
     case 12:
+        return game.hudButtonBackgroundScale;
+    case 13:
         return game.hudMidnaScale;
     case 0:
     default:
@@ -824,6 +833,40 @@ ConfigVar<float>& hud_element_text_scale(int index) {
     }
 }
 
+bool hud_element_has_text_offset(int index) {
+    return hud_element_is_button(index) && hud_layout::HasTextOffset(hud_element_button(index));
+}
+
+ConfigVar<float>& hud_element_text_offset_x(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBTextOffsetX;
+    case hud_layout::Button::X:
+        return game.hudButtonXTextOffsetX;
+    case hud_layout::Button::Y:
+        return game.hudButtonYTextOffsetX;
+    case hud_layout::Button::A:
+    default:
+        return game.hudButtonATextOffsetX;
+    }
+}
+
+ConfigVar<float>& hud_element_text_offset_y(int index) {
+    auto& game = getSettings().game;
+    switch (hud_element_button(index)) {
+    case hud_layout::Button::B:
+        return game.hudButtonBTextOffsetY;
+    case hud_layout::Button::X:
+        return game.hudButtonXTextOffsetY;
+    case hud_layout::Button::Y:
+        return game.hudButtonYTextOffsetY;
+    case hud_layout::Button::A:
+    default:
+        return game.hudButtonATextOffsetY;
+    }
+}
+
 bool hud_element_modified(int index) {
     auto& offsetX = hud_element_offset_x(index);
     auto& offsetY = hud_element_offset_y(index);
@@ -866,13 +909,19 @@ bool hud_element_modified(int index) {
         hud_element_has_text_scale(index) &&
         hud_element_text_scale(index).getValue() !=
             hud_element_text_scale(index).getDefaultValue();
+    const bool textOffsetModified =
+        hud_element_has_text_offset(index) &&
+        (hud_element_text_offset_x(index).getValue() !=
+                hud_element_text_offset_x(index).getDefaultValue() ||
+            hud_element_text_offset_y(index).getValue() !=
+                hud_element_text_offset_y(index).getDefaultValue());
     return offsetX.getValue() != offsetX.getDefaultValue() ||
            offsetY.getValue() != offsetY.getDefaultValue() ||
            scale.getValue() != scale.getDefaultValue() || minimapSlideModified ||
            dpadFollowModified ||
            itemAnchorModified ||
            textAnchorModified || itemScaleModified || itemOffsetModified ||
-           ammoLayoutModified || textScaleModified;
+           ammoLayoutModified || textScaleModified || textOffsetModified;
 }
 
 bool hud_layout_modified() {
@@ -928,6 +977,12 @@ void reset_hud_element(int index) {
     if (hud_element_has_text_scale(index)) {
         auto& textScale = hud_element_text_scale(index);
         textScale.setValue(textScale.getDefaultValue());
+    }
+    if (hud_element_has_text_offset(index)) {
+        auto& textOffsetX = hud_element_text_offset_x(index);
+        auto& textOffsetY = hud_element_text_offset_y(index);
+        textOffsetX.setValue(textOffsetX.getDefaultValue());
+        textOffsetY.setValue(textOffsetY.getDefaultValue());
     }
 }
 
@@ -1115,6 +1170,10 @@ json hud_element_to_json(int index) {
     if (hud_element_has_text_scale(index)) {
         element["textScale"] = hud_element_text_scale(index).getValue();
     }
+    if (hud_element_has_text_offset(index)) {
+        element["textOffsetX"] = hud_element_text_offset_x(index).getValue();
+        element["textOffsetY"] = hud_element_text_offset_y(index).getValue();
+    }
     return element;
 }
 
@@ -1150,6 +1209,12 @@ void import_hud_element_json(const json& elements, int index) {
     }
     if (hud_element_has_text_scale(index)) {
         set_float_from_json(hud_element_text_scale(index), *found, "textScale", 0.01f, 99.99f);
+    }
+    if (hud_element_has_text_offset(index)) {
+        set_float_from_json(hud_element_text_offset_x(index), *found, "textOffsetX", -9999.0f,
+                            9999.0f);
+        set_float_from_json(hud_element_text_offset_y(index), *found, "textOffsetY", -9999.0f,
+                            9999.0f);
     }
     if (hud_element_is_minimap(index)) {
         set_minimap_slide_direction_from_json(*found, "slideDirection");
@@ -1221,7 +1286,7 @@ json export_hud_layout_json() {
     }
 
     return {
-        {"version", 9},
+        {"version", 10},
         {"background", getSettings().game.hudButtonBackground.getValue()},
         {"roundXYButtons", getSettings().game.hudRoundXYButtons.getValue()},
         {"elements", std::move(elements)},
@@ -3218,6 +3283,18 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             []() -> ConfigVar<float>& { return hud_element_text_scale(hud_element_index()); },
             "Scales the text attached to the selected HUD button.",
             [] { return !hud_element_has_text_scale(hud_element_index()); });
+        config_hud_pixel_select(leftPane, rightPane, "Text Offset X",
+            []() -> ConfigVar<float>& {
+                return hud_element_text_offset_x(hud_element_index());
+            },
+            "Moves the text attached to the selected HUD button horizontally.",
+            [] { return !hud_element_has_text_offset(hud_element_index()); });
+        config_hud_pixel_select(leftPane, rightPane, "Text Offset Y",
+            []() -> ConfigVar<float>& {
+                return hud_element_text_offset_y(hud_element_index());
+            },
+            "Moves the text attached to the selected HUD button vertically.",
+            [] { return !hud_element_has_text_offset(hud_element_index()); });
         leftPane.register_control(
             leftPane.add_button("Reset HUD Element").on_pressed([] {
                 mDoAud_seStartMenu(kSoundItemChange);

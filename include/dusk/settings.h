@@ -278,6 +278,8 @@ struct UserSettings {
         ConfigVar<float> hudButtonAScale;
         ConfigVar<int> hudButtonATextAnchor;
         ConfigVar<float> hudButtonATextScale;
+        ConfigVar<float> hudButtonATextOffsetX;
+        ConfigVar<float> hudButtonATextOffsetY;
         ConfigVar<float> hudButtonBOffsetX;
         ConfigVar<float> hudButtonBOffsetY;
         ConfigVar<float> hudButtonBScale;
@@ -287,6 +289,8 @@ struct UserSettings {
         ConfigVar<float> hudButtonBItemScale;
         ConfigVar<int> hudButtonBTextAnchor;
         ConfigVar<float> hudButtonBTextScale;
+        ConfigVar<float> hudButtonBTextOffsetX;
+        ConfigVar<float> hudButtonBTextOffsetY;
         ConfigVar<float> hudButtonXOffsetX;
         ConfigVar<float> hudButtonXOffsetY;
         ConfigVar<float> hudButtonXScale;
@@ -299,6 +303,8 @@ struct UserSettings {
         ConfigVar<float> hudButtonXAmmoScale;
         ConfigVar<int> hudButtonXTextAnchor;
         ConfigVar<float> hudButtonXTextScale;
+        ConfigVar<float> hudButtonXTextOffsetX;
+        ConfigVar<float> hudButtonXTextOffsetY;
         ConfigVar<float> hudButtonYOffsetX;
         ConfigVar<float> hudButtonYOffsetY;
         ConfigVar<float> hudButtonYScale;
@@ -311,6 +317,8 @@ struct UserSettings {
         ConfigVar<float> hudButtonYAmmoScale;
         ConfigVar<int> hudButtonYTextAnchor;
         ConfigVar<float> hudButtonYTextScale;
+        ConfigVar<float> hudButtonYTextOffsetX;
+        ConfigVar<float> hudButtonYTextOffsetY;
         ConfigVar<float> hudButtonZOffsetX;
         ConfigVar<float> hudButtonZOffsetY;
         ConfigVar<float> hudButtonZScale;
@@ -336,6 +344,9 @@ struct UserSettings {
         ConfigVar<float> hudOilOffsetX;
         ConfigVar<float> hudOilOffsetY;
         ConfigVar<float> hudOilScale;
+        ConfigVar<float> hudOxygenOffsetX;
+        ConfigVar<float> hudOxygenOffsetY;
+        ConfigVar<float> hudOxygenScale;
         ConfigVar<float> hudDPadOffsetX;
         ConfigVar<float> hudDPadOffsetY;
         ConfigVar<float> hudDPadScale;

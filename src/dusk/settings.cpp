@@ -151,6 +151,8 @@ UserSettings g_userSettings = {
         .hudButtonAScale {"game.hudButtonAScale", 1.0f},
         .hudButtonATextAnchor {"game.hudButtonATextAnchor", 0},
         .hudButtonATextScale {"game.hudButtonATextScale", 1.0f},
+        .hudButtonATextOffsetX {"game.hudButtonATextOffsetX", 0.0f},
+        .hudButtonATextOffsetY {"game.hudButtonATextOffsetY", 0.0f},
         .hudButtonBOffsetX {"game.hudButtonBOffsetX", 0.0f},
         .hudButtonBOffsetY {"game.hudButtonBOffsetY", 0.0f},
         .hudButtonBScale {"game.hudButtonBScale", 1.0f},
@@ -160,6 +162,8 @@ UserSettings g_userSettings = {
         .hudButtonBItemScale {"game.hudButtonBItemScale", 1.0f},
         .hudButtonBTextAnchor {"game.hudButtonBTextAnchor", 0},
         .hudButtonBTextScale {"game.hudButtonBTextScale", 1.0f},
+        .hudButtonBTextOffsetX {"game.hudButtonBTextOffsetX", 0.0f},
+        .hudButtonBTextOffsetY {"game.hudButtonBTextOffsetY", 0.0f},
         .hudButtonXOffsetX {"game.hudButtonXOffsetX", 0.0f},
         .hudButtonXOffsetY {"game.hudButtonXOffsetY", 0.0f},
         .hudButtonXScale {"game.hudButtonXScale", 1.0f},
@@ -172,6 +176,8 @@ UserSettings g_userSettings = {
         .hudButtonXAmmoScale {"game.hudButtonXAmmoScale", 1.0f},
         .hudButtonXTextAnchor {"game.hudButtonXTextAnchor", 0},
         .hudButtonXTextScale {"game.hudButtonXTextScale", 1.0f},
+        .hudButtonXTextOffsetX {"game.hudButtonXTextOffsetX", 0.0f},
+        .hudButtonXTextOffsetY {"game.hudButtonXTextOffsetY", 0.0f},
         .hudButtonYOffsetX {"game.hudButtonYOffsetX", 0.0f},
         .hudButtonYOffsetY {"game.hudButtonYOffsetY", 0.0f},
         .hudButtonYScale {"game.hudButtonYScale", 1.0f},
@@ -184,6 +190,8 @@ UserSettings g_userSettings = {
         .hudButtonYAmmoScale {"game.hudButtonYAmmoScale", 1.0f},
         .hudButtonYTextAnchor {"game.hudButtonYTextAnchor", 0},
         .hudButtonYTextScale {"game.hudButtonYTextScale", 1.0f},
+        .hudButtonYTextOffsetX {"game.hudButtonYTextOffsetX", 0.0f},
+        .hudButtonYTextOffsetY {"game.hudButtonYTextOffsetY", 0.0f},
         .hudButtonZOffsetX {"game.hudButtonZOffsetX", 0.0f},
         .hudButtonZOffsetY {"game.hudButtonZOffsetY", 0.0f},
         .hudButtonZScale {"game.hudButtonZScale", 1.0f},
@@ -209,6 +217,9 @@ UserSettings g_userSettings = {
         .hudOilOffsetX {"game.hudOilOffsetX", 0.0f},
         .hudOilOffsetY {"game.hudOilOffsetY", 0.0f},
         .hudOilScale {"game.hudOilScale", 1.0f},
+        .hudOxygenOffsetX {"game.hudOxygenOffsetX", 0.0f},
+        .hudOxygenOffsetY {"game.hudOxygenOffsetY", 0.0f},
+        .hudOxygenScale {"game.hudOxygenScale", 1.0f},
         .hudDPadOffsetX {"game.hudDPadOffsetX", 0.0f},
         .hudDPadOffsetY {"game.hudDPadOffsetY", 0.0f},
         .hudDPadScale {"game.hudDPadScale", 1.0f},
@@ -470,6 +481,8 @@ void registerSettings() {
     Register(g_userSettings.game.hudButtonAScale);
     Register(g_userSettings.game.hudButtonATextAnchor);
     Register(g_userSettings.game.hudButtonATextScale);
+    Register(g_userSettings.game.hudButtonATextOffsetX);
+    Register(g_userSettings.game.hudButtonATextOffsetY);
     Register(g_userSettings.game.hudButtonBOffsetX);
     Register(g_userSettings.game.hudButtonBOffsetY);
     Register(g_userSettings.game.hudButtonBScale);
@@ -479,6 +492,8 @@ void registerSettings() {
     Register(g_userSettings.game.hudButtonBItemScale);
     Register(g_userSettings.game.hudButtonBTextAnchor);
     Register(g_userSettings.game.hudButtonBTextScale);
+    Register(g_userSettings.game.hudButtonBTextOffsetX);
+    Register(g_userSettings.game.hudButtonBTextOffsetY);
     Register(g_userSettings.game.hudButtonXOffsetX);
     Register(g_userSettings.game.hudButtonXOffsetY);
     Register(g_userSettings.game.hudButtonXScale);
@@ -491,6 +506,8 @@ void registerSettings() {
     Register(g_userSettings.game.hudButtonXAmmoScale);
     Register(g_userSettings.game.hudButtonXTextAnchor);
     Register(g_userSettings.game.hudButtonXTextScale);
+    Register(g_userSettings.game.hudButtonXTextOffsetX);
+    Register(g_userSettings.game.hudButtonXTextOffsetY);
     Register(g_userSettings.game.hudButtonYOffsetX);
     Register(g_userSettings.game.hudButtonYOffsetY);
     Register(g_userSettings.game.hudButtonYScale);
@@ -503,6 +520,8 @@ void registerSettings() {
     Register(g_userSettings.game.hudButtonYAmmoScale);
     Register(g_userSettings.game.hudButtonYTextAnchor);
     Register(g_userSettings.game.hudButtonYTextScale);
+    Register(g_userSettings.game.hudButtonYTextOffsetX);
+    Register(g_userSettings.game.hudButtonYTextOffsetY);
     Register(g_userSettings.game.hudButtonZOffsetX);
     Register(g_userSettings.game.hudButtonZOffsetY);
     Register(g_userSettings.game.hudButtonZScale);
@@ -528,6 +547,9 @@ void registerSettings() {
     Register(g_userSettings.game.hudOilOffsetX);
     Register(g_userSettings.game.hudOilOffsetY);
     Register(g_userSettings.game.hudOilScale);
+    Register(g_userSettings.game.hudOxygenOffsetX);
+    Register(g_userSettings.game.hudOxygenOffsetY);
+    Register(g_userSettings.game.hudOxygenScale);
     Register(g_userSettings.game.hudDPadOffsetX);
     Register(g_userSettings.game.hudDPadOffsetY);
     Register(g_userSettings.game.hudDPadScale);

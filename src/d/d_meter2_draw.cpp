@@ -606,7 +606,7 @@ dMeter2Draw_c::dMeter2Draw_c(JKRExpHeap* mp_heap) {
     mpScreen->search(MULTI_CHAR('ju_ring5'))->hide();
     field_0x73c = 0.0f;
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
         mpKanteraMeter[i] = JKR_NEW dKantera_icon_c();
         JUT_ASSERT(0, mpKanteraMeter[i] != NULL);
     }
@@ -710,7 +710,7 @@ dMeter2Draw_c::~dMeter2Draw_c() {
     JKR_DELETE(mpKanteraScreen);
     mpKanteraScreen = NULL;
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
         JKR_DELETE(mpKanteraMeter[i]);
         mpKanteraMeter[i] = NULL;
     }
@@ -1168,7 +1168,7 @@ void dMeter2Draw_c::draw() {
         }
     }
 
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < SELECT_ITEM_MAX_e; i++) {
         mpKanteraMeter[i]->drawSelf();
     }
 
@@ -2333,6 +2333,9 @@ void dMeter2Draw_c::setAlphaKanteraAnimeMax() {
 }
 
 void dMeter2Draw_c::drawOxygen(s32 i_max, s32 i_oxygen, f32 i_posX, f32 i_posY) {
+    const auto hudTransform =
+        dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::Oxygen);
+    const f32 hudScale = hudTransform.scale;
     f32 var_f6 = mpMagicFrameR->getInitPosX() - mpMagicFrameL->getInitPosX();
     f32 var_f7 = 0.0f;
     f32 var_f4 = 0.0f;
@@ -2348,10 +2351,10 @@ void dMeter2Draw_c::drawOxygen(s32 i_max, s32 i_oxygen, f32 i_posX, f32 i_posY) 
     field_0x5a8[2] = mpMagicFrameL->getInitPosY();
     field_0x5b4[2] = var_f4 * mpMagicBase->getInitSizeX();
     field_0x5c0[2] = mpMagicBase->getInitSizeY();
-    field_0x5cc[2] = g_drawHIO.mOxygenMeterScale;
-    field_0x5d8[2] = g_drawHIO.mOxygenMeterScale;
-    field_0x5e4[2] = i_posX;
-    field_0x5f0[2] = i_posY;
+    field_0x5cc[2] = g_drawHIO.mOxygenMeterScale * hudScale;
+    field_0x5d8[2] = g_drawHIO.mOxygenMeterScale * hudScale;
+    field_0x5e4[2] = i_posX + hudTransform.offsetX;
+    field_0x5f0[2] = i_posY + hudTransform.offsetY;
 }
 
 void dMeter2Draw_c::setAlphaOxygenChange(bool i_forceSet) {
@@ -2863,12 +2866,17 @@ void dMeter2Draw_c::drawButtonA(u8 i_action, f32 i_posX, f32 i_posY, f32 i_textP
     mpButtonA->scale(var_f31 * i_scale * hudScale, var_f31 * i_scale * hudScale);
     mpButtonA->paneTrans(i_posX + hudTransform.offsetX, i_posY + hudTransform.offsetY);
     const f32 textScale = dusk::hud_layout::ButtonTextScale(dusk::hud_layout::Button::A);
+    const f32 textOffsetX =
+        dusk::hud_layout::ButtonTextOffsetX(dusk::hud_layout::Button::A);
+    const f32 textOffsetY =
+        dusk::hud_layout::ButtonTextOffsetY(dusk::hud_layout::Button::A);
     mpTextA->scale(var_f30 * i_scale * hudScale * textScale,
                    var_f30 * i_scale * hudScale * textScale);
     mpTextA->paneTrans(g_drawHIO.mButtonATextPosX + i_textPosX +
                            hud_text_anchor_offset(dusk::hud_layout::Button::A, mpTextA) +
-                           hudTransform.offsetX,
-                       g_drawHIO.mButtonATextPosY + i_textPosY + hudTransform.offsetY);
+                           textOffsetX + hudTransform.offsetX,
+                       g_drawHIO.mButtonATextPosY + i_textPosY + textOffsetY +
+                           hudTransform.offsetY);
 
     apply_hud_button_background_layout(mpUzu);
     if (mpUzu != NULL) {
@@ -2963,6 +2971,10 @@ void dMeter2Draw_c::drawButtonB(u8 i_action, bool param_1, f32 i_posX, f32 i_pos
     const f32 hudScale = hudTransform.scale;
     const f32 itemScale = dusk::hud_layout::ButtonItemScale(dusk::hud_layout::Button::B);
     const f32 textScale = dusk::hud_layout::ButtonTextScale(dusk::hud_layout::Button::B);
+    const f32 textOffsetX =
+        dusk::hud_layout::ButtonTextOffsetX(dusk::hud_layout::Button::B);
+    const f32 textOffsetY =
+        dusk::hud_layout::ButtonTextOffsetY(dusk::hud_layout::Button::B);
     const HudItemAnchorOffset itemAnchorOffset = hud_item_anchor_delta(
         dusk::hud_layout::Button::B, g_drawHIO.mButtonBItemPosX[var_r31],
         g_drawHIO.mButtonBItemPosY[var_r31]);
@@ -2998,8 +3010,9 @@ void dMeter2Draw_c::drawButtonB(u8 i_action, bool param_1, f32 i_posX, f32 i_pos
                    var_f30 * i_scale * hudScale * textScale);
     mpTextB->paneTrans(g_drawHIO.mButtonBFontPosX + i_textPosX +
                            hud_text_anchor_offset(dusk::hud_layout::Button::B, mpTextB) +
-                           hudTransform.offsetX,
-                       g_drawHIO.mButtonBFontPosY + i_textPosY + hudTransform.offsetY);
+                           textOffsetX + hudTransform.offsetX,
+                       g_drawHIO.mButtonBFontPosY + i_textPosY + textOffsetY +
+                           hudTransform.offsetY);
 }
 
 void dMeter2Draw_c::drawButtonR(u8 unused0, u8 i_action, bool unused1, bool unused2) {
@@ -3218,12 +3231,15 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
         }
 
         const f32 textScale = dusk::hud_layout::ButtonTextScale(button);
+        const f32 textOffsetX = dusk::hud_layout::ButtonTextOffsetX(button);
+        const f32 textOffsetY = dusk::hud_layout::ButtonTextOffsetY(button);
         mpTextXY[i_no]->scale(g_drawHIO.mButtonXYTextScale * hudScale * textScale,
                               g_drawHIO.mButtonXYTextScale * hudScale * textScale);
         mpTextXY[i_no]->paneTrans(g_drawHIO.mButtonXYTextPosX +
                                       hud_text_anchor_offset(button, mpTextXY[i_no]) +
-                                      hudTransform.offsetX,
-                                  g_drawHIO.mButtonXYTextPosY + hudTransform.offsetY);
+                                      textOffsetX + hudTransform.offsetX,
+                                  g_drawHIO.mButtonXYTextPosY + textOffsetY +
+                                      hudTransform.offsetY);
     } else {
         mpScreen->search(tag[i_no])->show();
         mpTextXY[i_no]->hide();
@@ -3261,6 +3277,8 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
             const f32 hudScale = hudTransform.scale;
             const f32 itemScale = dusk::hud_layout::ButtonItemScale(button);
             const f32 textScale = dusk::hud_layout::ButtonTextScale(button);
+            const f32 textOffsetX = dusk::hud_layout::ButtonTextOffsetX(button);
+            const f32 textOffsetY = dusk::hud_layout::ButtonTextOffsetY(button);
             const HudItemAnchorOffset itemOffset = hud_button_item_offset(button);
 
             scale_xy_hud_button_base(mpButtonXY[0], g_drawHIO.mButtonXScale * hudScale);
@@ -3312,8 +3330,9 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
                                   g_drawHIO.mButtonXYTextScale * hudScale * textScale);
             mpTextXY[i_no]->paneTrans(g_drawHIO.mButtonXYTextPosX +
                                           hud_text_anchor_offset(button, mpTextXY[i_no]) +
-                                          hudTransform.offsetX,
-                                      g_drawHIO.mButtonXYTextPosY + hudTransform.offsetY);
+                                          textOffsetX + hudTransform.offsetX,
+                                      g_drawHIO.mButtonXYTextPosY + textOffsetY +
+                                          hudTransform.offsetY);
         } else if (i_no == SELECT_Y_e) {
             constexpr auto button = dusk::hud_layout::Button::Y;
             const auto hudTransform =
@@ -3321,6 +3340,8 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
             const f32 hudScale = hudTransform.scale;
             const f32 itemScale = dusk::hud_layout::ButtonItemScale(button);
             const f32 textScale = dusk::hud_layout::ButtonTextScale(button);
+            const f32 textOffsetX = dusk::hud_layout::ButtonTextOffsetX(button);
+            const f32 textOffsetY = dusk::hud_layout::ButtonTextOffsetY(button);
             const HudItemAnchorOffset itemOffset = hud_button_item_offset(button);
 
             scale_xy_hud_button_base(mpButtonXY[1], g_drawHIO.mButtonYScale * hudScale);
@@ -3372,8 +3393,9 @@ void dMeter2Draw_c::drawButtonXY(int i_no, u8 i_itemNo, u8 i_action, bool param_
                                   g_drawHIO.mButtonXYTextScale * hudScale * textScale);
             mpTextXY[i_no]->paneTrans(g_drawHIO.mButtonXYTextPosX +
                                           hud_text_anchor_offset(button, mpTextXY[i_no]) +
-                                          hudTransform.offsetX,
-                                      g_drawHIO.mButtonXYTextPosY + hudTransform.offsetY);
+                                          textOffsetX + hudTransform.offsetX,
+                                      g_drawHIO.mButtonXYTextPosY + textOffsetY +
+                                          hudTransform.offsetY);
         }
     }
 }
@@ -4409,14 +4431,14 @@ void dMeter2Draw_c::drawItemNum(u8 i_button, f32 i_alpha) {
 }
 
 void dMeter2Draw_c::drawKanteraMeter(u8 i_button, f32 i_alphaRate) {
-    JUT_ASSERT(0, i_button < SELECT_MAX_e);
+    JUT_ASSERT(0, i_button < SELECT_ITEM_MAX_e);
 
-    CPaneMgr* pane = mpItemXY[i_button];
-    f32 sp10[2] = {0.0f};
-    f32 sp8[2] = {0.0f};
+    CPaneMgr* pane = i_button == SELECT_Z_e ? mpItemR : mpItemXY[i_button];
+    f32 sp10[SELECT_ITEM_MAX_e] = {0.0f};
+    f32 sp8[SELECT_ITEM_MAX_e] = {0.0f};
 
     if (i_alphaRate == 1.0f) {
-        i_alphaRate = mpItemXY[i_button]->getAlphaRate();
+        i_alphaRate = pane->getAlphaRate();
     }
 
     Vec vtx0 = pane->getPanePtr()->getGlbVtx(0);
@@ -4454,6 +4476,7 @@ void dMeter2Draw_c::setItemParamX(u8 i_itemNo) {
             mItemParams[SELECT_X_e].num_scale = 0.95f;
             break;
         case dItemNo_BOW_e:
+        case dItemNo_HAWK_ARROW_e:
             mItemParams[SELECT_X_e].pos_x = 9.2f;
             mItemParams[SELECT_X_e].pos_y = -14.0f;
             mItemParams[SELECT_X_e].scale = 2.0f;
@@ -4536,6 +4559,7 @@ void dMeter2Draw_c::setItemParamY(u8 i_itemNo) {
             mItemParams[SELECT_Y_e].num_scale = 0.95f;
             break;
         case dItemNo_BOW_e:
+        case dItemNo_HAWK_ARROW_e:
             mItemParams[SELECT_Y_e].pos_x = -1.3f;
             mItemParams[SELECT_Y_e].pos_y = -6.6f;
             mItemParams[SELECT_Y_e].scale = 2.0f;
@@ -4618,6 +4642,7 @@ void dMeter2Draw_c::setItemParamZ(u8 i_itemNo) {
             mItemParams[SELECT_Z_e].num_scale = 0.75f;
             break;
         case dItemNo_BOW_e:
+        case dItemNo_HAWK_ARROW_e:
             mItemParams[SELECT_Z_e].pos_x = -1.3f;
             mItemParams[SELECT_Z_e].pos_y = 1.3f;
             mItemParams[SELECT_Z_e].scale = 2.2f;

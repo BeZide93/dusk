@@ -38,6 +38,8 @@ ConfigVar<float>& offset_x_var(Element element) noexcept {
         return settings.hudKeysOffsetX;
     case Element::Oil:
         return settings.hudOilOffsetX;
+    case Element::Oxygen:
+        return settings.hudOxygenOffsetX;
     case Element::DPad:
         return settings.hudDPadOffsetX;
     case Element::Minimap:
@@ -71,6 +73,8 @@ ConfigVar<float>& offset_y_var(Element element) noexcept {
         return settings.hudKeysOffsetY;
     case Element::Oil:
         return settings.hudOilOffsetY;
+    case Element::Oxygen:
+        return settings.hudOxygenOffsetY;
     case Element::DPad:
         return settings.hudDPadOffsetY;
     case Element::Minimap:
@@ -104,6 +108,8 @@ ConfigVar<float>& scale_var(Element element) noexcept {
         return settings.hudKeysScale;
     case Element::Oil:
         return settings.hudOilScale;
+    case Element::Oxygen:
+        return settings.hudOxygenScale;
     case Element::DPad:
         return settings.hudDPadScale;
     case Element::Minimap:
@@ -247,6 +253,36 @@ ConfigVar<float>& text_scale_var(Button button) noexcept {
     }
 }
 
+ConfigVar<float>& text_offset_x_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::B:
+        return settings.hudButtonBTextOffsetX;
+    case Button::X:
+        return settings.hudButtonXTextOffsetX;
+    case Button::Y:
+        return settings.hudButtonYTextOffsetX;
+    case Button::A:
+    default:
+        return settings.hudButtonATextOffsetX;
+    }
+}
+
+ConfigVar<float>& text_offset_y_var(Button button) noexcept {
+    auto& settings = getSettings().game;
+    switch (button) {
+    case Button::B:
+        return settings.hudButtonBTextOffsetY;
+    case Button::X:
+        return settings.hudButtonXTextOffsetY;
+    case Button::Y:
+        return settings.hudButtonYTextOffsetY;
+    case Button::A:
+    default:
+        return settings.hudButtonATextOffsetY;
+    }
+}
+
 u32 hash_float(u32 hash, float value) noexcept {
     const auto quantized = static_cast<s32>(value * 100.0f + (value >= 0.0f ? 0.5f : -0.5f));
     return (hash ^ static_cast<u32>(quantized)) * 16777619u;
@@ -357,6 +393,11 @@ bool HasTextScale(Button button) noexcept {
            button == Button::Y || button == Button::Z;
 }
 
+bool HasTextOffset(Button button) noexcept {
+    return button == Button::A || button == Button::B || button == Button::X ||
+           button == Button::Y;
+}
+
 bool HasAmmoLayout(Button button) noexcept {
     return button == Button::X || button == Button::Y || button == Button::Z;
 }
@@ -393,6 +434,14 @@ float ButtonItemScale(Button button) noexcept {
 
 float ButtonTextScale(Button button) noexcept {
     return HasTextScale(button) ? text_scale_var(button).getValue() : 1.0f;
+}
+
+float ButtonTextOffsetX(Button button) noexcept {
+    return HasTextOffset(button) ? text_offset_x_var(button).getValue() : 0.0f;
+}
+
+float ButtonTextOffsetY(Button button) noexcept {
+    return HasTextOffset(button) ? text_offset_y_var(button).getValue() : 0.0f;
 }
 
 float ButtonItemOffsetX(Button button) noexcept {
@@ -438,6 +487,7 @@ u32 LayoutStamp() noexcept {
     hash = hash_element(hash, Element::Rupees);
     hash = hash_element(hash, Element::Keys);
     hash = hash_element(hash, Element::Oil);
+    hash = hash_element(hash, Element::Oxygen);
     hash = hash_element(hash, Element::DPad);
     hash = hash_element(hash, Element::Minimap);
     hash = hash_element(hash, Element::ButtonBackground);
@@ -455,10 +505,14 @@ u32 LayoutStamp() noexcept {
     hash = hash_int(hash, static_cast<int>(ButtonItemAnchor(Button::X)));
     hash = hash_int(hash, static_cast<int>(ButtonItemAnchor(Button::Y)));
     hash = hash_float(hash, ButtonTextScale(Button::A));
+    hash = hash_float(hash, ButtonTextOffsetX(Button::A));
+    hash = hash_float(hash, ButtonTextOffsetY(Button::A));
     hash = hash_float(hash, ButtonItemScale(Button::B));
     hash = hash_float(hash, ButtonItemOffsetX(Button::B));
     hash = hash_float(hash, ButtonItemOffsetY(Button::B));
     hash = hash_float(hash, ButtonTextScale(Button::B));
+    hash = hash_float(hash, ButtonTextOffsetX(Button::B));
+    hash = hash_float(hash, ButtonTextOffsetY(Button::B));
     hash = hash_float(hash, ButtonItemScale(Button::X));
     hash = hash_float(hash, ButtonItemOffsetX(Button::X));
     hash = hash_float(hash, ButtonItemOffsetY(Button::X));
@@ -466,6 +520,8 @@ u32 LayoutStamp() noexcept {
     hash = hash_float(hash, ButtonAmmoOffsetY(Button::X));
     hash = hash_float(hash, ButtonAmmoScale(Button::X));
     hash = hash_float(hash, ButtonTextScale(Button::X));
+    hash = hash_float(hash, ButtonTextOffsetX(Button::X));
+    hash = hash_float(hash, ButtonTextOffsetY(Button::X));
     hash = hash_float(hash, ButtonItemScale(Button::Y));
     hash = hash_float(hash, ButtonItemOffsetX(Button::Y));
     hash = hash_float(hash, ButtonItemOffsetY(Button::Y));
@@ -473,6 +529,8 @@ u32 LayoutStamp() noexcept {
     hash = hash_float(hash, ButtonAmmoOffsetY(Button::Y));
     hash = hash_float(hash, ButtonAmmoScale(Button::Y));
     hash = hash_float(hash, ButtonTextScale(Button::Y));
+    hash = hash_float(hash, ButtonTextOffsetX(Button::Y));
+    hash = hash_float(hash, ButtonTextOffsetY(Button::Y));
     hash = hash_float(hash, ButtonItemScale(Button::Z));
     hash = hash_float(hash, ButtonItemOffsetX(Button::Z));
     hash = hash_float(hash, ButtonItemOffsetY(Button::Z));

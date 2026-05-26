@@ -168,7 +168,7 @@ private:
     /* 0x084 */ J2DPicture* mpItemNumTex[SELECT_ITEM_MAX_e][3];
     /* 0x09C */ CPaneMgr* field_0x9c[3];
     /* 0x0A8 */ int field_0xa8;
-    /* 0x0AC */ dKantera_icon_c* mpKanteraMeter[2];
+    /* 0x0AC */ dKantera_icon_c* mpKanteraMeter[SELECT_ITEM_MAX_e];
     /* 0x0B4 */ u8 field_0xb4[8];
     /* 0x0BC */ CPaneMgr* mpParent;
     /* 0x0C0 */ CPaneMgr* mpAText[5];
