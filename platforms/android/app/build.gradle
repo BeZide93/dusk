@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+def versionNameStr = (System.getenv("DUSK_VERSION") ?: "v0.1.0").replaceFirst("^v", "")
+def versionCodeInt = (System.getenv("DUSK_VERSION_CODE") ?: "100000").toInteger()
+
 def duskRepoDir = rootProject.projectDir.parentFile.parentFile
 def duskGeneratedAssetsDir = layout.buildDirectory.dir('generated/assets/dawnlight').get().asFile
 def releaseSigningPropsFile = new File(duskRepoDir, 'keystores/release-signing.properties')
@@ -25,8 +28,8 @@ android {
         applicationId 'dev.bezide.dawnlight'
         minSdk 26
         targetSdk 36
-        versionCode 1
-        versionName '0.1.0'
+        versionCode versionCodeInt
+        versionName versionNameStr
     }
 
     signingConfigs {
