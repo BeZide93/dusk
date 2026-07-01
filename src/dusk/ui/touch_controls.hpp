@@ -73,7 +73,6 @@ private:
     bool fire_control_action(Control control, ControlAction action) noexcept;
     bool start_control_touch(SDL_FingerID id, Control control) noexcept;
     void set_control_visual(Control control, bool pressed) noexcept;
-    void sync_l_lock_state() noexcept;
     void clear_motion_touch_input() noexcept;
     void clear_control_input() noexcept;
     void clear_virtual_input() noexcept;
@@ -106,6 +105,8 @@ private:
     std::string mButtonYIconSource;
     std::string mZTriggerIconSource;
     uint64_t mZTriggerIconRevision = 0;
+    std::string mMidnaIconSource;
+    uint64_t mMidnaIconRevision = 0;
     std::string mButtonXCountLabel;
     std::string mButtonYCountLabel;
     std::string mButtonZCountLabel;
@@ -120,15 +121,10 @@ private:
     Insets mSafeInsets;
     u16 mButtonMask = 0;
     bool mLPressed = false;
-    bool mLLatched = false;
-    bool mManualLLatched = false;
-    bool mLReleasePending = false;
     bool mRTriggerHeld = false;
     bool mWantsVirtualPad = false;
     bool mWasSuppressed = true;
     bool mMenuPointerTouchActive = false;
-    clock::time_point mLPressStartTime{};
-    clock::time_point mLastLTapTime{};
 };
 
 }  // namespace dusk::ui

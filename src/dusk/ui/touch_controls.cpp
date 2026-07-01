@@ -37,7 +37,6 @@ constexpr float kAnalogZoneBottomDp = 30.f;
 constexpr float kLeftZoneWidth = 0.46f;
 constexpr float kRightZoneStart = 0.52f;
 constexpr u8 kTriggerAnalog = 180;
-constexpr auto kLDoubleTapWindow = std::chrono::milliseconds(300);
 constexpr auto kHoldActionDuration = std::chrono::milliseconds(450);
 constexpr float kFaceIconTargetRatio = 0.76f;
 constexpr float kPressedScale = 0.94f;
@@ -127,6 +126,12 @@ constexpr std::array<ControlInfo, static_cast<std::size_t>(Control::COUNT)> kCon
         .id = "skip",
         .padButton = PAD_BUTTON_START,
     },
+    {},
+    {
+        .id = "button-midna",
+        .iconId = "button-midna-icon",
+        .padButton = PAD_BUTTON_DOWN,
+    },
 }};
 
 constexpr const ControlInfo* control_info(Control control) noexcept {
@@ -189,6 +194,9 @@ enum class StickOutput {
 };
 
 StickOutput stick_output_mode() noexcept {
+    if (dCamera_c::isAimActive() && getSettings().game.enableAimMovement) {
+        return StickOutput::MainStick;
+    }
     if (fishing_controls_active() || hawkeye_active()) {
         return StickOutput::CStick;
     }
@@ -506,53 +514,7 @@ void TouchControls::set_control_pressed(Control control, bool pressed) {
 
     switch (control) {
     case Control::L:
-        if (control_override_active(control)) {
-            mLPressed = pressed;
-            mLLatched = false;
-            mManualLLatched = false;
-            mLReleasePending = false;
-            mLPressStartTime = {};
-            mLastLTapTime = {};
-            break;
-        }
-        if (pressed && (mLLatched || mManualLLatched)) {
-            mLLatched = false;
-            mManualLLatched = false;
-            mLPressed = false;
-            mLReleasePending = true;
-            mLPressStartTime = {};
-            mLastLTapTime = {};
-            set_control_visual(control, false);
-        } else if (pressed) {
-            const auto now = clock::now();
-            if (!player_attention_locked() && mLastLTapTime != clock::time_point{} &&
-                now - mLastLTapTime <= kLDoubleTapWindow)
-            {
-                mManualLLatched = true;
-                mLPressed = false;
-                mLReleasePending = true;
-                mLPressStartTime = {};
-                mLastLTapTime = {};
-            } else if (!mLReleasePending) {
-                mLPressed = true;
-                mLPressStartTime = now;
-            }
-        } else if (!mLReleasePending) {
-            mLPressed = false;
-        }
-        if (!pressed) {
-            const auto now = clock::now();
-            if (!mLReleasePending) {
-                const bool wasQuickTap = mLPressStartTime != clock::time_point{} &&
-                                         now - mLPressStartTime <= kLDoubleTapWindow;
-                mLastLTapTime = wasQuickTap ? now : clock::time_point{};
-            }
-            mLPressStartTime = {};
-            mLReleasePending = false;
-        }
-        if (!pressed && !player_attention_locked()) {
-            mLLatched = false;
-        }
+        mLPressed = pressed;
         break;
     case Control::R:
         mRTriggerHeld = pressed;
@@ -613,11 +575,6 @@ void TouchControls::release_control(Control control) noexcept {
     switch (control) {
     case Control::L:
         mLPressed = false;
-        mLLatched = false;
-        mManualLLatched = false;
-        mLReleasePending = false;
-        mLPressStartTime = {};
-        mLastLTapTime = {};
         break;
     case Control::R:
         mRTriggerHeld = false;
@@ -662,16 +619,6 @@ void TouchControls::apply_control_transform(Control control) noexcept {
         index < mControlVisualPressed.size() && mControlVisualPressed[index] ? kPressedScale : 1.f;
     apply_control_transform_if_changed(
         elements.root, layout.appliedTransform, layout.layoutScale * pressedScale);
-}
-
-void TouchControls::sync_l_lock_state() noexcept {
-    if (player_attention_locked()) {
-        if (mLPressed) {
-            mLLatched = true;
-        }
-    } else {
-        mLLatched = false;
-    }
 }
 
 void TouchControls::clear_motion_touch_input() noexcept {
@@ -725,9 +672,10 @@ void TouchControls::sync_touch_state() noexcept {
         }
     }
 
-    sync_l_lock_state();
     const bool aimActive = dCamera_c::isAimActive();
-    if (aimActive && !hawkeye_active() && mMoveTouch.active) {
+    if (aimActive && !getSettings().game.enableAimMovement && !hawkeye_active() &&
+        mMoveTouch.active)
+    {
         if (!mCameraTouch.active) {
             mCameraTouch = mMoveTouch;
             mCameraTouch.start = mMoveTouch.current;
@@ -768,7 +716,7 @@ void TouchControls::sync_virtual_input() noexcept {
     status.err = PAD_ERR_NONE;
     status.button = mButtonMask;
 
-    if (mLPressed || mLLatched || mManualLLatched) {
+    if (mLPressed) {
         status.button |= PAD_TRIGGER_L;
         status.triggerLeft = kTriggerAnalog;
     }
@@ -904,18 +852,22 @@ void TouchControls::sync_visual_state() noexcept {
     const auto& zlTrigger = mControlElements[static_cast<std::size_t>(Control::ZL)];
     const auto& rTrigger = mControlElements[static_cast<std::size_t>(Control::R)];
     const auto& minusButton = mControlElements[static_cast<std::size_t>(Control::MINUS)];
+    const auto& midnaButton = mControlElements[static_cast<std::size_t>(Control::DPAD_DOWN)];
     const bool lHidden = hideGameplayControls && !control_override_active(Control::L);
     const bool zlHidden = !wiiuStyle || (hideGameplayControls && !control_override_active(Control::ZL));
     const bool rHidden = hideGameplayControls && !control_override_active(Control::R);
     const bool minusHidden =
         !wiiuStyle || (hideGameplayControls && !control_override_active(Control::MINUS));
+    const bool midnaHidden = !wiiuStyle || hideGameplayControls;
+    const bool switchLockActive = dComIfGs_getOptAttentionType() == 1 &&
+                                  player_attention_locked();
 
     if (lTrigger.root != nullptr) {
         set_control_label(lTrigger.root, "L");
         lTrigger.root->SetPseudoClass("hidden", lHidden);
         lTrigger.root->SetClass("active",
-            !lHidden && (mLPressed || mLLatched || mManualLLatched ||
-                            (!control_override_active(Control::L) && player_attention_locked())));
+            !lHidden && (mLPressed ||
+                            (!control_override_active(Control::L) && switchLockActive)));
     }
     if (zlTrigger.root != nullptr) {
         set_control_label(zlTrigger.root, "ZL");
@@ -929,6 +881,10 @@ void TouchControls::sync_visual_state() noexcept {
         set_control_label(minusButton.root, "-");
         minusButton.root->SetPseudoClass("hidden", minusHidden);
     }
+    if (midnaButton.root != nullptr) {
+        midnaButton.root->SetPseudoClass("hidden", midnaHidden);
+        midnaButton.root->SetClass("has-icon", !midnaHidden && !mMidnaIconSource.empty());
+    }
 
     if (lHidden) {
         release_control(Control::L);
@@ -941,6 +897,9 @@ void TouchControls::sync_visual_state() noexcept {
     }
     if (minusHidden) {
         release_control(Control::MINUS);
+    }
+    if (midnaHidden) {
+        release_control(Control::DPAD_DOWN);
     }
 }
 
@@ -998,7 +957,9 @@ void TouchControls::sync_action_bar_state() noexcept {
 
 void TouchControls::sync_control_displays() noexcept {
     if (mWasSuppressed || !getSettings().game.enableTouchControls) {
-        for (const auto control : {Control::A, Control::B, Control::X, Control::Y, Control::Z}) {
+        for (const auto control :
+            {Control::A, Control::B, Control::X, Control::Y, Control::Z, Control::DPAD_DOWN})
+        {
             const auto& elements = mControlElements[static_cast<std::size_t>(control)];
             if (elements.root != nullptr) {
                 elements.root->SetPseudoClass("hidden", true);
@@ -1019,6 +980,7 @@ void TouchControls::sync_control_displays() noexcept {
     const auto& x = mControlElements[static_cast<std::size_t>(Control::X)];
     const auto& y = mControlElements[static_cast<std::size_t>(Control::Y)];
     const auto& z = mControlElements[static_cast<std::size_t>(Control::Z)];
+    const auto& midna = mControlElements[static_cast<std::size_t>(Control::DPAD_DOWN)];
 
     if (a.root != nullptr) {
         a.root->SetPseudoClass("hidden", false);
@@ -1053,6 +1015,42 @@ void TouchControls::sync_control_displays() noexcept {
             z.icon->SetAttribute("src", zState.iconSource);
         }
         if (zSourceChanged) {
+            release_rml_texture(previousSource);
+        }
+    }
+
+    const bool midnaVisible = UseWiiUControllerStyle() && !game_controls_suppressed();
+    const std::string midnaSource = midnaVisible ? midna_icon_source() : std::string();
+    const uint64_t midnaRevision = midnaVisible ? midna_icon_revision() : 0;
+    if (midna.root != nullptr) {
+        midna.root->SetPseudoClass("hidden", !midnaVisible);
+        midna.root->SetClass("has-icon", !midnaSource.empty());
+    }
+    if (!midnaVisible) {
+        release_control(Control::DPAD_DOWN);
+    }
+    if (midna.icon != nullptr) {
+        midna.icon->SetClass("visible", !midnaSource.empty());
+    }
+
+    const bool midnaSourceChanged = midnaSource != mMidnaIconSource;
+    const bool midnaRevisionChanged = midnaRevision != mMidnaIconRevision;
+    if (midnaSourceChanged || midnaRevisionChanged) {
+        const std::string previousSource = mMidnaIconSource;
+        mMidnaIconSource = midnaSource;
+        mMidnaIconRevision = midnaRevision;
+        if (midna.icon == nullptr) {
+            release_rml_texture(previousSource);
+        } else if (midnaSource.empty()) {
+            midna.icon->RemoveAttribute("src");
+        } else {
+            release_rml_texture(midnaSource);
+            if (!midnaSourceChanged) {
+                midna.icon->RemoveAttribute("src");
+            }
+            midna.icon->SetAttribute("src", midnaSource);
+        }
+        if (midnaSourceChanged) {
             release_rml_texture(previousSource);
         }
     }
@@ -1275,6 +1273,17 @@ void TouchControls::handle_touch_down(Rml::Event& event) noexcept {
     const bool inAnalogZone = position.y >= top && position.y <= bottom;
     const bool inLeftZone = position.x < width * kLeftZoneWidth;
     if (dCamera_c::isAimActive()) {
+        if (getSettings().game.enableAimMovement && inAnalogZone && inLeftZone) {
+            if (!mMoveTouch.active) {
+                mMoveTouch = {
+                    .id = id,
+                    .start = position,
+                    .current = position,
+                    .active = true,
+                };
+            }
+            return;
+        }
         if (hawkeye_active() && inAnalogZone && inLeftZone) {
             if (!mMoveTouch.active) {
                 mMoveTouch = {

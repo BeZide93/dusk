@@ -84,7 +84,7 @@ struct ControlLayout {
     std::map<std::string, ControlProps, std::less<> > controls;
 };
 
-constexpr std::array<std::string_view, 11> kControlLayoutIds = {
+constexpr std::array<std::string_view, 12> kControlLayoutIds = {
     "actionBar",
     "buttonA",
     "buttonB",
@@ -93,6 +93,7 @@ constexpr std::array<std::string_view, 11> kControlLayoutIds = {
     "buttonZ",
     "buttonZL",
     "buttonMinus",
+    "buttonMidna",
     "skip",
     "triggerL",
     "triggerR",

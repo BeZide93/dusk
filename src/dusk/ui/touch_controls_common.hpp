@@ -12,7 +12,7 @@
 
 namespace dusk::ui {
 
-constexpr std::size_t kTouchLayoutControlCount = 11;
+constexpr std::size_t kTouchLayoutControlCount = 12;
 
 struct TouchLayoutControlInfo {
     std::string_view layoutId;

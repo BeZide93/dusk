@@ -3,6 +3,7 @@
 #include "d/d_meter2.h"
 #include "d/d_meter2_draw.h"
 #include "d/d_meter2_info.h"
+#include "dusk/combat_time.hpp"
 
 void daAlink_c::handleWolfHowl() {
     if (checkWolf()) {
@@ -181,6 +182,12 @@ bool daAlink_c::checkAimContext() {
 }
 
 bool daAlink_c::checkAimInputContext() {
+#if TARGET_PC
+    if (dusk::IsBulletTimeActiveForLink(this)) {
+        return true;
+    }
+#endif
+
     switch (mProcID) {
     case PROC_HOOKSHOT_ROOF_WAIT:
     case PROC_HOOKSHOT_WALL_WAIT:

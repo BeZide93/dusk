@@ -86,6 +86,21 @@ constexpr std::array<TouchLayoutControlInfo, kTouchLayoutControlCount> kLayoutCo
         .hasControl = true,
     },
     {
+        .layoutId = "buttonMidna",
+        .elementId = "button-midna",
+        .props =
+            {
+                .x = 24.f,
+                .y = 72.f,
+                .w = 78.f,
+                .h = 46.f,
+                .scale = 1.f,
+                .anchor = ControlAnchor::BottomLeft,
+            },
+        .control = Control::DPAD_DOWN,
+        .hasControl = true,
+    },
+    {
         .layoutId = "actionBar",
         .elementId = "action-bar",
         .props =
@@ -188,6 +203,7 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
         <button id="collections" class="utility collections"><icon><glyph>&#xe034;</glyph></icon></button>
     </action-bar>
     <button id="button-minus" class="control trigger button-minus"><span>-</span></button>
+    <button id="button-midna" class="control trigger button-midna"><img id="button-midna-icon" class="midna-icon" /><span>&#x25BC;</span></button>
     <button id="skip" class="control skip"><icon><glyph>&#xe044;</glyph></icon></button>
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>

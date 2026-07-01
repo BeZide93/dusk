@@ -111,6 +111,11 @@ button icon glyph {
     border-color: rgba(203, 170, 255, 36%);
 }
 
+.button-midna {
+    background-color: rgba(118, 79, 158, 58%);
+    border-color: rgba(203, 170, 255, 36%);
+}
+
 .midna-icon {
     position: absolute;
     left: 9dp;
@@ -128,6 +133,19 @@ button icon glyph {
 .button-z.has-icon span {
     right: 9dp;
     bottom: 7dp;
+}
+
+.button-midna.has-icon span {
+    position: absolute;
+    right: 9dp;
+    bottom: 7dp;
+    font-size: 13dp;
+    line-height: 1;
+}
+
+.button-midna.pressed {
+    background-color: rgba(139, 91, 187, 82%);
+    border-color: rgba(220, 194, 255, 70%);
 }
 
 .button-z.pressed {
