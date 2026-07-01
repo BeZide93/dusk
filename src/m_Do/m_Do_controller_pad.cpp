@@ -7,12 +7,16 @@
 #include "JSystem/JAWExtSystem/JAWExtSystem.h"
 #include "SSystem/SComponent/c_lib.h"
 #include "d/d_com_inf_game.h"
-#include "dusk/touch_controls.hpp"
 #include "f_ap/f_ap_game.h"
 #include "m_Do/m_Do_Reset.h"
 #include "m_Do/m_Do_main.h"
 #include "tracy/Tracy.hpp"
 #include <SDL3/SDL_gamepad.h>
+
+#if TARGET_PC
+#include "dusk/menu_pointer.h"
+#include "dusk/ui/touch_controls.hpp"
+#endif
 
 JUTGamePad* mDoCPd_c::m_gamePad[4];
 
@@ -35,14 +39,7 @@ void resetWiiUPhysicalShoulderState(u32 port) {
 }
 
 bool nativeButtonHeld(SDL_Gamepad* gamepad, u32 nativeButton) {
-    switch (nativeButton) {
-    case PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER:
-        return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER) > 16384;
-    case PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER:
-        return SDL_GetGamepadAxis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16384;
-    default:
-        return SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(nativeButton)) != 0;
-    }
+    return SDL_GetGamepadButton(gamepad, static_cast<SDL_GamepadButton>(nativeButton)) != 0;
 }
 
 bool mappedButtonHeld(u32 port, PADButton button) {
@@ -280,6 +277,9 @@ void mDoCPd_c::create() {
 
 void mDoCPd_c::read() {
     ZoneScoped;
+#if TARGET_PC
+    dusk::ui::sync_virtual_input();
+#endif
     JUTGamePad::read();
 
     if (!mDoRst::isReset() && mDoRst::is3ButtonReset()) {
@@ -312,9 +312,12 @@ void mDoCPd_c::read() {
         } else {
             convert(interface, *pad);
             remapWiiUPhysicalShoulders(interface, i);
-        }
-        if (i == PAD_1) {
-            dusk::touch_controls::MergeToPad(*interface);
+#if TARGET_PC
+            const u32 suppressedButtons = dusk::menu_pointer::suppressed_pad_buttons(i);
+            interface->mButtonFlags &= ~suppressedButtons;
+            interface->mPressedButtonFlags &= ~suppressedButtons;
+            dusk::menu_pointer::finish_pad_suppression_read(i);
+#endif
         }
         LRlockCheck(interface);
 #if DEBUG

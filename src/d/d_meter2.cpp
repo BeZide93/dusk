@@ -771,8 +771,15 @@ void dMeter2_c::moveLife() {
         draw_life = true;
     }
 
-    if (mLifeGaugeScale != g_drawHIO.mLifeParentScale) {
-        mLifeGaugeScale = g_drawHIO.mLifeParentScale;
+#if TARGET_PC
+    const f32 lifeGaugeScale =
+        g_drawHIO.mLifeParentScale *
+        std::clamp(dusk::getSettings().game.hudScale.getValue(), 0.5f, 2.0f);
+#else
+    const f32 lifeGaugeScale = g_drawHIO.mLifeParentScale;
+#endif
+    if (mLifeGaugeScale != lifeGaugeScale) {
+        mLifeGaugeScale = lifeGaugeScale;
         draw_life = true;
     }
 
@@ -3224,7 +3231,15 @@ void dMeter2_c::alphaAnimeButtonCross() {
             field_0x190++;
         }
     } else {
+#if TARGET_PC
+        if (dusk::getSettings().game.enableTouchControls) {
+            mpMeterDraw->setAlphaButtonCrossAnimeMin();
+        } else {
+            mpMeterDraw->setAlphaButtonCrossAnimeMax();
+        }
+#else
         mpMeterDraw->setAlphaButtonCrossAnimeMax();
+#endif
 
         if (field_0x190 < 5) {
             field_0x190++;
@@ -3368,7 +3383,7 @@ static leafdraw_method_class l_dMeter2_Method = {
     (process_method_func)dMeter2_Draw,
 };
 
-msg_process_profile_definition g_profile_METER2 = {
+DUSK_PROFILE msg_process_profile_definition DUSK_CONST g_profile_METER2 = {
     /* Layer ID    */ fpcLy_CURRENT_e,
     /* List ID     */ 12,
     /* List Prio   */ fpcPi_CURRENT_e,

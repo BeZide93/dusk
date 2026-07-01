@@ -24,7 +24,21 @@
 #include "m_Do/m_Do_graphic.h"
 #include <cstring>
 
+#if TARGET_PC
+#include "dusk/menu_pointer.h"
 #include "dusk/string.hpp"
+
+namespace {
+constexpr u8 pointer_target(u8 group, u8 index) noexcept {
+    return static_cast<u8>((group << 4) | (index & 0x0F));
+}
+
+constexpr u8 s_pointerDataSelectTarget = 0;
+constexpr u8 s_pointerMenuSelectTarget = 1;
+constexpr u8 s_pointerCopySelectTarget = 2;
+constexpr u8 s_pointerYesNoSelectTarget = 3;
+}  // namespace
+#endif
 
 static s32 SelStartFrameTbl[3] = {
     59,
@@ -780,8 +794,143 @@ void dFile_select_c::dataSelectInit() {
     }
 }
 
+#if TARGET_PC
+bool dFile_select_c::pointerDataSelect() {
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    for (u8 i = 0; i < 3; ++i) {
+        if (!dusk::menu_pointer::hit_pane(mSelFilePanes[i], 8.0f)) {
+            continue;
+        }
+        const bool clicked = dusk::menu_pointer::consume_click();
+        if (mSelectNum != i) {
+            mDoAud_seStart(Z2SE_FILE_SELECT_CURSOR, NULL, 0, 0);
+            mLastSelectNum = mSelectNum;
+            mSelectNum = i;
+            if (clicked) {
+                dusk::menu_pointer::defer_activation(
+                    dusk::menu_pointer::Context::FileSelect,
+                    pointer_target(s_pointerDataSelectTarget, i));
+            }
+            dataSelectAnmSet();
+            mDataSelProc = DATASELPROC_DATA_SELECT_MOVE_ANIME;
+            return true;
+        }
+        if (clicked) {
+            dataSelectStart();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool dFile_select_c::pointerMenuSelect() {
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    for (u8 i = 0; i < 3; ++i) {
+        if (!dusk::menu_pointer::hit_pane(m3mSelPane[i], 8.0f)) {
+            continue;
+        }
+        const bool clicked = dusk::menu_pointer::consume_click();
+        if (!mIsDataNew[mSelectNum] && mSelectMenuNum != i) {
+            mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+            mLastSelectMenuNum = mSelectMenuNum;
+            mSelectMenuNum = i;
+            if (clicked) {
+                dusk::menu_pointer::defer_activation(
+                    dusk::menu_pointer::Context::FileSelect,
+                    pointer_target(s_pointerMenuSelectTarget, i));
+            }
+            menuSelectAnmSet();
+            mDataSelProc = DATASELPROC_MENU_SELECT_MOVE_ANM;
+            return true;
+        }
+        if (clicked) {
+            menuSelectStart();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool dFile_select_c::pointerCopyDataToSelect() {
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    for (u8 i = 0; i < 2; ++i) {
+        if (!dusk::menu_pointer::hit_pane(mCpSelPane[i], 8.0f)) {
+            continue;
+        }
+        const bool clicked = dusk::menu_pointer::consume_click();
+        if (field_0x026b != i) {
+            mDoAud_seStart(Z2SE_FILE_SELECT_CURSOR, NULL, 0, 0);
+            field_0x026c = field_0x026b;
+            field_0x026b = i;
+            if (clicked) {
+                dusk::menu_pointer::defer_activation(
+                    dusk::menu_pointer::Context::FileSelect,
+                    pointer_target(s_pointerCopySelectTarget, i));
+            }
+            copyDataToSelectMoveAnmSet();
+            mDataSelProc = DATASELPROC_COPY_DATA_TO_SELECT_MOVE_ANM;
+            return true;
+        }
+        if (clicked) {
+            copyDataToSelectStart();
+            return true;
+        }
+    }
+    return false;
+}
+
+bool dFile_select_c::pointerYesNoSelect(bool errorSelect) {
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    for (u8 i = 0; i < 2; ++i) {
+        if (!dusk::menu_pointer::hit_pane(mYnSelPane[i], 8.0f)) {
+            continue;
+        }
+        const bool clicked =
+            (!errorSelect || field_0x0268 == i) && dusk::menu_pointer::consume_click();
+        if (field_0x0268 != i) {
+            field_0x0269 = field_0x0268;
+            field_0x0268 = i;
+            if (errorSelect) {
+                errCurMove(0);
+                return false;
+            } else {
+                mDoAud_seStart(Z2SE_SY_MENU_CURSOR_COMMON, NULL, 0, 0);
+                if (clicked) {
+                    dusk::menu_pointer::defer_activation(
+                        dusk::menu_pointer::Context::FileSelect,
+                        pointer_target(s_pointerYesNoSelectTarget, i));
+                }
+                yesnoSelectAnmSet();
+                mDataSelProc = DATASELPROC_YES_NO_CURSOR_MOVE_ANM;
+                return true;
+            }
+        }
+        if (clicked) {
+            if (errorSelect) {
+                if (field_0x0268 != 0) {
+                    mDoAud_seStart(Z2SE_SY_CURSOR_OK, 0, 0, 0);
+                } else {
+                    mDoAud_seStart(Z2SE_SY_CURSOR_CANCEL, 0, 0, 0);
+                }
+                mSelIcon->setAlphaRate(0.0f);
+            } else {
+                yesNoSelectStart();
+            }
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
 // handles switching between quest logs
 void dFile_select_c::dataSelect() {
+#if TARGET_PC
+    if (pointerDataSelect()) {
+        return;
+    }
+#endif
+
     stick->checkTrigger();
 
     // If A or Start was pressed
@@ -1031,6 +1180,9 @@ void dFile_select_c::startNewGameNameInput() {
 }
 
 void dFile_select_c::dataSelectStart() {
+#if TARGET_PC
+    dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
+#endif
     mSelIcon->setAlphaRate(0.0f);
 
     if (mIsNoData[mSelectNum]) {
@@ -1237,7 +1389,26 @@ bool dFile_select_c::dataSelectMoveAnimeStep(bool i_showCursor) {
 }
 
 void dFile_select_c::dataSelectMoveAnime() {
+#if TARGET_PC
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    if (mSelectNum != 0xFF && dusk::menu_pointer::hit_pane(mSelFilePanes[mSelectNum], 8.0f) &&
+        dusk::menu_pointer::consume_click())
+    {
+        dusk::menu_pointer::defer_activation(
+            dusk::menu_pointer::Context::FileSelect,
+            pointer_target(s_pointerDataSelectTarget, mSelectNum));
+    }
+#endif
+
     if (dataSelectMoveAnimeStep(true)) {
+#if TARGET_PC
+        if (dusk::menu_pointer::consume_deferred_activation(
+                dusk::menu_pointer::Context::FileSelect,
+                pointer_target(s_pointerDataSelectTarget, mSelectNum))) {
+            dataSelectStart();
+            return;
+        }
+#endif
         mDataSelProc = DATASELPROC_DATA_SELECT;
     }
 }
@@ -2019,6 +2190,12 @@ void dFile_select_c::selectDataOpenEraseMove() {
 
 // Handles selecting between copy / start / delete menus in quest log
 void dFile_select_c::menuSelect() {
+#if TARGET_PC
+    if (pointerMenuSelect()) {
+        return;
+    }
+#endif
+
     stick->checkTrigger();
 
     // if a was pressed, do the menu selection process
@@ -2049,6 +2226,9 @@ void dFile_select_c::menuSelect() {
 
 // Handles copy / start / delete actions depending on which menu is selected from menuSelect
 void dFile_select_c::menuSelectStart() {
+#if TARGET_PC
+    dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
+#endif
     #if TARGET_PC
     if (!dusk::getSettings().game.hideTvSettingsScreen || mSelectMenuNum != 1) {
         mDoAud_seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0);
@@ -2177,6 +2357,17 @@ void dFile_select_c::menuSelectAnmSet() {
 }
 
 void dFile_select_c::menuSelectMoveAnm() {
+#if TARGET_PC
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    if (mSelectMenuNum != 0xFF &&
+        dusk::menu_pointer::hit_pane(m3mSelPane[mSelectMenuNum], 8.0f) &&
+        dusk::menu_pointer::consume_click())
+    {
+        dusk::menu_pointer::defer_activation(
+            dusk::menu_pointer::Context::FileSelect,
+            pointer_target(s_pointerMenuSelectTarget, mSelectMenuNum));
+    }
+#endif
     bool tmp1 = true;
 
     if (mSelectMenuNum != 0xFF &&
@@ -2234,6 +2425,14 @@ void dFile_select_c::menuSelectMoveAnm() {
             m3mSelPane[mLastSelectMenuNum]->getPanePtr()->setAnimation((J2DAnmTransform*)NULL);
         }
 
+#if TARGET_PC
+        if (dusk::menu_pointer::consume_deferred_activation(
+                dusk::menu_pointer::Context::FileSelect,
+                pointer_target(s_pointerMenuSelectTarget, mSelectMenuNum))) {
+            menuSelectStart();
+            return;
+        }
+#endif
         mDataSelProc = DATASELPROC_MENU_SELECT;
     }
 }
@@ -2538,7 +2737,7 @@ void dFile_select_c::copySelMoveAnmInitSet(int param_0, int param_1) {
 
 void dFile_select_c::setSaveDataForCopySel() {
     static u64 l_tagName101[2] = {MULTI_CHAR('w_nun01'), MULTI_CHAR('w_nun02')};
-    static char* l_numTex[3] = {"tt_1_metal_40x40.bti", "tt_2_metal_40x40.bti",
+    static DUSK_CONST char* l_numTex[3] = {"tt_1_metal_40x40.bti", "tt_2_metal_40x40.bti",
                                 "tt_3_metal_40x40.bti"};
     SaveDataBuf* pSave = mSaveData;
     int notSelectedIndex = 0;
@@ -2568,6 +2767,12 @@ void dFile_select_c::setSaveDataForCopySel() {
 }
 
 void dFile_select_c::copyDataToSelect() {
+#if TARGET_PC
+    if (pointerCopyDataToSelect()) {
+        return;
+    }
+#endif
+
     stick->checkTrigger();
 
     if (mDoCPd_c::getTrigA(PAD_1)) {
@@ -2592,6 +2797,9 @@ void dFile_select_c::copyDataToSelect() {
 }
 
 void dFile_select_c::copyDataToSelectStart() {
+#if TARGET_PC
+    dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
+#endif
     mDoAud_seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0);
 
     mCpDataToNum = getCptoNum(field_0x026b);
@@ -2657,6 +2865,17 @@ void dFile_select_c::copyDataToSelectMoveAnmSet() {
 }
 
 void dFile_select_c::copyDataToSelectMoveAnm() {
+#if TARGET_PC
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    if (field_0x026b != 0xFF &&
+        dusk::menu_pointer::hit_pane(mCpSelPane[field_0x026b], 8.0f) &&
+        dusk::menu_pointer::consume_click())
+    {
+        dusk::menu_pointer::defer_activation(
+            dusk::menu_pointer::Context::FileSelect,
+            pointer_target(s_pointerCopySelectTarget, field_0x026b));
+    }
+#endif
     bool iVar7 = true;
     bool iVar6 = true;
     bool bVar1 = true;
@@ -2706,6 +2925,14 @@ void dFile_select_c::copyDataToSelectMoveAnm() {
             mSelIcon2->setAlphaRate(1.0f);
         }
 
+#if TARGET_PC
+        if (dusk::menu_pointer::consume_deferred_activation(
+                dusk::menu_pointer::Context::FileSelect,
+                pointer_target(s_pointerCopySelectTarget, field_0x026b))) {
+            copyDataToSelectStart();
+            return;
+        }
+#endif
         mDataSelProc = DATASELPROC_COPY_DATA_TO_SELECT;
     }
 }
@@ -2979,6 +3206,12 @@ void dFile_select_c::yesnoCursorShow() {
 }
 
 void dFile_select_c::YesNoSelect() {
+#if TARGET_PC
+    if (pointerYesNoSelect(false)) {
+        return;
+    }
+#endif
+
     stick->checkTrigger();
 
     if (mDoCPd_c::getTrigA(PAD_1)) {
@@ -3003,6 +3236,9 @@ void dFile_select_c::YesNoSelect() {
 }
 
 void dFile_select_c::yesNoSelectStart() {
+#if TARGET_PC
+    dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
+#endif
     if (field_0x0268 != 0) {
         mDoAud_seStart(Z2SE_SY_CURSOR_OK, NULL, 0, 0);
         field_0x03b1 = 1;
@@ -3158,10 +3394,29 @@ void dFile_select_c::YesNoCancelMove() {
 }
 
 void dFile_select_c::yesNoCursorMoveAnm() {
+#if TARGET_PC
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::FileSelect);
+    if (field_0x0268 != 0xFF &&
+        dusk::menu_pointer::hit_pane(mYnSelPane[field_0x0268], 8.0f) &&
+        dusk::menu_pointer::consume_click())
+    {
+        dusk::menu_pointer::defer_activation(
+            dusk::menu_pointer::Context::FileSelect,
+            pointer_target(s_pointerYesNoSelectTarget, field_0x0268));
+    }
+#endif
     bool isYnSelMove = yesnoSelectMoveAnm();
     bool isYnWakuAlpha = yesnoWakuAlpahAnm(field_0x0269);
     if (isYnSelMove == true && isYnWakuAlpha == true) {
         yesnoCursorShow();
+#if TARGET_PC
+        if (dusk::menu_pointer::consume_deferred_activation(
+                dusk::menu_pointer::Context::FileSelect,
+                pointer_target(s_pointerYesNoSelectTarget, field_0x0268))) {
+            yesNoSelectStart();
+            return;
+        }
+#endif
         mDataSelProc = DATASELPROC_YES_NO_SELECT;
     }
 }
@@ -4636,6 +4891,7 @@ bool dFile_select_c::yesnoWakuAlpahAnm(u8 param_1) {
 
 #if TARGET_PC
 void dFile_select_c::fileSelectWide() {
+    static bool cachedPanes = false;
     // Get pre-scale values for each pane
     if (!cachedPanes) {
         for (PaneCache& entry : mSelDtPanes) {
@@ -4737,17 +4993,11 @@ void dFile_select_c::fileSelectWide() {
         mSelDt.ScrDt->search(MULTI_CHAR('fuku_n1'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
         mSelDt.ScrDt->search(MULTI_CHAR('fuku_n2'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
 
-        // Spirals
-        fileSel.Scr->search(MULTI_CHAR('w_uzu00'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu01'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu02'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu03'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu04'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu05'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu06'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu07'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu08'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu09'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
+        // Spirals & Memory Card Text
+        for (PaneCache& entry : fileSelPanes) {
+            J2DPane* pane = fileSel.Scr->search(entry.tag);
+            pane->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
+        }
 
         // Selection Cursor
         if (mSelIcon) {
@@ -4837,17 +5087,11 @@ void dFile_select_c::fileSelectWide() {
             mSelIcon2->refreshAspectScale(mDoGph_gInf_c::hudAspectScaleUp);
         }
 
-        // Spirals
-        fileSel.Scr->search(MULTI_CHAR('w_uzu00'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu01'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu02'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu03'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu04'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu05'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu06'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu07'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu08'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
-        fileSel.Scr->search(MULTI_CHAR('w_uzu09'))->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
+        // Spirals & Memory Card Text
+        for (PaneCache& entry : fileSelPanes) {
+            J2DPane* pane = fileSel.Scr->search(entry.tag);
+            pane->scale(mDoGph_gInf_c::hudAspectScaleDown, 1.0f);
+        }
         break;
     }
 }
@@ -5133,6 +5377,11 @@ static MemCardCheckFuncT MemCardCheckProc[] = {
     &dFile_select_c::MemCardErrYesNoCursorMoveAnm,
     &dFile_select_c::MemCardSaveDataClear,
 
+#if TARGET_PC
+    &dFile_select_c::MemCardAutoMakeGameFile,
+    &dFile_select_c::MemCardAutoMakeGameFileErrWait,
+#endif
+
     #if PLATFORM_WII || PLATFORM_SHIELD
     &dFile_select_c::nandStatCheck,
     &dFile_select_c::gameFileInitSel,
@@ -5216,11 +5465,33 @@ void dFile_select_c::MemCardStatCheck() {
         mDoMemCd_Load();
         mCardCheckProc = MEMCARDCHECKPROC_LOAD_WAIT;
         break;
+#if TARGET_PC
+    case 1: { // no save file
+        if (dusk::getSettings().game.instantSaves) {
+            field_0x03b1 = 1;
+            setInitSaveData();
+            dataSave();
+            mCardCheckProc = MEMCARDCHECKPROC_AUTO_MAKE_GAMEFILE;
+        } else {
+            errDispInitSet(22, 0);
+            field_0x0280 = true;
+            mNextCardCheckProc = MEMCARDCHECKPROC_MAKE_GAMEFILE_SEL;
+        }
+        break;
+    }
+    case 4: // card is writing
+        if (dusk::getSettings().game.instantSaves) {
+            field_0x03b1 = 1;
+            mCardCheckProc = MEMCARDCHECKPROC_AUTO_MAKE_GAMEFILE;
+        }
+        break;
+#else
     case 1:
         errDispInitSet(22, 0);
         field_0x0280 = true;
         mNextCardCheckProc = MEMCARDCHECKPROC_MAKE_GAMEFILE_SEL;
         break;
+#endif
     }
 #else
     switch (status) {
@@ -5926,6 +6197,33 @@ void dFile_select_c::MemCardMakeGameFileCheck() {
     }
 }
 
+#if TARGET_PC
+void dFile_select_c::MemCardAutoMakeGameFile() {
+    field_0x03b4 = mDoMemCd_SaveSync();
+    if (field_0x03b4 == 0) {
+        return;
+    }
+
+    field_0x03b1 = 0;
+    if (field_0x03b4 == 1) {
+        mDoMemCd_Load();
+        mCardCheckProc = MEMCARDCHECKPROC_LOAD_WAIT;
+    } else {
+        errDispInitSet(0x1A, 0);
+        field_0x0280 = false;
+        mWindowCloseMsgDispCb = NULL;
+        mKeyWaitMsgDispCb = NULL;
+        mNextCardCheckProc = MEMCARDCHECKPROC_AUTO_MAKE_GAMEFILE_ERR_WAIT;
+    }
+}
+
+void dFile_select_c::MemCardAutoMakeGameFileErrWait() {
+    mNextCardCheckProc = MEMCARDCHECKPROC_STAT_CHECK;
+    mKeyWaitCardCheckProc = MEMCARDCHECKPROC_MSG_WINDOW_CLOSE;
+    mCardCheckProc = MEMCARDCHECKPROC_ERRMSG_WAIT_KEY;
+}
+#endif
+
 #if PLATFORM_WII || PLATFORM_SHIELD
 void dFile_select_c::gameFileInitSel() {
     if (errYesNoSelect() != 0) {
@@ -6079,6 +6377,12 @@ void dFile_select_c::MemCardMsgWindowClose() {
 
 bool dFile_select_c::errYesNoSelect() {
     bool rv = false;
+#if TARGET_PC
+    if (pointerYesNoSelect(true)) {
+        return true;
+    }
+#endif
+
     stick->checkTrigger();
 
     if (mDoCPd_c::getTrigA(PAD_1)) {

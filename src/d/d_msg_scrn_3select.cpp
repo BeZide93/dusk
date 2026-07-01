@@ -16,6 +16,17 @@
 #include "d/d_msg_object.h"
 #include "d/d_pane_class.h"
 
+#if TARGET_PC
+#include "dusk/menu_pointer.h"
+
+namespace {
+bool hit_choice_pane(CPaneMgr* pane, f32 padding) {
+    return pane != NULL && pane->getPanePtr() != NULL && pane->getPanePtr()->isVisible() &&
+           dusk::menu_pointer::hit_pane(pane, padding);
+}
+}  // namespace
+#endif
+
 typedef void (dMsgScrn3Select_c::*processFn)();
 processFn process[] = {
     &dMsgScrn3Select_c::open1Proc,  &dMsgScrn3Select_c::open2Proc,  &dMsgScrn3Select_c::waitProc,
@@ -277,7 +288,7 @@ bool dMsgScrn3Select_c::isSelect() {
     return mProcess == PROC_SELECT_e ? TRUE : FALSE;
 }
 
-void dMsgScrn3Select_c::setString(char* mpText0, char* mpText1, char* mpText2) {
+void dMsgScrn3Select_c::setString(DUSK_CONST char* mpText0, DUSK_CONST char* mpText1, DUSK_CONST char* mpText2) {
     if (mpTmSel_c[0] != NULL) {
         JUT_ASSERT(0, ((J2DTextBox*)(mpTmSel_c[0]->getPanePtr()))->getStringAllocByte() >
                    strlen(mpText0));
@@ -306,7 +317,7 @@ void dMsgScrn3Select_c::setString(char* mpText0, char* mpText1, char* mpText2) {
     }
 }
 
-void dMsgScrn3Select_c::setRubyString(char* pText0, char* pText1, char* pText2) {
+void dMsgScrn3Select_c::setRubyString(DUSK_CONST char* pText0, DUSK_CONST char* pText1, DUSK_CONST char* pText2) {
     if (mpTmrSel_c[0] != NULL) {
         JUT_ASSERT(0, ((J2DTextBox*)(mpTmrSel_c[0]->getPanePtr()))->getStringAllocByte() >
                    strlen(pText0));
@@ -470,6 +481,9 @@ bool dMsgScrn3Select_c::selAnimeMove(u8 i_selNum, u8 param_1, bool param_2) {
     mSelNum = i_selNum;
     field_0x114 = 0;
     field_0x108 = param_2;
+#if TARGET_PC
+    pointerMove();
+#endif
 
     (this->*process[mProcess])();
 
@@ -517,6 +531,47 @@ bool dMsgScrn3Select_c::selAnimeMove(u8 i_selNum, u8 param_1, bool param_2) {
 
     return mProcess == PROC_SELECT_e ? TRUE : FALSE;
 }
+
+#if TARGET_PC
+bool dMsgScrn3Select_c::pointerMove() {
+    dusk::menu_pointer::begin_context(dusk::menu_pointer::Context::Dialog);
+    mDPDPoint = 0xFF;
+
+    const u8 firstPane = mSelNum == 2 ? 1 : 0;
+    for (u8 choice = 0; choice < mSelNum; ++choice) {
+        const u8 paneIndex = firstPane + choice;
+        if (paneIndex >= 3) {
+            continue;
+        }
+
+        // TODO: this sucks and should be replaced with Wii mpTouchArea
+        bool hit = hit_choice_pane(mpSel_c[paneIndex], 8.0f) ||
+                   hit_choice_pane(mpTmSel_c[paneIndex], 24.0f) ||
+                   hit_choice_pane(mpTmrSel_c[paneIndex], 24.0f) ||
+                   hit_choice_pane(mpKahen_c[paneIndex], 8.0f) ||
+                   hit_choice_pane(mpCursor_c[paneIndex], 8.0f);
+        for (int i = 0; i < 5 && !hit; ++i) {
+            hit = hit_choice_pane(mpSelCldw_c[i][paneIndex], 8.0f);
+        }
+
+        if (!hit) {
+            continue;
+        }
+
+        mDPDPoint = choice;
+        field_0x110 = paneIndex;
+        dusk::menu_pointer::set_dialog_choice(choice, dusk::menu_pointer::state().clicked);
+        return true;
+    }
+
+    return false;
+}
+
+bool dMsgScrn3Select_c::consumePointerClick() {
+    u8 choice = 0xFF;
+    return dusk::menu_pointer::consume_dialog_click(choice);
+}
+#endif
 
 bool dMsgScrn3Select_c::selAnimeEnd() {
     if (mProcess == PROC_MAX_e) {

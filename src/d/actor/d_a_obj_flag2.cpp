@@ -261,6 +261,7 @@ void FlagCloth_c::execute() {
 }
 
 void FlagCloth_c::draw() {
+    ZoneScoped;
     j3dSys.reinitGX();
     GXSetNumIndStages(0);
     dKy_setLight_again();
@@ -498,7 +499,7 @@ static int daObjFlag2_Create(fopAc_ac_c* i_this) {
     return static_cast<daObjFlag2_c*>(i_this)->create();
 }
 
-static actor_method_class l_daObjFlag2_Method = {
+static DUSK_CONST actor_method_class l_daObjFlag2_Method = {
     (process_method_func)daObjFlag2_Create,
     (process_method_func)daObjFlag2_Delete,
     (process_method_func)daObjFlag2_Execute,
@@ -506,7 +507,7 @@ static actor_method_class l_daObjFlag2_Method = {
     (process_method_func)daObjFlag2_Draw,
 };
 
-actor_process_profile_definition g_profile_Obj_Flag2 = {
+DUSK_PROFILE actor_process_profile_definition DUSK_CONST g_profile_Obj_Flag2 = {
     /* Layer ID     */ fpcLy_CURRENT_e,
     /* List ID      */ 7,
     /* List Prio    */ fpcPi_CURRENT_e,

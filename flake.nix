@@ -1,5 +1,5 @@
 {
-  description = "Dawnlight — native PC port of the Twilight Princess decompilation";
+  description = "Dawnlight - native PC port of the Twilight Princess decompilation";
 
   inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
 
@@ -57,12 +57,22 @@
           inherit (pkgs.stdenv.hostPlatform) isDarwin;
           hasNodPrebuilt = nodPrebuiltInfo ? ${system};
 
-          aurora = pkgs.fetchFromGitHub {
-            owner = "encounter";
-            repo = "aurora";
-            rev = "10006618ee493f248b8597e4dfa1d2871d76a1d9";
-            hash = "sha256-lY2xuVyB7aPJ9+2wwLRB3F5U/BuPSxdSpegdG+qNd9o=";
-          };
+          aurora = builtins.pathExists "${self}/extern/aurora/CMakeLists.txt";
+          needSubmodules = ''
+            dawnlight: The aurora submodule is not vendored. Add submodules=1 to build.
+
+            As a flake input:
+
+            dawnlight.url = "git+https://github.com/BeZide93/dusk?ref=dawnlight&submodules=1";
+
+            nix command:
+
+            nix run 'git+https://github.com/BeZide93/dusk?ref=dawnlight&submodules=1'
+
+            Local checkout:
+
+            nix run '.?submodules=1#dawnlight'
+          '';
 
           dawn = pkgs.fetchzip {
             url = "https://github.com/encounter/dawn-build/releases/download/${dawnVersion}/dawn-${dawnInfo.${system}.triple}.tar.gz";
@@ -86,6 +96,7 @@
               rev = nodVersion;
               hash = "sha256-+zrtVzjo0+X/6uMcNUn1+FaSR+jOhrcQSDNBFjw0NDs=";
             };
+            patches = [ ./fix-cmake-paths.patch ];
             cargoDeps = pkgs.rustPlatform.importCargoLock {
               lockFile = "${finalAttrs.src}/Cargo.lock";
             };
@@ -127,7 +138,7 @@
             NOD_PREBUILT = nod;
             CXXOPTS = pkgs.cxxopts.src;
             JSON = pkgs.nlohmann_json.src;
-            XXHASH = pkgs.xxHash.src;
+            XXHASH = pkgs.xxhash.src;
             ZSTD = pkgs.zstd.src;
             FMT = pkgs.fetchzip {
               url = "https://github.com/fmtlib/fmt/archive/refs/tags/11.1.4.tar.gz";
@@ -153,119 +164,120 @@
             };
           };
 
-          dawnlight = pkgs.stdenv.mkDerivation {
-            pname = "dawnlight";
-            version = versionSuffix;
-            src = ./.;
+          dawnlight =
+            if !aurora then
+              throw needSubmodules
+            else
+              pkgs.stdenv.mkDerivation {
+                pname = "dawnlight";
+                version = versionSuffix;
+                src = ./.;
 
-            postUnpack = ''
-              chmod -R u+w "$sourceRoot"
-              rm -rf "$sourceRoot/extern/aurora"
-              mkdir -p "$sourceRoot/extern"
-              cp -r ${aurora} "$sourceRoot/extern/aurora"
-              chmod -R u+w "$sourceRoot/extern/aurora"
-              substituteInPlace "$sourceRoot/extern/aurora/CMakeLists.txt" \
-                --replace-warn "add_subdirectory(tests)" ""
-            '';
-
-            nativeBuildInputs = [
-              pkgs.cmake
-              pkgs.ninja
-              pkgs.pkg-config
-              pkgs.python3
-              pkgs.python3Packages.markupsafe
-            ]
-            ++ lib.optionals (!isDarwin) [ pkgs.autoPatchelfHook ];
-
-            buildInputs = [
-              pkgs.sdl3
-              pkgs.freetype
-              pkgs.zstd
-              pkgs.cxxopts
-              pkgs.nlohmann_json
-              pkgs.xxHash
-              pkgs.abseil-cpp
-              pkgs.zlib
-              pkgs.libpng
-              pkgs.libjpeg_turbo
-              pkgs.curl
-              pkgs.openssl
-            ]
-            ++ lib.optionals isDarwin [
-              pkgs.apple-sdk_15
-              pkgs.libiconv
-            ]
-            ++ lib.optionals (!isDarwin) [
-              pkgs.libGL
-              pkgs.libGLU
-              pkgs.libglvnd
-              pkgs.vulkan-loader
-              pkgs.libX11
-              pkgs.libxcb
-              pkgs.libXcursor
-              pkgs.libxi
-              pkgs.libxrandr
-              pkgs.libxscrnsaver
-              pkgs.libxtst
-              pkgs.libxinerama
-              pkgs.libxkbcommon
-              pkgs.wayland
-              pkgs.libdecor
-              pkgs.alsa-lib
-              pkgs.libpulseaudio
-              pkgs.pipewire
-              pkgs.dbus
-              pkgs.udev
-              pkgs.libusb1
-              pkgs.libunwind
-              pkgs.gtk3
-            ];
-
-            cmakeBuildType = "RelWithDebInfo";
-            ninjaFlags = [ "dawnlight" ];
-
-            cmakeFlags = [
-              "-DDUSK_VERSION_OVERRIDE=${versionSuffix}"
-              "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
-              "-DAURORA_DAWN_PROVIDER=package"
-              "-DAURORA_DAWN_LINKAGE=static"
-              "-DAURORA_NOD_PROVIDER=package"
-              "-DAURORA_NOD_LINKAGE=static"
-              "-DAURORA_SDL3_PROVIDER=system"
-            ]
-            ++ lib.mapAttrsToList (key: src: "-DFETCHCONTENT_SOURCE_DIR_${key}=${src}") fetchContentDirs;
-
-            installPhase =
-              if isDarwin then
-                ''
-                  runHook preInstall
-                  mkdir -p "$out/Applications"
-                  cp -r Dawnlight.app "$out/Applications/Dawnlight.app"
-                  runHook postInstall
-                ''
-              else
-                ''
-                  runHook preInstall
-                  install -Dm755 dawnlight "$out/bin/dawnlight"
-                  cp -r "$src/res" "$out/bin/res"
-                  install -Dm644 "$src/platforms/freedesktop/dawnlight.desktop" \
-                    "$out/share/applications/dawnlight.desktop"
-                  for size in 16 32 48 64 128 256 512 1024; do
-                    install -Dm644 "$src/platforms/freedesktop/''${size}x''${size}/apps/dawnlight.png" \
-                      "$out/share/icons/hicolor/''${size}x''${size}/apps/dawnlight.png"
-                  done
-                  runHook postInstall
+                postUnpack = ''
+                  chmod -R u+w "$sourceRoot"
+                  substituteInPlace "$sourceRoot/extern/aurora/CMakeLists.txt" \
+                    --replace-warn "add_subdirectory(tests)" ""
                 '';
 
-            dontStrip = true;
+                nativeBuildInputs = [
+                  pkgs.cmake
+                  pkgs.ninja
+                  pkgs.pkg-config
+                  pkgs.python3
+                  pkgs.python3Packages.markupsafe
+                ]
+                ++ lib.optionals (!isDarwin) [ pkgs.autoPatchelfHook ];
 
-            meta = {
-              description = "Dawnlight — native PC port of the Twilight Princess decompilation";
-              homepage = "https://github.com/zeldaret/tp";
-              platforms = supportedSystems;
-              mainProgram = "dawnlight";
-            };
-          };
+                buildInputs = [
+                  pkgs.sdl3
+                  pkgs.freetype
+                  pkgs.zstd
+                  pkgs.cxxopts
+                  pkgs.nlohmann_json
+                  pkgs.xxhash
+                  pkgs.abseil-cpp
+                  pkgs.zlib
+                  pkgs.libpng
+                  pkgs.libjpeg_turbo
+                  pkgs.curl
+                  pkgs.openssl
+                ]
+                ++ lib.optionals isDarwin [
+                  pkgs.apple-sdk_15
+                  pkgs.libiconv
+                ]
+                ++ lib.optionals (!isDarwin) [
+                  pkgs.libGL
+                  pkgs.libGLU
+                  pkgs.libglvnd
+                  pkgs.vulkan-loader
+                  pkgs.libX11
+                  pkgs.libxcb
+                  pkgs.libXcursor
+                  pkgs.libxi
+                  pkgs.libxrandr
+                  pkgs.libxscrnsaver
+                  pkgs.libxtst
+                  pkgs.libxinerama
+                  pkgs.libxkbcommon
+                  pkgs.wayland
+                  pkgs.libdecor
+                  pkgs.alsa-lib
+                  pkgs.libpulseaudio
+                  pkgs.pipewire
+                  pkgs.dbus
+                  pkgs.udev
+                  pkgs.libusb1
+                  pkgs.libunwind
+                  pkgs.gtk3
+                  nod
+                ];
+
+                cmakeBuildType = "RelWithDebInfo";
+                ninjaFlags = [ "dawnlight" ];
+
+                cmakeFlags = [
+                  "-DDUSK_VERSION_OVERRIDE=${versionSuffix}"
+                  "-DFETCHCONTENT_FULLY_DISCONNECTED=ON"
+                  "-DAURORA_DAWN_PROVIDER=package"
+                  "-DAURORA_DAWN_LINKAGE=static"
+                  "-DAURORA_NOD_PROVIDER=system"
+                  "-DAURORA_SDL3_PROVIDER=system"
+                  "-DBUILD_SHARED_LIBS=OFF"
+                ]
+                ++ lib.mapAttrsToList (key: src: "-DFETCHCONTENT_SOURCE_DIR_${key}=${src}") fetchContentDirs;
+
+                installPhase =
+                  if isDarwin then
+                    ''
+                      runHook preInstall
+                      mkdir -p "$out/Applications"
+                      cp -r Dawnlight.app "$out/Applications/Dawnlight.app"
+                      runHook postInstall
+                    ''
+                  else
+                    ''
+                      runHook preInstall
+                      install -Dm755 dawnlight "$out/bin/dawnlight"
+                      cp -r "$src/res" "$out/bin/res"
+                      install -Dm644 "$src/platforms/freedesktop/dawnlight.desktop" \
+                        "$out/share/applications/dawnlight.desktop"
+                      for size in 16 32 48 64 128 256 512 1024; do
+                        install -Dm644 "$src/platforms/freedesktop/''${size}x''${size}/apps/dawnlight.png" \
+                          "$out/share/icons/hicolor/''${size}x''${size}/apps/dawnlight.png"
+                      done
+                      runHook postInstall
+                    '';
+
+                dontStrip = true;
+
+                meta = {
+                  description = "Dawnlight - native PC port of the Twilight Princess decompilation";
+                  homepage = "https://github.com/zeldaret/tp";
+                  platforms = supportedSystems;
+                  mainProgram = "dawnlight";
+                };
+              };
 
           # Tooling common to every supported host (Linux and macOS).
           commonDevTools = [

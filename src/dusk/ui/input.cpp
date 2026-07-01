@@ -1,6 +1,5 @@
 #include "input.hpp"
 
-#include "dusk/touch_controls.hpp"
 #include "ui.hpp"
 
 #include <RmlUi/Core.h>
@@ -696,7 +695,6 @@ void release_input_block() noexcept {
 void reset_input_state() noexcept {
     clear_gamepad_repeats();
     reset_touch_menu_tap();
-    touch_controls::ResetInputState();
 }
 
 void handle_event(const SDL_Event& event) noexcept {
@@ -718,11 +716,6 @@ void handle_event(const SDL_Event& event) noexcept {
         event.type == SDL_EVENT_FINGER_UP || event.type == SDL_EVENT_FINGER_CANCELED)
     {
         if (handle_touch_menu_tap(*context, event)) {
-            touch_controls::ResetInputState();
-            sync_input_block();
-            return;
-        }
-        if (touch_controls::HandleEvent(event)) {
             sync_input_block();
         }
         return;
