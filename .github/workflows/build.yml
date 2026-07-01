@@ -177,7 +177,7 @@ jobs:
           rm -rf build/install/Payload
           mkdir -p build/install/Payload
           cp -R build/install/Dawnlight.app build/install/Payload/
-          ditto -c -k --sequesterRsrc \
+          ditto -c -k --sequesterRsrc --keepParent \
             build/install/Payload \
             "build/install/Dawnlight-${DUSK_VERSION}-${{ matrix.release_asset }}"
 
