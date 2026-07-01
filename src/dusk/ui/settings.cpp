@@ -7,6 +7,7 @@
 #include "dusk/app_info.hpp"
 #include "dusk/audio/DuskAudioSystem.h"
 #include "dusk/audio/DuskDsp.hpp"
+#include "dusk/android_frame_rate.hpp"
 #include "dusk/config.hpp"
 #include "dusk/discord_presence.hpp"
 #include "dusk/hotkeys.h"
@@ -17,15 +18,14 @@
 #include "dusk/io.hpp"
 #include "dusk/livesplit.h"
 #include "dusk/main.h"
-#include "dusk/touch_controls.hpp"
 #include "graphics_tuner.hpp"
 #include "m_Do/m_Do_main.h"
 #include "menu_bar.hpp"
 #include "modal.hpp"
 #include "number_button.hpp"
-#include "menu_bar.hpp"
 #include "pane.hpp"
 #include "prelaunch.hpp"
+#include "touch_controls_editor.hpp"
 #include "ui.hpp"
 #include "nlohmann/json.hpp"
 
@@ -46,6 +46,17 @@
 #include <memory>
 #include <string>
 #include <utility>
+
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#endif
+
+#if defined(TARGET_ANDROID) || defined(__ANDROID__) || \
+    (defined(__APPLE__) && TARGET_OS_IOS && !TARGET_OS_MACCATALYST)
+#define TOUCH_CONTROLS_AVAILABLE true
+#else
+#define TOUCH_CONTROLS_AVAILABLE false
+#endif
 
 namespace dusk::ui {
 namespace {
@@ -191,6 +202,14 @@ constexpr std::array kMenuScalingModeLabels = {
     "Dawnlight",
 };
 
+constexpr std::array kMagicArmorModes = {
+    "Normal",
+    "On Damage",
+    "Double Defense",
+    "Invincible",
+    "Cosmetic",
+};
+
 bool try_parse_backend(std::string_view backend, AuroraBackend& outBackend) {
     if (backend == "auto") {
         outBackend = BACKEND_AUTO;
@@ -327,7 +346,7 @@ void reset_for_speedrun_mode() {
     getSettings().game.canTransformAnywhere.setSpeedrunValue(false);
     getSettings().game.fastRoll.setSpeedrunValue(false);
     getSettings().game.fastSpinner.setSpeedrunValue(false);
-    getSettings().game.freeMagicArmor.setSpeedrunValue(false);
+    getSettings().game.armorRupeeDrain.setSpeedrunValue(MagicArmorMode::NORMAL);
     getSettings().game.invincibleEnemies.setSpeedrunValue(false);
 
     getSettings().game.pauseOnFocusLost.setSpeedrunValue(false);
@@ -491,6 +510,8 @@ const Rml::String kDepthOfFieldHelpText =
 const Rml::String kUnlockFramerateHelpText =
     "<br/>Uses inter-frame interpolation to enable higher frame rates.<br/><br/>May introduce minor "
     "visual artifacts or animation glitches.";
+const Rml::String kTextureReplacementHelpText =
+    "Enable installed texture replacements.";
 
 int float_setting_percent(ConfigVar<float>& var) {
     return static_cast<int>(var.getValue() * 100.0f + 0.5f);
@@ -1017,14 +1038,6 @@ T json_value_or(const json& object, const char* key, T fallback) {
     }
 }
 
-ControllerOverlayLayout json_layout_or(const json& object, const char* key,
-    ControllerOverlayLayout fallback) {
-    const int raw = json_value_or(object, key, static_cast<int>(fallback));
-    const int min = static_cast<int>(ControllerOverlayLayout::GameCube);
-    const int max = static_cast<int>(ControllerOverlayLayout::XBox);
-    return static_cast<ControllerOverlayLayout>(std::clamp(raw, min, max));
-}
-
 void set_float_from_json(
     ConfigVar<float>& var, const json& object, const char* key, float min, float max) {
     var.setValue(std::clamp(json_value_or(object, key, var.getValue()), min, max));
@@ -1233,60 +1246,6 @@ void import_hud_element_json(const json& elements, int index) {
     }
 }
 
-json export_touch_controls_json() {
-    auto& game = getSettings().game;
-    return {
-        {"version", 1},
-        {"enabled", game.enableTouchControls.getValue()},
-        {"preset", static_cast<int>(game.touchControlsPreset.getValue())},
-        {"scale", game.touchControlsScale.getValue()},
-        {"opacity", game.touchControlsOpacity.getValue()},
-        {"editMode", game.touchControlsEditMode.getValue()},
-        {"layout", touch_controls::ExportLayout()},
-    };
-}
-
-bool import_touch_controls_json(const json& root) {
-    if (!root.is_object()) {
-        return false;
-    }
-    if (root.contains("controls")) {
-        return touch_controls::ImportLayout(root);
-    }
-
-    const json* touch = &root;
-    const auto nestedTouch = root.find("touchControls");
-    if (nestedTouch != root.end()) {
-        if (!nestedTouch->is_object()) {
-            return false;
-        }
-        touch = &*nestedTouch;
-    }
-
-    if (!touch->contains("enabled") && !touch->contains("preset") && !touch->contains("scale") &&
-        !touch->contains("opacity") && !touch->contains("editMode") &&
-        !touch->contains("layout"))
-    {
-        return false;
-    }
-
-    auto& game = getSettings().game;
-    game.enableTouchControls.setValue(
-        json_value_or(*touch, "enabled", game.enableTouchControls.getValue()));
-    game.touchControlsPreset.setValue(
-        json_layout_or(*touch, "preset", game.touchControlsPreset.getValue()));
-    set_float_from_json(game.touchControlsScale, *touch, "scale", 0.6f, 1.6f);
-    set_float_from_json(game.touchControlsOpacity, *touch, "opacity", 0.2f, 1.0f);
-    game.touchControlsEditMode.setValue(
-        json_value_or(*touch, "editMode", game.touchControlsEditMode.getValue()));
-
-    const auto layout = touch->find("layout");
-    if (layout != touch->end()) {
-        touch_controls::ImportLayout(*layout);
-    }
-    return true;
-}
-
 json export_hud_layout_json() {
     json elements = json::object();
     for (size_t i = 0; i < kHudElementNames.size(); ++i) {
@@ -1409,28 +1368,9 @@ void open_layout_export_picker(const char* fileName, const json& layout, Rml::St
         static_cast<int>(std::size(filters)), defaultLocation.c_str());
 }
 
-enum class LayoutImportKind {
-    TouchControls,
-    Hud,
-};
-
-LayoutImportKind sTouchControlsImportKind = LayoutImportKind::TouchControls;
-LayoutImportKind sHudImportKind = LayoutImportKind::Hud;
-
-Rml::String import_label(LayoutImportKind kind) {
-    return kind == LayoutImportKind::Hud ? "HUD Layout" : "Touch Controls";
-}
-
-bool import_layout_json(LayoutImportKind kind, const json& root) {
-    return kind == LayoutImportKind::Hud ? import_hud_layout_json(root) :
-                                           import_touch_controls_json(root);
-}
-
-void import_layout_file_callback(void* userdata, const char* path, const char* error) {
-    const auto kind =
-        userdata != nullptr ? *static_cast<LayoutImportKind*>(userdata) :
-                              LayoutImportKind::TouchControls;
-    const Rml::String label = import_label(kind);
+void import_hud_layout_file_callback(void* userdata, const char* path, const char* error) {
+    (void)userdata;
+    const Rml::String label = "HUD Layout";
     if (error != nullptr) {
         push_layout_toast(label + " Import Failed", escape(error));
         return;
@@ -1441,7 +1381,7 @@ void import_layout_file_callback(void* userdata, const char* path, const char* e
 
     try {
         const json root = json::parse(read_file_select_text(path));
-        if (!import_layout_json(kind, root)) {
+        if (!import_hud_layout_json(root)) {
             push_layout_toast(
                 label + " Import Failed", "The selected file has no matching layout data.");
             return;
@@ -1453,35 +1393,20 @@ void import_layout_file_callback(void* userdata, const char* path, const char* e
     }
 }
 
-void open_layout_import_picker(LayoutImportKind kind) {
+void open_hud_layout_import_picker() {
     static constexpr SDL_DialogFileFilter filters[] = {
         {"Dusk Layout", "json"},
         {"All Files", "*"},
     };
     static std::string defaultLocation;
     defaultLocation = ConfigPath.empty() ? std::string{} : io::fs_path_to_string(ConfigPath);
-    ShowFileSelect(import_layout_file_callback,
-        kind == LayoutImportKind::Hud ? &sHudImportKind : &sTouchControlsImportKind, nullptr,
-        filters,
+    ShowFileSelect(import_hud_layout_file_callback, nullptr, nullptr, filters,
         static_cast<int>(std::size(filters)),
         defaultLocation.empty() ? nullptr : defaultLocation.c_str(), false);
 }
 
-void export_touch_controls_file() {
-    open_layout_export_picker(
-        "touch_controls_settings.json", export_touch_controls_json(), "Touch Controls");
-}
-
 void export_hud_layout_file() {
     open_layout_export_picker("hud_layout_settings.json", export_hud_layout_json(), "HUD Layout");
-}
-
-void open_touch_controls_import_picker() {
-    open_layout_import_picker(LayoutImportKind::TouchControls);
-}
-
-void open_hud_layout_import_picker() {
-    open_layout_import_picker(LayoutImportKind::Hud);
 }
 
 struct SaveFileInfo {
@@ -1638,9 +1563,7 @@ void open_save_import_picker() {
 }
 
 bool gyro_enabled() {
-    return getSettings().game.enableGyroAim ||
-           (getSettings().game.enableGyroRollgoal &&
-            getSettings().game.gyroMode.getValue() != GyroMode::Mouse);
+    return getSettings().game.enableGyroAim || getSettings().game.enableGyroRollgoal;
 }
 
 struct ConfigBoolProps {
@@ -1708,82 +1631,7 @@ SelectButton& config_percent_select(Pane& leftPane, Pane& rightPane, ConfigVar<f
     });
     leftPane.register_control(button, rightPane, [helpText = std::move(helpText)](Pane& pane) {
         pane.clear();
-        pane.add_text(helpText);
-    });
-    return button;
-}
-
-SelectButton& config_touch_scale_select(Pane& leftPane, Pane& rightPane) {
-    auto& globalScale = getSettings().game.touchControlsScale;
-    auto touchDisabled = [] { return !getSettings().game.enableTouchControls.getValue(); };
-    auto& button = leftPane.add_select_button({
-        .key = "Touch Scale",
-        .getValue = [&globalScale] {
-            return fmt::format("Global {}%", float_setting_percent(globalScale));
-        },
-        .isDisabled = touchDisabled,
-        .isModified =
-            [&globalScale] {
-                if (globalScale.getValue() != globalScale.getDefaultValue()) {
-                    return true;
-                }
-                const size_t count = touch_controls::ControlCount();
-                for (size_t i = 0; i < count; ++i) {
-                    if (touch_controls::ControlScalePercent(i) !=
-                        touch_controls::DefaultControlScalePercent(i))
-                    {
-                        return true;
-                    }
-                }
-                return false;
-            },
-    });
-    leftPane.register_control(button, rightPane, [&globalScale, touchDisabled](Pane& pane) {
-        pane.clear();
-        pane.add_child<NumberButton>(NumberButton::Props{
-            .key = "Global Scale",
-            .getValue = [&globalScale] { return float_setting_percent(globalScale); },
-            .setValue =
-                [&globalScale](int value) {
-                    globalScale.setValue(std::clamp(value, 60, 160) / 100.0f);
-                    config::Save();
-                },
-            .isDisabled = touchDisabled,
-            .isModified =
-                [&globalScale] {
-                    return globalScale.getValue() != globalScale.getDefaultValue();
-                },
-            .min = 60,
-            .max = 160,
-            .step = 5,
-            .suffix = "%",
-        });
-
-        pane.add_section("Buttons");
-        const size_t count = touch_controls::ControlCount();
-        for (size_t i = 0; i < count; ++i) {
-            pane.add_child<NumberButton>(NumberButton::Props{
-                .key = touch_controls::ControlDisplayName(i),
-                .getValue = [i] { return touch_controls::ControlScalePercent(i); },
-                .setValue =
-                    [i](int value) {
-                        touch_controls::SetControlScalePercent(i, value);
-                    },
-                .isDisabled = touchDisabled,
-                .isModified =
-                    [i] {
-                        return touch_controls::ControlScalePercent(i) !=
-                               touch_controls::DefaultControlScalePercent(i);
-                    },
-                .min = 50,
-                .max = 250,
-                .step = 5,
-                .suffix = "%",
-            });
-        }
-        pane.add_text(
-            "Global Scale changes the full touch controller. Button scales adjust individual "
-            "touch controls and are saved with the custom touch layout.");
+        pane.add_rml(helpText);
     });
     return button;
 }
@@ -2002,14 +1850,19 @@ SelectButton& config_controller_style_select(Pane& leftPane, Pane& rightPane) {
 
 SelectButton& config_int_select(Pane& leftPane, Pane& rightPane, ConfigVar<int>& var,
     Rml::String key, Rml::String helpText, int min, int max, int step = 5,
-    std::function<bool()> isDisabled = {}, std::string suffix = "") {
+    std::function<bool()> isDisabled = {}, std::function<void(int)> onChange = {},
+    std::string suffix = "") {
     auto& button = leftPane.add_child<NumberButton>(NumberButton::Props{
         .key = std::move(key),
         .getValue = [&var] { return var; },
         .setValue =
-            [&var, min, max](int value) {
-                var.setValue(std::clamp(value, min, max));
+            [&var, min, max, callback = std::move(onChange)](int value) {
+                const int clampedValue = std::clamp(value, min, max);
+                var.setValue(clampedValue);
                 config::Save();
+                if (callback) {
+                    callback(clampedValue);
+                }
             },
         .isDisabled = std::move(isDisabled),
         .isModified = [&var] { return var.getValue() != var.getDefaultValue(); },
@@ -2343,6 +2196,21 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 pane.add_rml(
                     "<br/>Display the current framerate in a corner of the screen while playing.");
             });
+        config_bool_select(leftPane, rightPane, getSettings().video.rememberWindowSize,
+            {
+                .key = "Remember Window Size",
+                .helpText = "Save and restore the previous session's window size when opening Dusklight.",
+                .onChange =
+                    [](bool value) {
+                        if (value && !dusk::getSettings().video.enableFullscreen) {
+                            const auto windowSize = aurora::window::get_window_size();
+                            dusk::getSettings().video.lastWindowWidth.setValue(windowSize.width);
+                            dusk::getSettings().video.lastWindowHeight.setValue(windowSize.height);
+                            dusk::config::Save();
+                        }
+                    },
+                .isDisabled = [] { return IsMobile; },
+            });
         leftPane.add_section("Resolution");
         graphics_tuner_control(*this, leftPane, rightPane,
             getSettings().game.internalResolutionScale,
@@ -2407,12 +2275,17 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             mPrelaunch);
 
         leftPane.add_section("Rendering");
-        config_bool_select(leftPane, rightPane, getSettings().game.enableTextureReplacements,
-            {
-                .key = "Use Texture Pack",
-                .helpText = "Enable installed texture replacements.",
-                .onChange = [](bool value) { aurora_set_texture_replacements_enabled(value); },
-            });
+        graphics_tuner_control(*this, leftPane, rightPane,
+            getSettings().game.enableTextureReplacements,
+            GraphicsTunerProps{
+                .option = GraphicsOption::TextureReplacements,
+                .title = "Enable Texture Replacements",
+                .helpText = kTextureReplacementHelpText,
+                .valueMin = static_cast<int>(false),
+                .valueMax = static_cast<int>(true),
+                .defaultValue = static_cast<int>(false),
+            },
+            mPrelaunch);
         leftPane.register_control(
             leftPane.add_select_button({
                 .key = "Unlock Framerate",
@@ -2438,6 +2311,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                         .on_pressed([i] {
                             mDoAud_seStartMenu(kSoundItemChange);
                             getSettings().game.enableFrameInterpolation.setValue(static_cast<FrameInterpMode>(i));
+                            android::update_surface_frame_rate();
                             config::Save();
                         });
                 }
@@ -2445,7 +2319,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             });
         config_int_select(leftPane, rightPane, getSettings().video.maxFrameRate,
             "Framerate Cap", "Limit the framerate to the specified value.", 30, 540, 1,
-            [] { return getSettings().game.enableFrameInterpolation.getValue() != FrameInterpMode::Capped; });
+            [] { return getSettings().game.enableFrameInterpolation.getValue() != FrameInterpMode::Capped; },
+            [](int) { android::update_surface_frame_rate(); });
         config_bool_select(leftPane, rightPane, getSettings().game.enableMapBackground,
             {
                 .key = "Enable Mini-Map Shadows",
@@ -2490,126 +2365,63 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
                 .onChange = [](bool value) { aurora_set_background_input(value); },
             });
 
-        leftPane.add_section("Touch Controls");
-        config_bool_select(leftPane, rightPane, getSettings().game.enableTouchControls,
-            {
-                .key = "Touch Controller",
-                .helpText = "Shows an on-screen controller and feeds touch input into player one.",
-            });
-        config_layout_select(leftPane, rightPane, getSettings().game.touchControlsPreset,
-            "Touch Layout",
-            "Choose the initial arrangement used by the on-screen controller.",
-            [](ControllerOverlayLayout layout) { touch_controls::ApplyPreset(layout); },
-            [] { return !getSettings().game.enableTouchControls.getValue(); });
-        config_touch_scale_select(leftPane, rightPane);
-        config_percent_select(leftPane, rightPane, getSettings().game.touchControlsOpacity,
-            "Touch Opacity", "Adjusts the transparency of the on-screen controller.", 20, 100, 5,
-            [] { return !getSettings().game.enableTouchControls.getValue(); });
-        config_bool_select(leftPane, rightPane, getSettings().game.touchControlsEditMode,
-            {
-                .key = "Edit Touch Layout",
-                .helpText = "When enabled, touch controls can be dragged into new positions.",
-            });
-        leftPane.register_control(
-            leftPane.add_button("Reset Touch Layout").on_pressed([] {
-                mDoAud_seStartMenu(kSoundItemChange);
-                touch_controls::ApplyPreset(getSettings().game.touchControlsPreset.getValue());
-            }),
+#if TOUCH_CONTROLS_AVAILABLE
+        leftPane.add_section("Touch");
+        addOption("Touch Controls", getSettings().game.enableTouchControls,
+            "Enables controls overlay for touch screens.<br/><br/>Press and drag on the left side "
+            "of the screen to move, and on the right side of the screen to control the camera.");
+        auto& customizeTouchLayout = leftPane.add_button(ControlledButton::Props{
+            .text = "Customize Layout",
+            .isDisabled = [] { return !getSettings().game.enableTouchControls; },
+        });
+        leftPane.register_control(customizeTouchLayout.on_pressed(
+                                      [this] { push(std::make_unique<TouchControlsEditor>()); }),
             rightPane, [](Pane& pane) {
                 pane.clear();
-                pane.add_text("Restores the selected touch layout preset.");
+                pane.add_text("Open the touch controls layout editor.");
             });
-        leftPane.register_control(
-            leftPane.add_button("Export Touch Controls").on_pressed([] {
-                mDoAud_seStartMenu(kSoundItemChange);
-                export_touch_controls_file();
-            }),
-            rightPane, [](Pane& pane) {
-                pane.clear();
-                pane.add_text(
-                    "Exports touch controller settings and custom positions to a selected JSON file.");
-            });
-        leftPane.register_control(
-            leftPane.add_button("Import Touch Controls").on_pressed([] {
-                mDoAud_seStartMenu(kSoundItemChange);
-                open_touch_controls_import_picker();
-            }),
-            rightPane, [](Pane& pane) {
-                pane.clear();
-                pane.add_text(
-                    "Imports touch controller settings and custom positions from a JSON file.");
-            });
+        config_percent_select(leftPane, rightPane, getSettings().game.touchCameraXSensitivity,
+            "Touch Camera X Sensitivity",
+            "Adjusts touch camera horizontal sensitivity.<br/><br/>Applies to touch input only.",
+            25, 400, 5, [] { return !getSettings().game.enableTouchControls; });
+        config_percent_select(leftPane, rightPane, getSettings().game.touchCameraYSensitivity,
+            "Touch Camera Y Sensitivity",
+            "Adjusts touch camera vertical sensitivity.<br/><br/>Applies to touch input only.", 25,
+            400, 5, [] { return !getSettings().game.enableTouchControls; });
+#endif
 
         leftPane.add_section("Camera");
         addOption("Free Camera", getSettings().game.freeCamera,
-            "Enables twin-stick camera control, letting the C-Stick move the camera vertically as "
-            "well as horizontally.");
+            "Enables free camera control, letting you control the camera fully with the C-Stick.");
+        config_percent_select(leftPane, rightPane, getSettings().game.freeCameraXSensitivity,
+            "Free Camera X Sensitivity",
+            "Adjusts horizontal free camera sensitivity.<br/><br/>Applies to the control stick only.",
+            50, 200, 5, [] { return !getSettings().game.freeCamera; });
+        config_percent_select(leftPane, rightPane, getSettings().game.freeCameraYSensitivity,
+            "Free Camera Y Sensitivity",
+            "Adjusts vertical free camera sensitivity.<br/><br/>Applies to the control stick only.",
+            50, 200, 5, [] { return !getSettings().game.freeCamera; });
         addOption("Invert Camera X Axis", getSettings().game.invertCameraXAxis,
-            "Invert horizontal camera movement.");
+            "Invert horizontal camera movement.<br/><br/>Applies to the control stick only.");
         addOption("Invert Camera Y Axis", getSettings().game.invertCameraYAxis,
-            "Invert vertical camera movement when Free Camera is enabled.",
-            [] { return !getSettings().game.freeCamera; });
-        config_percent_select(leftPane, rightPane, getSettings().game.freeCameraSensitivity,
-            "Free Camera Sensitivity", "Adjusts twin-stick camera sensitivity.", 50, 200, 5,
+            "Invert vertical camera movement.<br/><br/>Applies to the control stick only.",
             [] { return !getSettings().game.freeCamera; });
         addOption("Invert First Person X Axis", getSettings().game.invertFirstPersonXAxis,
-            "Invert horizontal movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).");
+            "Invert horizontal movement while aiming with items or first person camera.<br/><br/>Applies to the control stick only.");
         addOption("Invert First Person Y Axis", getSettings().game.invertFirstPersonYAxis,
-            "Invert vertical movement while aiming with items or first person camera. Applies only to the control stick (the gyroscope can be inverted in Input settings).");
+            "Invert vertical movement while aiming with items or first person camera.<br/><br/>Applies to the control stick only.");
         addOption("Aim Movement", getSettings().game.enableAimMovement,
-            "Allows movement while aiming supported items. Supported items include the Slingshot, "
-            "Hero's Bow, Gale Boomerang, Clawshot(s), and Ball and Chain.");
+            "Allows movement while aiming supported items.<br/><br/>Supported items include the "
+            "Slingshot, Gale Boomerang, Hero's Bow, Clawshot(s), Ball and Chain, and Dominion Rod.");
         config_aim_mode_select(leftPane, rightPane);
-        addOption("Invert Air/Swim X Axis", getSettings().game.invertAirSwimX,
-            "Invert horizontal movement while flying or swimming.");
-        addOption("Invert Air/Swim Y Axis", getSettings().game.invertAirSwimY,
-            "Invert vertical movement while flying or swimming.");
 
         leftPane.add_section("Gyro");
-        leftPane.register_control(
-            leftPane.add_select_button({
-                .key = "Gyro Input Method",
-                .getValue =
-                    [] {
-                        const auto mode = getSettings().game.gyroMode.getValue();
-                        const auto idx = static_cast<size_t>(mode);
-                        return Rml::String{kGyroInputModeLabels[idx]};
-                    },
-                .isModified =
-                    [] {
-                        return getSettings().game.gyroMode.getValue() !=
-                               getSettings().game.gyroMode.getDefaultValue();
-                    },
-            }),
-            rightPane, [](Pane& pane) {
-                for (size_t i = 0; i < kGyroInputModeLabels.size(); i++) {
-                    pane
-                        .add_button({
-                            .text = Rml::String{kGyroInputModeLabels[i]},
-                            .isSelected =
-                                [i] {
-                                    return getSettings().game.gyroMode.getValue() == static_cast<GyroMode>(i);
-                                },
-                        })
-                        .on_pressed([i] {
-                            mDoAud_seStartMenu(kSoundItemChange);
-                            const GyroMode mode = static_cast<GyroMode>(i);
-                            getSettings().game.gyroMode.setValue(mode);
-                            config::Save();
-                        });
-                }
-                pane.add_rml(
-                    "<br/><b>Sensor</b> reads motion directly from a supported controller's gyro via SDL.<br/>"
-                    "<br/><b>Mouse</b> treats mouse input as gyro, intended for use with the Steam Deck.<br/>"
-                    "<br/>Mouse input cannot currently be used with Gyro Rollgoal.");
-            });
         addOption("Gyro Aim", getSettings().game.enableGyroAim,
             "Enables gyro controls while in look mode, aiming a hawk, and aiming "
             "supported items.<br/><br/>Supported items include the Slingshot, Gale Boomerang, "
             "Hero's Bow, Clawshot(s), Ball and Chain, and Dominion Rod.");
         addOption("Gyro Rollgoal", getSettings().game.enableGyroRollgoal,
-            "Enables gyro controls for Rollgoal in Hena's Cabin.",
-            [] { return getSettings().game.gyroMode.getValue() == GyroMode::Mouse; });
+            "Enables gyro controls for Rollgoal in Hena's Cabin.");
         config_percent_select(leftPane, rightPane, getSettings().game.gyroSensitivityY,
             "Gyro Pitch Sensitivity", "Controls vertical gyro aiming sensitivity.", 25, 400, 5,
             [] { return !gyro_enabled(); });
@@ -2619,10 +2431,7 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         config_percent_select(leftPane, rightPane, getSettings().game.gyroSensitivityRollgoal,
             "Rollgoal Sensitivity", "Controls how strongly gyro input tilts the Rollgoal table.",
             25, 400, 5,
-            [] {
-                return !getSettings().game.enableGyroRollgoal ||
-                       getSettings().game.gyroMode.getValue() == GyroMode::Mouse;
-            });
+            [] { return !getSettings().game.enableGyroRollgoal; });
         config_percent_select(leftPane, rightPane, getSettings().game.gyroDeadband, "Gyro Deadband",
             "Ignores small gyro movement to reduce drift and jitter.", 0, 50, 1,
             [] { return !gyro_enabled(); });
@@ -2633,6 +2442,33 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Invert vertical gyro aiming.", [] { return !gyro_enabled(); });
         addOption("Invert Gyro Yaw", getSettings().game.gyroInvertYaw,
             "Invert horizontal gyro aiming.", [] { return !gyro_enabled(); });
+
+        leftPane.add_section("Mouse");
+        addOption("Mouse Aim", getSettings().game.enableMouseAim,
+            "Enables mouse input while in look mode, aiming a hawk, and aiming "
+            "supported items.<br/><br/>Supported items include the Slingshot, Gale Boomerang, "
+            "Hero's Bow, Clawshot(s), Ball and Chain, and Dominion Rod.");
+        addOption("Mouse Camera", getSettings().game.enableMouseCamera,
+            "Enables mouse input for controlling the third-person camera.");
+        config_percent_select(leftPane, rightPane, getSettings().game.mouseAimSensitivity,
+            "Mouse Aim Sensitivity", "Controls mouse aim sensitivity.", 25, 400, 5,
+            [] { return !getSettings().game.enableMouseAim; });
+        config_percent_select(leftPane, rightPane, getSettings().game.mouseCameraSensitivity,
+            "Mouse Camera Sensitivity", "Controls mouse camera sensitivity.", 25, 400, 5,
+            [] { return !getSettings().game.enableMouseCamera; });
+        addOption("Invert Mouse Y", getSettings().game.invertMouseY,
+            "Invert vertical mouse control for both aiming and camera.",
+            [] { return !getSettings().game.enableMouseAim || !getSettings().game.enableMouseCamera; });
+
+        leftPane.add_section("Gameplay");
+        addOption("Mouse/Touch in Menus", getSettings().game.enableMenuPointer,
+            "Enables mouse and touch input for supported in-game menus.");
+        addOption("Invert Air/Swim X Axis", getSettings().game.invertAirSwimX,
+            "Invert horizontal movement while flying or swimming.");
+        addOption("Invert Air/Swim Y Axis", getSettings().game.invertAirSwimY,
+            "Invert vertical movement while flying or swimming.");
+        addOption("Swap Direct Select Input", getSettings().game.swapDirectSelect,
+            "Swap the controls for using Direct Select on the item wheel, making Direct Select the default and holding L to scroll the wheel.");
 
         leftPane.add_section("Tools");
         addOption("Turbo Key", getSettings().game.enableTurboKeybind,
@@ -2728,6 +2564,11 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         addOption("Minimal HUD", getSettings().game.minimalHUD,
             "Disables the elements of the main HUD of the game.<br/>Useful for a more immersive "
             "experience.");
+        config_percent_select(leftPane, rightPane, getSettings().game.hudScale,
+            "HUD Scale",
+            "Scales the size of the gameplay HUD (hearts, buttons, mini-map, etc.). Does not affect dialog boxes or menus.",
+            50, 200, 5,
+            [] { return getSettings().game.minimalHUD.getValue(); });
         addOption("Restore Wii 1.0 Glitches", getSettings().game.restoreWiiGlitches,
             "Restores patched glitches from Wii USA 1.0, the first released version.");
         addOption("Enable Rotating Link Doll", getSettings().game.enableLinkDollRotation,
@@ -2825,6 +2666,8 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
         config_lock_on_type_select(leftPane, rightPane);
         addOption("No 2nd Fish for Cat", getSettings().game.no2ndFishForCat,
             "Skip needing to catch a second fish for Sera's cat.");
+        addOption("Button Fishing", getSettings().game.buttonFishing,
+            "Allow fishing with the Fishing Rod using the button the item is assigned to.");
         addOption("Show Poe Count on Map", getSettings().game.enhancedMapMenus,
             "Displays collected/total number of Poe Souls for a region on the map.");
         addSpeedrunDisabledOption("Sun's Song (R+X)", getSettings().game.sunsSong,
@@ -2917,8 +2760,38 @@ SettingsWindow::SettingsWindow(bool prelaunch) : mPrelaunch(prelaunch) {
             "Makes Link's roll animation and movement twice as fast.");
         addCheat("Fast Spinner", getSettings().game.fastSpinner,
             "Speeds up Spinner movement while holding R.");
-        addCheat("Free Magic Armor", getSettings().game.freeMagicArmor,
-            "Lets the magic armor work without consuming rupees.");
+        leftPane.register_control(
+            leftPane.add_select_button({
+                .key = "Magic Armor Behavior",
+                .getValue =
+                    [] {
+                        return kMagicArmorModes[static_cast<u8>(getSettings().game.armorRupeeDrain.getValue())];
+                    },
+                .isDisabled = [] { return getSettings().game.speedrunMode; },
+                .isModified =
+                    [] {
+                        return getSettings().game.armorRupeeDrain.getValue() !=
+                               getSettings().game.armorRupeeDrain.getDefaultValue();
+                    },
+            }),
+            rightPane, [](Pane& pane) {
+                for (int i = 0; i < kMagicArmorModes.size(); i++) {
+                    pane.add_button({
+                            .text = kMagicArmorModes[i],
+                            .isSelected =
+                                [i] {
+                                    return getSettings().game.armorRupeeDrain.getValue() == static_cast<MagicArmorMode>(i);
+                                },
+                        })
+                        .on_pressed([i] {
+                            mDoAud_seStartMenu(kSoundItemChange);
+                            getSettings().game.armorRupeeDrain.setValue(static_cast<MagicArmorMode>(i));
+                            config::Save();
+                        });
+                }
+                pane.add_rml(
+                    "<br/>Control the behavior of the Magic Armor.");
+            });
         addCheat("Invincible Enemies", getSettings().game.invincibleEnemies,
             "Prevents enemies from taking damage.");
     });

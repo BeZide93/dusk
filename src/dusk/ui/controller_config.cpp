@@ -19,6 +19,7 @@
 
 #include "dusk/action_bindings.h"
 #include "dusk/config.hpp"
+#include "dusk/gamepad_color.h"
 
 namespace dusk::ui {
 namespace {
@@ -127,25 +128,6 @@ Rml::String native_axis_name(const PADAxisMapping& mapping, SDL_Gamepad* gamepad
     }
 
     return "Not Bound";
-}
-
-bool is_digital_trigger_button(PADButton button) {
-    return button == PAD_TRIGGER_L || button == PAD_TRIGGER_R || button == PAD_TRIGGER_Z;
-}
-
-u32 native_button_for_trigger_axis(PADSignedNativeAxis axis) {
-    if (axis.sign != AXIS_SIGN_POSITIVE) {
-        return PAD_NATIVE_BUTTON_INVALID;
-    }
-
-    switch (axis.nativeAxis) {
-    case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
-        return PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER;
-    case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER:
-        return PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER;
-    default:
-        return PAD_NATIVE_BUTTON_INVALID;
-    }
 }
 
 bool is_dpad_button(PADButton button) {
@@ -318,7 +300,9 @@ ControllerConfigWindow::ControllerConfigWindow(bool prelaunch) {
                 event.StopPropagation();
             }
         },
-        true);
+        true
+    );
+
     if (auto* context = mDocument != nullptr ? mDocument->GetContext() : nullptr) {
         if (auto* root = context->GetRootElement()) {
             mListeners.emplace_back(std::make_unique<ScopedEventListener>(
@@ -376,6 +360,28 @@ void ControllerConfigWindow::build_port_tab(Rml::Element* content, int port) {
     addPageButton(Page::Actions, "Custom Action Bindings", [] {return Rml::String(">"); }, [] { return false; });
 
     leftPane.add_section("Options");
+    leftPane.register_control(leftPane.add_child<BoolButton>(BoolButton::Props{
+                                  .key = "Enable LED Status",
+                                  .getValue =
+                                      [port] {
+                                          return getSettings().game.enableLED[port].getValue();
+                                      },
+                                  .setValue =
+                                      [port](const bool value) {
+                                          getSettings().game.enableLED[port].setValue(value);
+                                      },
+                                  .isDisabled = [port] {
+                                      return !input::pad_has_led(port);
+                                  },
+                                  .valueOverride = [port] {
+                                      if (!input::pad_has_led(port))
+                                          return "Not Supported";
+
+                                      return "";
+                                  }}),
+        rightPane, [](Pane& pane) {
+            pane.add_text("Sets the controller's lighting color based on the game's state.");
+        });
     leftPane.register_control(leftPane.add_child<BoolButton>(BoolButton::Props{
                                   .key = "Enable Dead Zones",
                                   .getValue =
@@ -445,6 +451,7 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
                 PADSetKeyboardActive(static_cast<u32>(port), FALSE);
                 PADSerializeMappings();
                 ClearAllActionBindings(port);
+                refresh_controller_page();
             });
 
         pane.add_button({
@@ -907,6 +914,20 @@ void ControllerConfigWindow::render_page(Pane& pane, int port, Page page) {
         break;
     }
     case Page::Rumble: {
+        if (PADCanForceDeviceRumble(static_cast<u32>(port))) {
+            pane.add_child<BoolButton>(BoolButton::Props{
+                .key = "Use Device Haptics",
+                .getValue = [port] { return PADGetForceDeviceRumble(static_cast<u32>(port)); },
+                .setValue =
+                    [port](bool value) {
+                        PADSetForceDeviceRumble(static_cast<u32>(port), value ? TRUE : FALSE);
+                        PADSerializeMappings();
+                    },
+                .isDisabled = [this] { return mRumbleTestActive; },
+            });
+            pane.add_text("Use native device haptics instead of controller rumble. "
+                          "Useful for devices with built-in gamepads.");
+        }
         auto& rumbleTest = pane.add_select_button({
             .key = "Test Rumble",
             .getValue =
@@ -1117,15 +1138,6 @@ void ControllerConfigWindow::poll_pending_binding() {
             return;
         }
 
-        if (is_digital_trigger_button(mPendingButtonMapping->padButton)) {
-            const u32 nativeAxisButton =
-                native_button_for_trigger_axis(PADGetNativeAxisPulled(mPendingPort));
-            if (nativeAxisButton != PAD_NATIVE_BUTTON_INVALID) {
-                const int completedPort = mPendingPort;
-                mPendingButtonMapping->nativeButton = nativeAxisButton;
-                finish_pending_binding(completedPort);
-            }
-        }
         return;
     }
 
@@ -1279,15 +1291,6 @@ void ControllerConfigWindow::stop_rumble_test() {
 Rml::String native_button_name(SDL_Gamepad* gamepad, u32 buttonUntyped) {
     if (buttonUntyped == PAD_NATIVE_BUTTON_INVALID) {
         return "Not Bound";
-    }
-
-    if (buttonUntyped == PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER ||
-        buttonUntyped == PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER)
-    {
-        if (const char* name = PADGetNativeButtonName(buttonUntyped)) {
-            return name;
-        }
-        return "Unknown";
     }
 
     auto button = static_cast<SDL_GamepadButton>(buttonUntyped);

@@ -33,6 +33,9 @@
 #include "dusk/settings.h"
 #include "dusk/logging.h"
 #include "dusk/action_bindings.h"
+#include "dusk/mouse.h"
+#include "dusk/settings.h"
+#include "dusk/touch_camera.h"
 #include "imgui.h"
 #endif
 
@@ -7521,6 +7524,15 @@ static constexpr s16 FLYCAM_ROLL_SPEED = 256;
 static ImVec2 sFlyCamLastMousePos = {-1.f, -1.f};
 
 #if TARGET_PC
+static constexpr f32 TOUCH_CAMERA_CSTICK_EXIT_THRESHOLD = 0.05f;
+static bool sTouchFreeCameraActive = false;
+
+bool dCamera_c::isAimActive() {
+    auto* link = daAlink_getAlinkActorClass();
+    return link != nullptr && link->checkAimInputContext() &&
+           dComIfGp_checkCameraAttentionStatus(link->field_0x317c, 0x10);
+}
+
 bool dCamera_c::executeDebugFlyCam() {
     if (!dusk::getSettings().game.debugFlyCam) {
         if (mDebugFlyCam.initialized) {
@@ -7663,11 +7675,29 @@ void dCamera_c::deactivateDebugFlyCam() {
 }
 
 bool dCamera_c::freeCamera() {
-    if (dusk::getSettings().game.freeCamera && mGear == 1) {
+    f32 touchYawDp = 0.0f;
+    f32 touchPitchDp = 0.0f;
+    bool touchCameraMoved = false;
+    const bool touchControlsEnabled = dusk::getSettings().game.enableTouchControls;
+    if (touchControlsEnabled && !isAimActive()) {
+        touchCameraMoved = dusk::touch_camera::consume_delta(touchYawDp, touchPitchDp);
+    }
+    if (!touchControlsEnabled ||
+        mPadInfo.mCStick.mLastValue > TOUCH_CAMERA_CSTICK_EXIT_THRESHOLD)
+    {
+        sTouchFreeCameraActive = false;
+    }
+    if (touchCameraMoved) {
+        sTouchFreeCameraActive = true;
+    }
+
+    const bool useFreeCamera = dusk::getSettings().game.freeCamera ||
+                               dusk::getSettings().game.enableMouseCamera || sTouchFreeCameraActive;
+    if (useFreeCamera && mGear == 1) {
         mGear = 0;
     }
 
-    if (!dusk::getSettings().game.freeCamera || mCamStyle == 70)
+    if (!useFreeCamera || mCamStyle == 70)
     {
         mCamParam.mManualMode = 0;
         return false;
@@ -7676,6 +7706,17 @@ bool dCamera_c::freeCamera() {
     if (!mCamParam.mManualMode) {
         mCamParam.freeXAngle = mViewCache.mDirection.mAzimuth.Degree();
         mCamParam.freeYAngle = mViewCache.mDirection.mInclination.Degree();
+    }
+
+    if (touchCameraMoved) {
+        mCamParam.mManualMode = 1;
+        const f32 yawInput = dusk::getSettings().game.invertCameraXAxis ? -touchYawDp : touchYawDp;
+        const f32 pitchInput =
+            touchPitchDp * (dusk::getSettings().game.invertCameraYAxis ? -1.0f : 1.0f);
+        mCamParam.freeXAngle += yawInput * dusk::getSettings().game.touchCameraXSensitivity *
+                                dusk::touch_camera::YAW_DEGREES_PER_DP;
+        mCamParam.freeYAngle += pitchInput * dusk::getSettings().game.touchCameraYSensitivity *
+                                dusk::touch_camera::PITCH_DEGREES_PER_DP;
     }
 
     cXyz camMovement = {mPadInfo.mCStick.mLastPosX, mPadInfo.mCStick.mLastPosY, 0.0f};
@@ -7689,8 +7730,19 @@ bool dCamera_c::freeCamera() {
         mCamParam.mManualMode = 1;
         camMovement = camMovement.normalize();
         camMovement.y *= dusk::getSettings().game.invertCameraYAxis ? 1.0f : -1.0f;
-        mCamParam.freeXAngle += camMovement.x * magnitude * dusk::getSettings().game.freeCameraSensitivity * 5.0f;
-        mCamParam.freeYAngle += camMovement.y * magnitude * dusk::getSettings().game.freeCameraSensitivity * 5.0f;
+        mCamParam.freeXAngle += camMovement.x * magnitude * dusk::getSettings().game.freeCameraXSensitivity * 5.0f;
+        mCamParam.freeYAngle += camMovement.y * magnitude * dusk::getSettings().game.freeCameraYSensitivity * 5.0f;
+    }
+
+    f32 yaw_rad = 0.0f;
+    f32 pitch_rad = 0.0f;
+    dusk::mouse::getCameraDeltas(yaw_rad, pitch_rad);
+    if (dusk::getSettings().game.enableMouseCamera && (yaw_rad != 0.0f || pitch_rad != 0.0f) &&
+        !dComIfGp_checkCameraAttentionStatus(dComIfGp_getPlayerCameraID(0), 0x8))
+    {
+        mCamParam.mManualMode = 1;
+        mCamParam.freeXAngle += MTXRadToDeg(yaw_rad);
+        mCamParam.freeYAngle += -MTXRadToDeg(pitch_rad);
     }
 
     fopAc_ac_c* player = dComIfGp_getPlayer(0);
@@ -9374,6 +9426,10 @@ bool dCamera_c::rideCamera(s32 param_0) {
             mStyleSettle.mFinished = true;
         }
 
+#if TARGET_PC
+        freeCamera();
+#endif
+
         return true;
     }
 
@@ -9502,6 +9558,10 @@ bool dCamera_c::rideCamera(s32 param_0) {
         mViewCache.mBank += (cSAngle::_0 - mViewCache.mBank) * 0.05f;
         setFlag(0x400);
     }
+
+#if TARGET_PC
+    freeCamera();
+#endif
 
     return true;
 }
@@ -10257,7 +10317,7 @@ bool dCamera_c::eventCamera(s32 param_0) {
     int var_r29 = -1;
 
     typedef bool (dCamera_c::*func)();
-    func l_func[] = {
+    DUSK_CONSTEXPR func l_func[] = {
         &dCamera_c::pauseEvCamera,
         &dCamera_c::pauseEvCamera,
         &dCamera_c::talktoEvCamera,
@@ -10294,7 +10354,7 @@ bool dCamera_c::eventCamera(s32 param_0) {
         &dCamera_c::maptoolIdEvCamera,
     };
 
-    static char* ActionNames[34] = {
+    static DUSK_CONSTEXPR char DUSK_CONST* ActionNames[34] = {
         "PAUSE",
         "WAIT",
         "TALK",
@@ -11651,7 +11711,7 @@ static leafdraw_method_class method = {
     (process_method_func)camera_draw,
 };
 
-camera_process_profile_definition g_profile_CAMERA = {
+DUSK_PROFILE camera_process_profile_definition DUSK_CONST g_profile_CAMERA = {
     /* Layer ID           */ fpcLy_CURRENT_e,
     /* List ID            */ 11,
     /* List Prio          */ fpcPi_CURRENT_e,
@@ -11672,7 +11732,7 @@ camera_process_profile_definition g_profile_CAMERA = {
                              0,
 };
 
-camera_process_profile_definition g_profile_CAMERA2 = {
+DUSK_PROFILE camera_process_profile_definition DUSK_CONST g_profile_CAMERA2 = {
     /* Layer ID           */ fpcLy_CURRENT_e,
     /* List ID            */ 11,
     /* List Prio          */ fpcPi_CURRENT_e,
