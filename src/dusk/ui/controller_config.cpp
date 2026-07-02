@@ -130,6 +130,25 @@ Rml::String native_axis_name(const PADAxisMapping& mapping, SDL_Gamepad* gamepad
     return "Not Bound";
 }
 
+bool is_digital_trigger_button(PADButton button) {
+    return button == PAD_TRIGGER_L || button == PAD_TRIGGER_R || button == PAD_TRIGGER_Z;
+}
+
+u32 native_button_for_trigger_axis(PADSignedNativeAxis axis) {
+    if (axis.sign != AXIS_SIGN_POSITIVE) {
+        return PAD_NATIVE_BUTTON_INVALID;
+    }
+
+    switch (axis.nativeAxis) {
+    case SDL_GAMEPAD_AXIS_LEFT_TRIGGER:
+        return PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER;
+    case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER:
+        return PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER;
+    default:
+        return PAD_NATIVE_BUTTON_INVALID;
+    }
+}
+
 bool is_dpad_button(PADButton button) {
     return button == PAD_BUTTON_UP || button == PAD_BUTTON_DOWN || button == PAD_BUTTON_LEFT ||
            button == PAD_BUTTON_RIGHT;
@@ -1138,6 +1157,15 @@ void ControllerConfigWindow::poll_pending_binding() {
             return;
         }
 
+        if (is_digital_trigger_button(mPendingButtonMapping->padButton)) {
+            const u32 nativeAxisButton =
+                native_button_for_trigger_axis(PADGetNativeAxisPulled(mPendingPort));
+            if (nativeAxisButton != PAD_NATIVE_BUTTON_INVALID) {
+                const int completedPort = mPendingPort;
+                mPendingButtonMapping->nativeButton = nativeAxisButton;
+                finish_pending_binding(completedPort);
+            }
+        }
         return;
     }
 
@@ -1291,6 +1319,15 @@ void ControllerConfigWindow::stop_rumble_test() {
 Rml::String native_button_name(SDL_Gamepad* gamepad, u32 buttonUntyped) {
     if (buttonUntyped == PAD_NATIVE_BUTTON_INVALID) {
         return "Not Bound";
+    }
+
+    if (buttonUntyped == PAD_NATIVE_BUTTON_AXIS_LEFT_TRIGGER ||
+        buttonUntyped == PAD_NATIVE_BUTTON_AXIS_RIGHT_TRIGGER)
+    {
+        if (const char* name = PADGetNativeButtonName(buttonUntyped)) {
+            return name;
+        }
+        return "Unknown";
     }
 
     auto button = static_cast<SDL_GamepadButton>(buttonUntyped);
