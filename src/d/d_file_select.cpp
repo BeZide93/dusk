@@ -1904,63 +1904,119 @@ void dFile_select_c::applySkipIntroPreset() {
     }
 
     static const u16 introEventBits[] = {
-        dSv_event_flag_c::F_0012,
+        dSv_event_flag_c::D_0001,
+        dSv_event_flag_c::F_0008,
+        dSv_event_flag_c::F_0010,
+        dSv_event_flag_c::F_0014,
+        dSv_event_flag_c::F_0015,
+        dSv_event_flag_c::F_0019,
+        dSv_event_flag_c::F_0023,
+        dSv_event_flag_c::F_0024,
+        dSv_event_flag_c::F_0025,
         dSv_event_flag_c::F_0026,
+        dSv_event_flag_c::F_0027,
+        dSv_event_flag_c::F_0032,
+        dSv_event_flag_c::F_0036,
+        dSv_event_flag_c::F_0037,
+        dSv_event_flag_c::F_0038,
+        dSv_event_flag_c::F_0044,
+        dSv_event_flag_c::F_0046,
+        dSv_event_flag_c::F_0051,
         dSv_event_flag_c::F_0053,
         dSv_event_flag_c::F_0055,
-        dSv_event_flag_c::F_0059,
+        dSv_event_flag_c::F_0067,
+        dSv_event_flag_c::F_0069,
+        dSv_event_flag_c::F_0072,
+        dSv_event_flag_c::F_0085,
         dSv_event_flag_c::F_0094,
-        dSv_event_flag_c::F_0204,
         dSv_event_flag_c::F_0205,
-        dSv_event_flag_c::F_0206,
+        dSv_event_flag_c::F_0207,
+        dSv_event_flag_c::F_0208,
         dSv_event_flag_c::F_0211,
-        dSv_event_flag_c::F_0212,
-        dSv_event_flag_c::F_0222,
+        dSv_event_flag_c::F_0215,
+        dSv_event_flag_c::F_0220,
         dSv_event_flag_c::F_0223,
-        dSv_event_flag_c::F_0363,
+        dSv_event_flag_c::F_0345,
         dSv_event_flag_c::F_0364,
-        dSv_event_flag_c::F_0537,
-        dSv_event_flag_c::F_0540,
         dSv_event_flag_c::F_0550,
         dSv_event_flag_c::F_0565,
-        dSv_event_flag_c::F_0574,
-        dSv_event_flag_c::F_0575,
+        dSv_event_flag_c::F_0573,
+        dSv_event_flag_c::F_0577,
+        dSv_event_flag_c::F_0580,
+        dSv_event_flag_c::F_0581,
+        dSv_event_flag_c::F_0582,
+        dSv_event_flag_c::F_0583,
+        dSv_event_flag_c::F_0585,
         dSv_event_flag_c::F_0600,
-        dSv_event_flag_c::F_0601,
+        dSv_event_flag_c::F_0608,
+        dSv_event_flag_c::F_0611,
         dSv_event_flag_c::F_0614,
         dSv_event_flag_c::F_0625,
         dSv_event_flag_c::F_0630,
+        dSv_event_flag_c::F_0651,
         dSv_event_flag_c::F_0700,
         dSv_event_flag_c::F_0701,
         dSv_event_flag_c::F_0702,
+        dSv_event_flag_c::F_0748,
+        dSv_event_flag_c::M_001,
+        dSv_event_flag_c::M_002,
+        dSv_event_flag_c::M_008,
+        dSv_event_flag_c::M_009,
+        dSv_event_flag_c::M_010,
         dSv_event_flag_c::M_011,
         dSv_event_flag_c::M_012,
         dSv_event_flag_c::M_013,
         dSv_event_flag_c::M_014,
         dSv_event_flag_c::M_015,
         dSv_event_flag_c::M_016,
+        dSv_event_flag_c::M_017,
         dSv_event_flag_c::M_019,
-        dSv_event_flag_c::M_020,
-        dSv_event_flag_c::M_021,
         dSv_event_flag_c::M_067,
         dSv_event_flag_c::M_068,
         dSv_event_flag_c::M_072,
+        dSv_event_flag_c::M_079,
         dSv_event_flag_c::M_095,
+    };
+
+    static const u8 ordonSwitches[] = {
+        1, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 17, 19, 20, 23, 24, 25, 26, 27, 28, 32,
+        33, 34, 35, 37, 41, 42, 43, 45, 47, 64, 66, 67, 68, 73, 84, 88, 95, 101, 103,
+        104, 119,
+    };
+    static const u8 prisonSwitches[] = {
+        0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 32, 33, 34, 35, 36, 37,
+    };
+    static const u8 faronSwitches[] = {
+        2, 3, 5, 6, 8, 9, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 30, 33, 34, 35, 36, 37,
+        38, 39, 40, 41, 42, 43, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58,
+        59, 60, 62, 64, 67, 70, 71, 73, 75, 76, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88,
+        89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 100, 101, 102, 103, 104, 105, 106, 107,
+        108, 109, 110, 111,
     };
 
     for (int i = 0; i < (int)(sizeof(introEventBits) / sizeof(introEventBits[0])); i++) {
         dComIfGs_onEventBit(introEventBits[i]);
     }
 
+    for (int i = 0; i < (int)(sizeof(ordonSwitches) / sizeof(ordonSwitches[0])); i++) {
+        save->getSave(dStage_SaveTbl_ORDON).getBit().onSwitch(ordonSwitches[i]);
+    }
+    for (int i = 0; i < (int)(sizeof(prisonSwitches) / sizeof(prisonSwitches[0])); i++) {
+        save->getSave(dStage_SaveTbl_PRISON).getBit().onSwitch(prisonSwitches[i]);
+    }
+    for (int i = 0; i < (int)(sizeof(faronSwitches) / sizeof(faronSwitches[0])); i++) {
+        save->getSave(dStage_SaveTbl_FARON).getBit().onSwitch(faronSwitches[i]);
+    }
+
     dComIfGs_onTransformLV(0);
     dComIfGs_onDarkClearLV(0);
-    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 71);
-    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 2);
     dComIfGs_offSaveSwitch(dStage_SaveTbl_FARON, 12);
-    dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 20);
     dComIfGs_setTransformStatus(TF_STATUS_HUMAN);
     dComIfGs_setLightDropNum(FARON_VESSEL, 16);
     dComIfGs_onLightDropGetFlag(FARON_VESSEL);
+
+    cXyz horsePos(-2030.36511f, 242.41f, -9671.569f);
+    save->getPlayer().getHorsePlace().set("F_SP104", horsePos, 0, 1);
 
     dComIfGs_onItemFirstBit(dItemNo_WEAR_KOKIRI_e);
     dComIfGs_setCollectClothes(KOKIRI_CLOTHES_FLAG);
@@ -1971,17 +2027,20 @@ void dFile_select_c::applySkipIntroPreset() {
     }
 
     dComIfGs_onItemFirstBit(dItemNo_SWORD_e);
+    dComIfGs_setCollectSword(COLLECT_ORDON_SWORD);
+    dComIfGs_setCollectSword(COLLECT_WOODEN_SWORD);
     if (!dComIfGs_isItemFirstBit(dItemNo_MASTER_SWORD_e) &&
         dComIfGs_getSelectEquipSword() == dItemNo_NONE_e)
     {
         dComIfGs_setSelectEquipSword(dItemNo_SWORD_e);
     }
 
-    dComIfGs_onItemFirstBit(dItemNo_SHIELD_e);
+    dComIfGs_onItemFirstBit(dItemNo_WOOD_SHIELD_e);
+    dComIfGs_setCollectShield(COLLECT_WOODEN_SHIELD);
     if (!dComIfGs_isItemFirstBit(dItemNo_HYLIA_SHIELD_e) &&
         dComIfGs_getSelectEquipShield() == dItemNo_NONE_e)
     {
-        dComIfGs_setSelectEquipShield(dItemNo_SHIELD_e);
+        dComIfGs_setSelectEquipShield(dItemNo_WOOD_SHIELD_e);
     }
 
     ensureIntroSkipItem(SLOT_1, dItemNo_KANTERA_e);
@@ -2005,15 +2064,16 @@ void dFile_select_c::applySkipIntroPreset() {
     setIntroSkipSelectItemIfEmpty(SELECT_ITEM_X, SLOT_1);
     setIntroSkipSelectItemIfEmpty(SELECT_ITEM_Y, SLOT_23);
 
-    if (dComIfGs_getBButtonItemKey() == dItemNo_NONE_e) {
-        dComIfGs_setBButtonItemKey(dItemNo_SWORD_e);
+    if (dComIfGs_getMaxLife() < 16) {
+        dComIfGs_setMaxLife(16);
+        dComIfGs_setLife(16);
     }
 
     if (dComIfGs_getRupee() < 100) {
         dComIfGs_setRupee(100);
     }
 
-    save->getPlayer().getPlayerReturnPlace().set("F_SP108", 1, 0);
+    save->getPlayer().getPlayerReturnPlace().set("F_SP108", 0, 0);
     save->getReserve().setIntroSkipped(true);
     dComIfGs_setLineUpItem();
     mSkipIntroPending = false;

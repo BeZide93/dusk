@@ -1462,6 +1462,12 @@ int item_getcheck_func_HOOKSHOT() {
 }
 
 int item_getcheck_func_HVY_BOOTS() {
+    if (dComIfGs_getSaveData()->getReserve().isNewGamePlus() &&
+        !dComIfGs_isEventBit(dSv_event_flag_c::F_0232))
+    {
+        return FALSE;
+    }
+
     return dComIfGs_getItem(SLOT_3, true) == dItemNo_HVY_BOOTS_e ? TRUE : FALSE;
 }
 
