@@ -157,7 +157,7 @@ void ensure_story_state() {
 void clear_boss_flags(const BossRushEntry& entry) {
     dComIfGs_getSaveData()->getSave(entry.saveTable).getBit().init();
 
-    if (is_current_save_table(entry.saveTable)) {
+    if (is_current_stage(entry)) {
         for (int i = 0; i < dSv_info_c::MEMORY_SWITCH + dSv_info_c::DAN_SWITCH; i++) {
             dComIfGs_offSwitch(i, entry.room);
         }
@@ -381,7 +381,6 @@ bool advance_to_next_entry() {
     }
 
     reserve().setBossRushIndex(index);
-    clear_boss_flags(current_entry());
     set_return_place_hub();
     return true;
 }
