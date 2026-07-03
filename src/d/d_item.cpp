@@ -757,15 +757,21 @@ void item_func_DUNGEON_EXIT_2() {
 }
 
 void item_func_WALLET_LV1() {
-    dComIfGs_setWalletSize(WALLET);
+    if (dComIfGs_getWalletSize() < WALLET) {
+        dComIfGs_setWalletSize(WALLET);
+    }
 }
 
 void item_func_WALLET_LV2() {
-    dComIfGs_setWalletSize(BIG_WALLET);
+    if (dComIfGs_getWalletSize() < BIG_WALLET) {
+        dComIfGs_setWalletSize(BIG_WALLET);
+    }
 }
 
 void item_func_WALLET_LV3() {
-    dComIfGs_setWalletSize(GIANT_WALLET);
+    if (dComIfGs_getWalletSize() < GIANT_WALLET) {
+        dComIfGs_setWalletSize(GIANT_WALLET);
+    }
 }
 
 void item_func_ZORAS_JEWEL() {
@@ -782,7 +788,11 @@ void item_func_HAWK_EYE() {
 
 void item_func_WOOD_STICK() {
     dComIfGs_setCollectSword(COLLECT_WOODEN_SWORD);
-    dComIfGs_setSelectEquipSword(dItemNo_WOOD_STICK_e);
+    if (!dComIfGs_getSaveData()->getReserve().isNewGamePlus() ||
+        !dComIfGs_isItemFirstBit(dItemNo_MASTER_SWORD_e))
+    {
+        dComIfGs_setSelectEquipSword(dItemNo_WOOD_STICK_e);
+    }
 
     dComIfGs_onSwitch(28, dComIfGp_roomControl_getStayNo());
 }
@@ -862,18 +872,30 @@ void item_func_LIGHT_ARROW() {
 }
 
 void item_func_ARROW_LV1() {
-    dComIfGs_setArrowNum(60);
-    dComIfGs_setArrowMax(60);
+    if (dComIfGs_getArrowMax() < 60) {
+        dComIfGs_setArrowMax(60);
+    }
+    if (dComIfGs_getArrowNum() < 60) {
+        dComIfGs_setArrowNum(60);
+    }
 }
 
 void item_func_ARROW_LV2() {
-    dComIfGs_setArrowNum(60);
-    dComIfGs_setArrowMax(60);
+    if (dComIfGs_getArrowMax() < 60) {
+        dComIfGs_setArrowMax(60);
+    }
+    if (dComIfGs_getArrowNum() < 60) {
+        dComIfGs_setArrowNum(60);
+    }
 }
 
 void item_func_ARROW_LV3() {
-    dComIfGs_setArrowNum(100);
-    dComIfGs_setArrowMax(100);
+    if (dComIfGs_getArrowMax() < 100) {
+        dComIfGs_setArrowMax(100);
+    }
+    if (dComIfGs_getArrowNum() < 100) {
+        dComIfGs_setArrowNum(100);
+    }
 }
 
 void item_func_LURE_ROD() {}
@@ -1382,6 +1404,12 @@ int item_getcheck_func_SWORD() {
 }
 
 int item_getcheck_func_MASTER_SWORD() {
+    if (dComIfGs_getSaveData()->getReserve().isNewGamePlus() &&
+        !dComIfGs_isEventBit(dSv_event_flag_c::F_0264))
+    {
+        return FALSE;
+    }
+
     return dComIfGs_isCollectSword(COLLECT_MASTER_SWORD);
 }
 
@@ -1406,6 +1434,12 @@ int item_getcheck_func_WEAR_CASUAL() {
 }
 
 int item_getcheck_func_WEAR_KOKIRI() {
+    if (dComIfGs_getSaveData()->getReserve().isNewGamePlus() &&
+        !dComIfGs_isEventBit(dSv_event_flag_c::M_019))
+    {
+        return FALSE;
+    }
+
     return dComIfGs_isCollectClothing(KOKIRI_CLOTHES_FLAG);
 }
 
@@ -1488,6 +1522,12 @@ int item_getcheck_func_W_HOOKSHOT() {
 }
 
 int item_getcheck_func_KANTERA() {
+    if (dComIfGs_getSaveData()->getReserve().isNewGamePlus() &&
+        !dComIfGs_isEventBit(dSv_event_flag_c::M_095))
+    {
+        return FALSE;
+    }
+
     return dComIfGs_getItem(SLOT_1, true) == dItemNo_KANTERA_e ? TRUE : FALSE;
 }
 
@@ -1507,6 +1547,12 @@ int item_getcheck_func_FISHING_ROD_1() {
 }
 
 int item_getcheck_func_PACHINKO() {
+    if (dComIfGs_getSaveData()->getReserve().isNewGamePlus() &&
+        !dComIfGs_isEventBit(dSv_event_flag_c::F_0600))
+    {
+        return FALSE;
+    }
+
     return dComIfGs_getItem(SLOT_23, true) == dItemNo_PACHINKO_e ? TRUE : FALSE;
 }
 

@@ -1090,6 +1090,35 @@ static bool isIntroSkipBottleItem(u8 i_itemNo) {
     return i_itemNo >= dItemNo_EMPTY_BOTTLE_e && i_itemNo <= dItemNo_DROP_BOTTLE_e;
 }
 
+static bool isNewGamePlusBombBagItem(u8 i_itemNo) {
+    return i_itemNo == dItemNo_BOMB_BAG_LV1_e || i_itemNo == dItemNo_NORMAL_BOMB_e ||
+           i_itemNo == dItemNo_WATER_BOMB_e || i_itemNo == dItemNo_POKE_BOMB_e;
+}
+
+static bool isNewGamePlusCarrySlot(u8 i_slotNo) {
+    switch (i_slotNo) {
+    case SLOT_0:  // Gale Boomerang
+    case SLOT_1:  // Lantern
+    case SLOT_2:  // Spinner
+    case SLOT_3:  // Iron Boots
+    case SLOT_4:  // Bow
+    case SLOT_5:  // Hawkeye
+    case SLOT_6:  // Ball and Chain
+    case SLOT_10: // Double Clawshots
+    case SLOT_11:
+    case SLOT_12:
+    case SLOT_13:
+    case SLOT_14: // Bottles
+    case SLOT_15:
+    case SLOT_16:
+    case SLOT_17: // Bomb bags
+    case SLOT_23: // Slingshot
+        return true;
+    default:
+        return false;
+    }
+}
+
 static bool hasIntroSkipItem(u8 i_itemNo) {
     if (dComIfGs_isItemFirstBit(i_itemNo)) {
         return true;
@@ -1839,51 +1868,133 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
     dstStatus.setMaxOil(srcStatus.getMaxOil());
     dstStatus.setOil(srcStatus.getOil());
     dstStatus.setWalletSize(srcStatus.getWalletSize());
-    dstStatus.setMaxMagic(srcStatus.getMaxMagic());
-    dstStatus.setMagic(srcStatus.getMagic());
 
-    for (int i = 0; i < MAX_SELECT_ITEM; i++) {
-        dstStatus.setSelectItemIndex(i, srcStatus.getSelectItemIndex(i));
-        dstStatus.setMixItemIndex(i, srcStatus.getMixItemIndex(i));
-    }
+    dSv_player_item_c& srcItems = srcPlayer.getItem();
+    dSv_player_item_c& dstItems = dstPlayer.getItem();
+    dSv_player_get_item_c& srcGetItems = srcPlayer.getGetItem();
+    dSv_player_get_item_c& dstGetItems = dstPlayer.getGetItem();
+    dSv_player_item_record_c& srcRecord = srcPlayer.getItemRecord();
+    dSv_player_item_record_c& dstRecord = dstPlayer.getItemRecord();
+    dSv_player_item_max_c& srcMax = srcPlayer.getItemMax();
+    dSv_player_item_max_c& dstMax = dstPlayer.getItemMax();
+    dSv_player_collect_c& srcCollect = srcPlayer.getCollect();
+    dSv_player_collect_c& dstCollect = dstPlayer.getCollect();
 
-    for (int i = 0; i < MAX_EQUIPMENT; i++) {
-        if (i == COLLECT_SMELL) {
-            dstStatus.setSelectEquip(i, dItemNo_NONE_e);
-        } else {
-            dstStatus.setSelectEquip(i, srcStatus.getSelectEquip(i));
+    const struct {
+        u8 slot;
+        u8 item;
+    } carriedItems[] = {
+        {SLOT_0, dItemNo_BOOMERANG_e}, {SLOT_1, dItemNo_KANTERA_e},
+        {SLOT_2, dItemNo_SPINNER_e},   {SLOT_3, dItemNo_HVY_BOOTS_e},
+        {SLOT_4, dItemNo_BOW_e},       {SLOT_5, dItemNo_HAWK_EYE_e},
+        {SLOT_6, dItemNo_IRONBALL_e},  {SLOT_10, dItemNo_W_HOOKSHOT_e},
+        {SLOT_23, dItemNo_PACHINKO_e},
+    };
+
+    for (int i = 0; i < (int)(sizeof(carriedItems) / sizeof(carriedItems[0])); i++) {
+        if (srcItems.getItem(carriedItems[i].slot, false) == carriedItems[i].item) {
+            dstItems.setItem(carriedItems[i].slot, carriedItems[i].item);
         }
     }
 
-    dstPlayer.getItem() = srcPlayer.getItem();
-    dstPlayer.getGetItem() = srcPlayer.getGetItem();
-    dstPlayer.getItemRecord() = srcPlayer.getItemRecord();
-    dstPlayer.getItemMax() = srcPlayer.getItemMax();
-    dstPlayer.getCollect() = srcPlayer.getCollect();
-
-    // These items gate the early wolf quest through vanilla possession checks.
-    // Let the quest award them again while retaining stronger NG+ equipment.
-    dstPlayer.getGetItem().offFirstBit(dItemNo_SWORD_e);
-    dstPlayer.getCollect().offCollect(COLLECT_SWORD, COLLECT_ORDON_SWORD);
-    dstPlayer.getGetItem().offFirstBit(dItemNo_WOOD_SHIELD_e);
-    dstPlayer.getCollect().offCollect(COLLECT_SHIELD, COLLECT_WOODEN_SHIELD);
-
-    if (dstStatus.getSelectEquip(COLLECT_SWORD) == dItemNo_SWORD_e) {
-        dstStatus.setSelectEquip(
-            COLLECT_SWORD,
-            dstPlayer.getGetItem().isFirstBit(dItemNo_MASTER_SWORD_e) ? dItemNo_MASTER_SWORD_e
-                                                                     : dItemNo_NONE_e);
-    }
-    if (dstStatus.getSelectEquip(COLLECT_SHIELD) == dItemNo_WOOD_SHIELD_e) {
-        dstStatus.setSelectEquip(
-            COLLECT_SHIELD,
-            dstPlayer.getGetItem().isFirstBit(dItemNo_HYLIA_SHIELD_e) ? dItemNo_HYLIA_SHIELD_e
-                                                                      : dItemNo_NONE_e);
+    for (int slot = SLOT_11; slot <= SLOT_14; slot++) {
+        u8 item = srcItems.getItem(slot, false);
+        if (isIntroSkipBottleItem(item)) {
+            dstItems.setItem(slot, item);
+            dstRecord.setBottleNum(slot - SLOT_11, srcRecord.getBottleNum(slot - SLOT_11));
+        }
     }
 
-    for (int i = 0; i < 4; i++) {
-        dstPlayer.getCollect().offCollectCrystal(i);
-        dstPlayer.getCollect().offCollectMirror(i);
+    bool hasBombBag = false;
+    for (int slot = SLOT_15; slot <= SLOT_17; slot++) {
+        u8 item = srcItems.getItem(slot, false);
+        if (isNewGamePlusBombBagItem(item)) {
+            dstItems.setItem(slot, item);
+            dstRecord.setBombNum(slot - SLOT_15, srcRecord.getBombNum(slot - SLOT_15));
+            hasBombBag = true;
+        }
+    }
+
+    dstRecord.setArrowNum(srcRecord.getArrowNum());
+    dstRecord.setPachinkoNum(srcRecord.getPachinkoNum());
+    dstMax = srcMax;
+    dstPlayer.getFishingInfo() = srcPlayer.getFishingInfo();
+
+    bool hasMasterSword = srcCollect.isCollect(COLLECT_SWORD, COLLECT_MASTER_SWORD) ||
+                          srcGetItems.isFirstBit(dItemNo_MASTER_SWORD_e);
+    if (hasMasterSword) {
+        dstCollect.setCollect(COLLECT_SWORD, COLLECT_MASTER_SWORD);
+        dstGetItems.onFirstBit(dItemNo_MASTER_SWORD_e);
+        dstStatus.setSelectEquip(COLLECT_SWORD, dItemNo_MASTER_SWORD_e);
+    }
+
+    bool hasHylianShield = srcCollect.isCollect(COLLECT_SHIELD, COLLECT_HYLIAN_SHIELD) ||
+                           srcGetItems.isFirstBit(dItemNo_HYLIA_SHIELD_e);
+    if (hasHylianShield) {
+        dstCollect.setCollect(COLLECT_SHIELD, COLLECT_HYLIAN_SHIELD);
+        dstGetItems.onFirstBit(dItemNo_HYLIA_SHIELD_e);
+        dstStatus.setSelectEquip(COLLECT_SHIELD, dItemNo_HYLIA_SHIELD_e);
+    }
+
+    bool hasHeroClothes = srcCollect.isCollect(COLLECT_CLOTHING, KOKIRI_CLOTHES_FLAG) ||
+                          srcGetItems.isFirstBit(dItemNo_WEAR_KOKIRI_e);
+    bool hasMagicArmor = srcGetItems.isFirstBit(dItemNo_ARMOR_e);
+    if (hasHeroClothes) {
+        dstCollect.setCollect(COLLECT_CLOTHING, KOKIRI_CLOTHES_FLAG);
+        dstGetItems.onFirstBit(dItemNo_WEAR_KOKIRI_e);
+        dstStatus.setSelectEquip(COLLECT_CLOTHING, dItemNo_WEAR_KOKIRI_e);
+    }
+    if (hasMagicArmor) {
+        dstGetItems.onFirstBit(dItemNo_ARMOR_e);
+        if (srcStatus.getSelectEquip(COLLECT_CLOTHING) == dItemNo_ARMOR_e) {
+            dstStatus.setSelectEquip(COLLECT_CLOTHING, dItemNo_ARMOR_e);
+        }
+    }
+
+    if (dstItems.getItem(SLOT_4, false) == dItemNo_BOW_e) {
+        dstGetItems.onFirstBit(dItemNo_BOW_e);
+    }
+    if (dstItems.getItem(SLOT_1, false) == dItemNo_KANTERA_e) {
+        dstGetItems.onFirstBit(dItemNo_KANTERA_e);
+    }
+    if (dstItems.getItem(SLOT_5, false) == dItemNo_HAWK_EYE_e) {
+        dstGetItems.onFirstBit(dItemNo_HAWK_EYE_e);
+    }
+    if (hasBombBag) {
+        dstGetItems.onFirstBit(dItemNo_BOMB_BAG_LV1_e);
+        if (srcGetItems.isFirstBit(dItemNo_BOMB_BAG_LV2_e)) {
+            dstGetItems.onFirstBit(dItemNo_BOMB_BAG_LV2_e);
+        }
+        for (int slot = SLOT_15; slot <= SLOT_17; slot++) {
+            u8 item = dstItems.getItem(slot, false);
+            if (item == dItemNo_NORMAL_BOMB_e || item == dItemNo_WATER_BOMB_e ||
+                item == dItemNo_POKE_BOMB_e)
+            {
+                dstGetItems.onFirstBit(item);
+            }
+        }
+    }
+
+    for (u8 item = dItemNo_M_BEETLE_e; item <= dItemNo_F_MAYFLY_e; item++) {
+        if (srcGetItems.isFirstBit(item)) {
+            dstGetItems.onFirstBit(item);
+        }
+    }
+
+    for (int i = 0; i < MAX_SELECT_ITEM; i++) {
+        u8 selectSlot = srcStatus.getSelectItemIndex(i);
+        if (selectSlot < MAX_ITEM_SLOTS && isNewGamePlusCarrySlot(selectSlot) &&
+            dstItems.getItem(selectSlot, false) != dItemNo_NONE_e)
+        {
+            dstStatus.setSelectItemIndex(i, selectSlot);
+        }
+
+        u8 mixSlot = srcStatus.getMixItemIndex(i);
+        if (mixSlot < MAX_ITEM_SLOTS && isNewGamePlusCarrySlot(mixSlot) &&
+            dstItems.getItem(mixSlot, false) != dItemNo_NONE_e)
+        {
+            dstStatus.setMixItemIndex(i, mixSlot);
+        }
     }
 
     dSv_event_c& srcEvent = srcSave->getEvent();
