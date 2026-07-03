@@ -705,7 +705,11 @@ void item_func_DUNGEON_BACK() {
 
 void item_func_SWORD() {
     dComIfGs_setCollectSword(COLLECT_ORDON_SWORD);
-    dComIfGs_setSelectEquipSword(dItemNo_SWORD_e);
+    if (!dComIfGs_getSaveData()->getReserve().isNewGamePlus() ||
+        !dComIfGs_isItemFirstBit(dItemNo_MASTER_SWORD_e))
+    {
+        dComIfGs_setSelectEquipSword(dItemNo_SWORD_e);
+    }
 }
 
 void item_func_MASTER_SWORD() {
@@ -715,7 +719,11 @@ void item_func_MASTER_SWORD() {
 
 void item_func_WOOD_SHIELD() {
     dComIfGs_setCollectShield(COLLECT_WOODEN_SHIELD);
-    dComIfGs_setSelectEquipShield(dItemNo_WOOD_SHIELD_e);
+    if (!dComIfGs_getSaveData()->getReserve().isNewGamePlus() ||
+        !dComIfGs_isItemFirstBit(dItemNo_HYLIA_SHIELD_e))
+    {
+        dComIfGs_setSelectEquipShield(dItemNo_WOOD_SHIELD_e);
+    }
 }
 
 void item_func_SHIELD() {}

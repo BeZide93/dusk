@@ -1861,6 +1861,26 @@ void dFile_select_c::applyNewGamePlusCarryOver() {
     dstPlayer.getItemMax() = srcPlayer.getItemMax();
     dstPlayer.getCollect() = srcPlayer.getCollect();
 
+    // These items gate the early wolf quest through vanilla possession checks.
+    // Let the quest award them again while retaining stronger NG+ equipment.
+    dstPlayer.getGetItem().offFirstBit(dItemNo_SWORD_e);
+    dstPlayer.getCollect().offCollect(COLLECT_SWORD, COLLECT_ORDON_SWORD);
+    dstPlayer.getGetItem().offFirstBit(dItemNo_WOOD_SHIELD_e);
+    dstPlayer.getCollect().offCollect(COLLECT_SHIELD, COLLECT_WOODEN_SHIELD);
+
+    if (dstStatus.getSelectEquip(COLLECT_SWORD) == dItemNo_SWORD_e) {
+        dstStatus.setSelectEquip(
+            COLLECT_SWORD,
+            dstPlayer.getGetItem().isFirstBit(dItemNo_MASTER_SWORD_e) ? dItemNo_MASTER_SWORD_e
+                                                                     : dItemNo_NONE_e);
+    }
+    if (dstStatus.getSelectEquip(COLLECT_SHIELD) == dItemNo_WOOD_SHIELD_e) {
+        dstStatus.setSelectEquip(
+            COLLECT_SHIELD,
+            dstPlayer.getGetItem().isFirstBit(dItemNo_HYLIA_SHIELD_e) ? dItemNo_HYLIA_SHIELD_e
+                                                                      : dItemNo_NONE_e);
+    }
+
     for (int i = 0; i < 4; i++) {
         dstPlayer.getCollect().offCollectCrystal(i);
         dstPlayer.getCollect().offCollectMirror(i);
