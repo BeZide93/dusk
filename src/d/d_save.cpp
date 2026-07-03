@@ -89,6 +89,56 @@ static bool dSv_is_valid_mix_pair(const u8* i_items, u8 i_selectSlot, u8 i_mixSl
     return false;
 }
 
+static void dSv_repair_legacy_ngplus_ordon_gear(dSv_save_c* i_save) {
+    if (!i_save->getReserve().isNewGamePlus() || i_save->getReserve().isIntroSkipped()) {
+        return;
+    }
+
+    dSv_player_c& player = i_save->getPlayer();
+    dSv_player_status_a_c& status = player.getPlayerStatusA();
+    dSv_memBit_c& ordon = i_save->getSave(dStage_SaveTbl_ORDON).getBit();
+    dSv_event_c& event = i_save->getEvent();
+    bool repaired = false;
+
+    bool swordQuestIncomplete = !event.isEventBit(dSv_event_flag_c::F_0363) &&
+                                !ordon.isSwitch(24);
+    if (swordQuestIncomplete &&
+        (player.getGetItem().isFirstBit(dItemNo_SWORD_e) ||
+         player.getCollect().isCollect(COLLECT_SWORD, COLLECT_ORDON_SWORD)))
+    {
+        player.getGetItem().offFirstBit(dItemNo_SWORD_e);
+        player.getCollect().offCollect(COLLECT_SWORD, COLLECT_ORDON_SWORD);
+        if (status.getSelectEquip(COLLECT_SWORD) == dItemNo_SWORD_e) {
+            status.setSelectEquip(
+                COLLECT_SWORD,
+                player.getGetItem().isFirstBit(dItemNo_MASTER_SWORD_e) ? dItemNo_MASTER_SWORD_e
+                                                                       : dItemNo_NONE_e);
+        }
+        repaired = true;
+    }
+
+    bool shieldQuestIncomplete = !event.isEventBit(dSv_event_flag_c::M_072) &&
+                                 !ordon.isSwitch(26);
+    if (shieldQuestIncomplete &&
+        (player.getGetItem().isFirstBit(dItemNo_WOOD_SHIELD_e) ||
+         player.getCollect().isCollect(COLLECT_SHIELD, COLLECT_WOODEN_SHIELD)))
+    {
+        player.getGetItem().offFirstBit(dItemNo_WOOD_SHIELD_e);
+        player.getCollect().offCollect(COLLECT_SHIELD, COLLECT_WOODEN_SHIELD);
+        if (status.getSelectEquip(COLLECT_SHIELD) == dItemNo_WOOD_SHIELD_e) {
+            status.setSelectEquip(
+                COLLECT_SHIELD,
+                player.getGetItem().isFirstBit(dItemNo_HYLIA_SHIELD_e) ? dItemNo_HYLIA_SHIELD_e
+                                                                       : dItemNo_NONE_e);
+        }
+        repaired = true;
+    }
+
+    if (repaired) {
+        OS_REPORT("Repaired legacy NG+ Ordon gear progression\n");
+    }
+}
+
 void dSv_player_status_a_c::init() {
     mMaxLife = 15;
     mLife = 12;
@@ -2036,6 +2086,7 @@ int dSv_info_c::card_to_memory(char* i_cardPtr, int i_dataNum) {
 
     dSv_save_c* pSave = dComIfGs_getSaveData();
     memcpy(pSave, i_cardPtr, sizeof(dSv_save_c));
+    dSv_repair_legacy_ngplus_ordon_gear(pSave);
     i_cardPtr += sizeof(dSv_save_c);
 
 #if PLATFORM_GCN
