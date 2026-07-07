@@ -943,6 +943,8 @@ public:
     /* 0x940 */ dSv_MiniGame_c mMiniGame;
 };  // Size: 0x958
 
+void dSv_repair_intro_skip_faron_tears(dSv_save_c* i_save);
+
 class flagFile_c : public JORReflexible {
 public:
     enum Flag_e {

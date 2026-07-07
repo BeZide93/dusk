@@ -89,6 +89,21 @@ static bool dSv_is_valid_mix_pair(const u8* i_items, u8 i_selectSlot, u8 i_mixSl
     return false;
 }
 
+void dSv_repair_intro_skip_faron_tears(dSv_save_c* i_save) {
+    if (i_save == NULL || !i_save->getReserve().isIntroSkipped()) {
+        return;
+    }
+
+    static const u8 faronTearTboxes[] = {
+        0, 1, 4, 5, 6, 8, 9, 11, 12, 13, 14, 17, 18, 20, 21, 23,
+    };
+
+    dSv_memBit_c& faron = i_save->getSave(dStage_SaveTbl_FARON).getBit();
+    for (int i = 0; i < (int)(sizeof(faronTearTboxes) / sizeof(faronTearTboxes[0])); i++) {
+        faron.onTbox(faronTearTboxes[i]);
+    }
+}
+
 static void dSv_repair_legacy_ngplus_ordon_gear(dSv_save_c* i_save) {
     if (!i_save->getReserve().isNewGamePlus() || i_save->getReserve().isIntroSkipped()) {
         return;
@@ -2087,6 +2102,7 @@ int dSv_info_c::card_to_memory(char* i_cardPtr, int i_dataNum) {
     dSv_save_c* pSave = dComIfGs_getSaveData();
     memcpy(pSave, i_cardPtr, sizeof(dSv_save_c));
     dSv_repair_legacy_ngplus_ordon_gear(pSave);
+    dSv_repair_intro_skip_faron_tears(pSave);
     i_cardPtr += sizeof(dSv_save_c);
 
 #if PLATFORM_GCN

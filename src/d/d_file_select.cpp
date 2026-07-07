@@ -2206,6 +2206,7 @@ void dFile_select_c::applySkipIntroPreset() {
 
     save->getPlayer().getPlayerReturnPlace().set("F_SP108", 0, 0);
     save->getReserve().setIntroSkipped(true);
+    dSv_repair_intro_skip_faron_tears(save);
     dComIfGs_setLineUpItem();
     mSkipIntroPending = false;
 }
