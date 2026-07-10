@@ -453,6 +453,7 @@ target_link_libraries(dusklight PRIVATE aurora::main ${GAME_LIBS} ${JSYSTEM_LINK
 target_precompile_headers(dusklight PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/include/dusk_pch.hpp>")
 
 if (DUSK_ENABLE_CODE_MODS)
+    target_compile_definitions(dusklight PRIVATE DUSK_BUILDING_GAME=1)
     include(cmake/SymbolManifest.cmake)
     if (WIN32)
         # Game ABI exports & import library for mod linking

@@ -1512,7 +1512,9 @@ int daAlink_c::procHookshotSubject() {
 
     if (!checkNextAction(0)) {
         if (checkHookshotWait()) {
-            if (setBodyAngleToCamera()) {
+            if (!dusk::mods::svc::item_aim::subject_update(this, DUSK_MOD_ITEM_AIM_HOOKSHOT) &&
+                setBodyAngleToCamera())
+            {
                 setHookshotSight();
             }
 

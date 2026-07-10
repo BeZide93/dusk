@@ -24,6 +24,8 @@
 #include "f_op/f_op_overlap_mng.h"
 #include "icon_provider.hpp"
 #include "m_Do/m_Do_graphic.h"
+#include "dusk/mods/svc/item_aim.hpp"
+#include "dusk/mods/svc/item_slots.hpp"
 #include "ui.hpp"
 
 namespace dusk::ui {
@@ -86,7 +88,10 @@ constexpr std::array<ControlInfo, static_cast<std::size_t>(Control::COUNT)> kCon
     },
     {
         .id = "button-z",
-        .iconId = "z-midna-icon",
+        .iconId = "button-z-icon",
+        .oilId = "button-z-oil",
+        .oilFillId = "button-z-oil-fill",
+        .countId = "button-z-count",
         .padButton = PAD_TRIGGER_Z,
     },
     {
@@ -116,6 +121,14 @@ constexpr std::array<ControlInfo, static_cast<std::size_t>(Control::COUNT)> kCon
         .id = "skip",
         .padButton = PAD_BUTTON_START,
     },
+    {},
+    {
+        .id = "button-midna",
+        .iconId = "button-midna-icon",
+        .padButton = PAD_BUTTON_DOWN,
+    },
+    {},
+    {},
 }};
 
 constexpr const ControlInfo* control_info(Control control) noexcept {
@@ -178,6 +191,9 @@ enum class StickOutput {
 };
 
 StickOutput stick_output_mode() noexcept {
+    if (dCamera_c::isAimActive() && dusk::mods::svc::item_aim::movement_enabled()) {
+        return StickOutput::MainStick;
+    }
     if (fishing_controls_active() || hawkeye_active()) {
         return StickOutput::CStick;
     }
@@ -267,6 +283,16 @@ FaceButtonState z_button_state() {
     }
     if (game_controls_suppressed()) {
         return {};
+    }
+
+    if (dusk::mods::svc::item_slots::z_slot_enabled()) {
+        const bool itemMode = dComIfGp_getLinkPlayer() != nullptr && daPy_py_c::checkNowWolf() == 0;
+        const auto source = itemMode ? item_icon_source_for_button(Control::Z) : std::string();
+        return {
+            .iconSource = source,
+            .visible = true,
+            .showIcon = itemMode && !source.empty(),
+        };
     }
 
     const auto source = midna_icon_source();
@@ -736,7 +762,9 @@ void TouchControls::sync_touch_state() noexcept {
 
     sync_l_lock_state();
     const bool aimActive = dCamera_c::isAimActive();
-    if (aimActive && !hawkeye_active() && mMoveTouch.active) {
+    if (aimActive && !dusk::mods::svc::item_aim::movement_enabled() && !hawkeye_active() &&
+        mMoveTouch.active)
+    {
         if (!mCameraTouch.active) {
             mCameraTouch = mMoveTouch;
             mCameraTouch.start = mMoveTouch.current;
@@ -985,7 +1013,9 @@ void TouchControls::sync_action_bar_state() noexcept {
 
 void TouchControls::sync_control_displays() noexcept {
     if (mWasSuppressed || !getSettings().game.enableTouchControls) {
-        for (const auto control : {Control::A, Control::B, Control::X, Control::Y, Control::Z}) {
+        for (const auto control :
+            {Control::A, Control::B, Control::X, Control::Y, Control::Z, Control::DPAD_DOWN})
+        {
             const auto& elements = mControlElements[static_cast<std::size_t>(control)];
             if (elements.root != nullptr) {
                 elements.root->SetPseudoClass("hidden", true);
@@ -1006,6 +1036,7 @@ void TouchControls::sync_control_displays() noexcept {
     const auto& x = mControlElements[static_cast<std::size_t>(Control::X)];
     const auto& y = mControlElements[static_cast<std::size_t>(Control::Y)];
     const auto& z = mControlElements[static_cast<std::size_t>(Control::Z)];
+    const auto& midna = mControlElements[static_cast<std::size_t>(Control::DPAD_DOWN)];
 
     if (a.root != nullptr) {
         a.root->SetPseudoClass("hidden", false);
@@ -1019,6 +1050,42 @@ void TouchControls::sync_control_displays() noexcept {
     }
     if (z.icon != nullptr) {
         z.icon->SetClass("visible", zState.showIcon);
+    }
+
+    const bool midnaVisible = dusk::mods::svc::item_slots::z_slot_enabled() && !game_controls_suppressed();
+    const std::string midnaSource = midnaVisible ? midna_icon_source() : std::string();
+    const uint64_t midnaRevision = midnaVisible ? midna_icon_revision() : 0;
+    if (midna.root != nullptr) {
+        midna.root->SetPseudoClass("hidden", !midnaVisible);
+        midna.root->SetClass("has-icon", !midnaSource.empty());
+    }
+    if (!midnaVisible) {
+        release_control(Control::DPAD_DOWN);
+    }
+    if (midna.icon != nullptr) {
+        midna.icon->SetClass("visible", !midnaSource.empty());
+    }
+
+    const bool midnaSourceChanged = midnaSource != mMidnaIconSource;
+    const bool midnaRevisionChanged = midnaRevision != mMidnaIconRevision;
+    if (midnaSourceChanged || midnaRevisionChanged) {
+        const std::string previousSource = mMidnaIconSource;
+        mMidnaIconSource = midnaSource;
+        mMidnaIconRevision = midnaRevision;
+        if (midna.icon == nullptr) {
+            release_rml_texture(previousSource);
+        } else if (midnaSource.empty()) {
+            midna.icon->RemoveAttribute("src");
+        } else {
+            release_rml_texture(midnaSource);
+            if (!midnaSourceChanged) {
+                midna.icon->RemoveAttribute("src");
+            }
+            midna.icon->SetAttribute("src", midnaSource);
+        }
+        if (midnaSourceChanged) {
+            release_rml_texture(previousSource);
+        }
     }
 
     const bool zSourceChanged = zState.iconSource != mZTriggerIconSource;
@@ -1078,6 +1145,9 @@ void TouchControls::sync_control_displays() noexcept {
     syncIcon(b.root, b.icon, mButtonBIconSource, Control::B, bState);
     syncIcon(x.root, x.icon, mButtonXIconSource, Control::X, xState);
     syncIcon(y.root, y.icon, mButtonYIconSource, Control::Y, yState);
+    if (dusk::mods::svc::item_slots::z_slot_enabled()) {
+        syncIcon(z.root, z.icon, mZTriggerIconSource, Control::Z, zState);
+    }
 
     const auto syncCount = [](Rml::Element* countElement, std::string& lastLabel, Control control,
                                const FaceButtonState& state) {
@@ -1096,6 +1166,7 @@ void TouchControls::sync_control_displays() noexcept {
 
     syncCount(x.count, mButtonXCountLabel, Control::X, xState);
     syncCount(y.count, mButtonYCountLabel, Control::Y, yState);
+    syncCount(z.count, mButtonZCountLabel, Control::Z, zState);
 
     const auto syncOil = [](Rml::Element* meter, Rml::Element* fill, Control control,
                              const FaceButtonState& state) {
@@ -1112,6 +1183,7 @@ void TouchControls::sync_control_displays() noexcept {
     syncOil(b.oil, b.oilFill, Control::B, bState);
     syncOil(x.oil, x.oilFill, Control::X, xState);
     syncOil(y.oil, y.oilFill, Control::Y, yState);
+    syncOil(z.oil, z.oilFill, Control::Z, zState);
 
     clear_equip_targets();
     if (!visible() || mWasSuppressed || !getSettings().game.enableTouchControls) {
@@ -1259,6 +1331,18 @@ void TouchControls::handle_touch_down(Rml::Event& event) noexcept {
     const bool inAnalogZone = position.y >= top && position.y <= bottom;
     const bool inLeftZone = position.x < width * kLeftZoneWidth;
     if (dCamera_c::isAimActive()) {
+        if (dusk::mods::svc::item_aim::movement_enabled() && inAnalogZone && inLeftZone) {
+            if (!mMoveTouch.active) {
+                mMoveTouch = {
+                    .id = id,
+                    .start = position,
+                    .current = position,
+                    .active = true,
+                };
+            }
+            return;
+        }
+
         if (hawkeye_active() && inAnalogZone && inLeftZone) {
             if (!mMoveTouch.active) {
                 mMoveTouch = {

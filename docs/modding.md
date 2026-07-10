@@ -280,6 +280,47 @@ at registration. Registrations follow your mod's lifecycle.
 
 See [Asset Overlays](#asset-overlays) for priority and conflict handling.
 
+### HudLayoutService (`mods/svc/hud_layout.h`)
+
+Registers a render-time HUD layout provider. The host keeps the default HUD when no provider is
+registered or when the active provider returns `NULL`; otherwise it applies the returned
+`DuskModHudLayoutSnapshot` to the existing meter panes. The latest active provider wins, and
+registrations are removed automatically when the owning mod is disabled, reloaded, or fails.
+
+```cpp
+IMPORT_SERVICE(HudLayoutService, svc_hud_layout);
+
+const DuskModHudLayoutSnapshot* get_layout(ModContext*, const char* data_path, void*) {
+    // Return stable storage owned by the mod, or NULL to use the upstream HUD.
+    return &layout;
+}
+
+HudLayoutProviderDesc desc = HUD_LAYOUT_PROVIDER_DESC_INIT;
+desc.get_layout = get_layout;
+HudLayoutProviderHandle handle = 0;
+svc_hud_layout->register_provider(mod_ctx, &desc, &handle);
+```
+
+The `data_path` argument points at the active user data folder. Use `revision` to notify the host
+that cached pane positions should be rebuilt after the snapshot changes.
+
+### Gameplay Extension Services
+
+The following small provider services expose game lifecycle points that are hard to express as
+asset overlays or ordinary function hooks. They follow the same pattern as `HudLayoutService`:
+the latest active provider for a callback wins, and registrations are removed automatically when
+the owning mod is disabled, reloaded, or fails.
+
+- `FileSelectService` (`mods/svc/file_select.h`): custom file-select flows and custom start-stage
+  selection for newly created saves.
+- `ItemAimService` (`mods/svc/item_aim.h`): item aim camera mode decisions, aim movement, and
+  optional replacement of per-item subject-aim updates.
+- `ItemSlotsService` (`mods/svc/item_slots.h`): exposes an optional third item slot.
+- `CombatInputService` (`mods/svc/combat_input.h`): custom manual-shield input decisions.
+- `BossFlowService` (`mods/svc/boss_flow.h`): custom boss portal and final-battle flow decisions.
+- `MidnaDialogService` (`mods/svc/midna_dialog.h`): custom Midna prompt/menu entries and
+  resolution callbacks.
+
 ### ConfigService (`mods/svc/config.h`)
 
 Persistent, mod-scoped configuration variables. Each var is stored in the user's `config.json` under

@@ -290,7 +290,9 @@ int daAlink_c::procCopyRodSubject() {
     setShapeAngleToAtnActor(0);
 
     if (!checkNextAction(0)) {
-        if (setBodyAngleToCamera()) {
+        if (!dusk::mods::svc::item_aim::subject_update(this, DUSK_MOD_ITEM_AIM_COPY_ROD) &&
+            setBodyAngleToCamera())
+        {
             setCopyRodSight();
         }
     } else {

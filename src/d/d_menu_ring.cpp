@@ -25,6 +25,7 @@
 #include "d/d_msg_string.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
+#include "dusk/mods/svc/item_slots.hpp"
 #include <cstring>
 
 #include <cstdio>
@@ -35,6 +36,63 @@
 #include "dusk/settings.h"
 #include "dusk/ui/touch_controls.hpp"
 #endif
+
+static bool dMenuRing_wiiuControllerStyle() {
+    return dusk::mods::svc::item_slots::z_slot_enabled() != 0;
+}
+
+static bool dMenuRing_closeTrigger() {
+    return dMw_UP_TRIGGER() || (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER());
+}
+
+static void dMenuRing_hidePaneTree(J2DPane* pane) {
+    if (pane == NULL) {
+        return;
+    }
+
+    pane->hide();
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        dMenuRing_hidePaneTree(child);
+    }
+}
+
+static void dMenuRing_showPaneTree(J2DPane* pane) {
+    if (pane == NULL) {
+        return;
+    }
+
+    pane->show();
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != NULL;
+         child = child->getNextChildPane()) {
+        dMenuRing_showPaneTree(child);
+    }
+}
+
+static void dMenuRing_showPaneParents(J2DPane* pane) {
+    for (J2DPane* parent = pane; parent != NULL; parent = parent->getParentPane()) {
+        parent->show();
+    }
+}
+
+static J2DPane* dMenuRing_getWiiUSetItemZAnchor(J2DScreen* screen) {
+    return screen != NULL ? screen->search(MULTI_CHAR('r_btn_n')) : NULL;
+}
+
+static void dMenuRing_applyWiiUSetItemZVisualOffset(Vec& pos) {
+    pos.x += 5.0f;
+    pos.y -= 5.0f;
+}
+
+static void dMenuRing_applyWiiUSetItemPrompt(J2DScreen* screen) {
+    J2DPane* rButton = dMenuRing_getWiiUSetItemZAnchor(screen);
+    if (rButton != NULL) {
+        rButton->translate(rButton->getTranslateX() + 64.0f, rButton->getTranslateY());
+        rButton->hide();
+    }
+}
 
 typedef void (dMenu_Ring_c::*initFunc)();
 static initFunc stick_init[] = {
@@ -161,6 +219,8 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     field_0x6d1 = 0xff;
     field_0x6d2 = 0xff;
     field_0x6d3 = 0xff;
+    mpWiiUSetItemZScreen = NULL;
+    mpWiiUSetItemZButton = NULL;
     int i;
     for (int i = 0; i < 3; i++) {
         field_0x580[i] = 0.0f;
@@ -248,7 +308,13 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         if (dComIfGs_getSelectItemIndex(1) == dComIfGs_getLineUpItem(i)) {
             mYButtonSlot = i;
         }
-        if (dComIfGs_getSelectItemIndex(2) == dComIfGs_getWolfAbility(i)) {
+        if (dMenuRing_wiiuControllerStyle() &&
+            dComIfGs_getSelectItemIndex(2) == dComIfGs_getLineUpItem(i))
+        {
+            field_0x6ac = i;
+        } else if (!dMenuRing_wiiuControllerStyle() &&
+                   dComIfGs_getSelectItemIndex(2) == dComIfGs_getWolfAbility(i))
+        {
             field_0x6ac = i;
         }
     }
@@ -263,7 +329,7 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             }
         }
         field_0x6be[i] = 0;
-        if (i == 2) {
+        if (i == 2 && !dMenuRing_wiiuControllerStyle()) {
             setSelectItem(i, 0);
         } else {
             setSelectItem(i, 0x43);
@@ -323,7 +389,14 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             mItemSlotParam2[i] = (mpItemBuf[i][0]->height / 48.0f * (texScale / 100.0f));
         }
     }
-    mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
+    if (dMenuRing_wiiuControllerStyle() && !mPlayerIsWolf) {
+        mpTextParent[0]->show();
+        mpTextParent[0]->setAlphaRate(1.0f);
+        dMenuRing_applyWiiUSetItemPrompt(mpScreen);
+        setupWiiUSetItemZButton();
+    } else {
+        mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
+    }
     if (mPlayerIsWolf) {
         mpScreen->search(MULTI_CHAR('yx_te_s1'))->hide();
         mpScreen->search(MULTI_CHAR('yx_te_s2'))->hide();
@@ -529,6 +602,12 @@ dMenu_Ring_c::~dMenu_Ring_c() {
     JKR_DELETE(mpKanteraMeter);
     mpKanteraMeter = NULL;
 
+    JKR_DELETE(mpWiiUSetItemZButton);
+    mpWiiUSetItemZButton = NULL;
+
+    JKR_DELETE(mpWiiUSetItemZScreen);
+    mpWiiUSetItemZScreen = NULL;
+
     JKR_DELETE(mpScreen);
     mpScreen = NULL;
 
@@ -611,6 +690,40 @@ void dMenu_Ring_c::_delete() {
     /* empty function */
 }
 
+void dMenu_Ring_c::setupWiiUSetItemZButton() {
+    mpWiiUSetItemZScreen = JKR_NEW J2DScreen();
+    if (mpWiiUSetItemZScreen == NULL) {
+        return;
+    }
+
+    bool loaded =
+        mpWiiUSetItemZScreen->setPriority("zelda_game_image.blo", 0x20000,
+                                          dComIfGp_getMain2DArchive());
+    if (!loaded) {
+        JKR_DELETE(mpWiiUSetItemZScreen);
+        mpWiiUSetItemZScreen = NULL;
+        return;
+    }
+
+    dPaneClass_showNullPane(mpWiiUSetItemZScreen);
+    dMenuRing_hidePaneTree(mpWiiUSetItemZScreen->search('ROOT'));
+
+    J2DPane* zButton = mpWiiUSetItemZScreen->search(MULTI_CHAR('zbtn_n'));
+    if (zButton == NULL) {
+        JKR_DELETE(mpWiiUSetItemZScreen);
+        mpWiiUSetItemZScreen = NULL;
+        return;
+    }
+
+    dMenuRing_showPaneParents(zButton);
+    dMenuRing_showPaneTree(zButton);
+    mpWiiUSetItemZButton = JKR_NEW CPaneMgr(mpWiiUSetItemZScreen, MULTI_CHAR('zbtn_n'), 2, NULL);
+    if (mpWiiUSetItemZButton != NULL) {
+        mpWiiUSetItemZButton->setAlphaRate(1.0f);
+        mpWiiUSetItemZButton->show();
+    }
+}
+
 /** @details
  * This is the update function which runs every frame. 
  * It runs a process based on mStatus every frame or 
@@ -638,6 +751,29 @@ void dMenu_Ring_c::_move() {
         mRingCursorScale = g_ringHIO.mCursorScale;
         mpDrawCursor->setScale(g_ringHIO.mCursorScale);
     }
+}
+
+void dMenu_Ring_c::drawWiiUSetItemZButton() {
+    if (mpWiiUSetItemZScreen == NULL || mpWiiUSetItemZButton == NULL) {
+        return;
+    }
+
+    J2DPane* anchor = dMenuRing_getWiiUSetItemZAnchor(mpScreen);
+    if (anchor == NULL) {
+        return;
+    }
+
+    CPaneMgr paneMgr;
+    Vec pos = paneMgr.getGlobalVtxCenter(anchor, true, 0);
+    pos.x += mCenterPosX;
+    pos.y += mCenterPosY;
+    dMenuRing_applyWiiUSetItemZVisualOffset(pos);
+
+    mpWiiUSetItemZButton->scale(0.9f, 0.9f);
+    mpWiiUSetItemZButton->paneTrans(pos.x - mpWiiUSetItemZButton->getInitGlobalCenterPosX(),
+                                    pos.y - mpWiiUSetItemZButton->getInitGlobalCenterPosY());
+    mpWiiUSetItemZButton->setAlphaRate(mAlphaRate);
+    mpWiiUSetItemZScreen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
 }
 
 void dMenu_Ring_c::_draw() {
@@ -680,6 +816,7 @@ void dMenu_Ring_c::_draw() {
             mpTextParent[1]->setAlphaRate(alphaRate * mAlphaRate);
         }
         mpScreen->draw(mCenterPosX, mCenterPosY, grafPort);
+        drawWiiUSetItemZButton();
         if (mStatus != STATUS_EXPLAIN && mPikariFlashingSpeed > 0.0f) {
             Vec pos;
             CPaneMgr paneMgr;
@@ -811,13 +948,13 @@ bool dMenu_Ring_c::isOpen() {
 bool dMenu_Ring_c::isMoveEnd() {
     bool ret = 0;
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN) {
-        if (dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER() || dMw_B_TRIGGER() ||
+        if (dMenuRing_closeTrigger() || dMw_B_TRIGGER() ||
             dMeter2Info_getWarpStatus() == 2 || dMeter2Info_getWarpStatus() == 1 ||
             dMeter2Info_isTouchKeyCheck(0xe))
         {
             if (dMw_UP_TRIGGER()) {
                 mRingOrigin = 0;
-            } else if (dMw_DOWN_TRIGGER()) {
+            } else if (!dMenuRing_wiiuControllerStyle() && dMw_DOWN_TRIGGER()) {
                 mRingOrigin = 2;
             } else {
                 mRingOrigin = 0xff;
@@ -1046,13 +1183,96 @@ void dMenu_Ring_c::setItem() {
 
     u8 mixItemIndex0 = dComIfGs_getMixItemIndex(0);
     u8 mixItemIndex1 = dComIfGs_getMixItemIndex(1);
+    u8 mixItemIndex2 = dComIfGs_getMixItemIndex(2);
 
     for (int i = 0; i < 4; i++) {
         setSelectItemForce(i);
     }
 
     checkExplainForce();
-    if (field_0x6b3 == 0) {
+    if (dMenuRing_wiiuControllerStyle() && field_0x6b3 < 3) {
+        u8 selectedItems[3] = {uVar1, uVar2, uVar3};
+        u8 selectedSlots[3] = {mXButtonSlot, mYButtonSlot, field_0x6ac};
+        u8 selectedMixItems[3] = {mixItemIndex0, mixItemIndex1, mixItemIndex2};
+        u8 selectedItem = mItemSlots[mCurrentSlot];
+        u8 targetSlot = field_0x6b3;
+        u8 sourceSlot = dItemNo_NONE_e;
+        bool selectedWasMixItem = false;
+
+        for (u8 i = 0; i < 3; i++) {
+            if (i == targetSlot) {
+                continue;
+            }
+
+            if (selectedItems[i] == selectedItem) {
+                sourceSlot = i;
+                break;
+            }
+
+            if (selectedMixItems[i] == selectedItem) {
+                sourceSlot = i;
+                selectedWasMixItem = true;
+                break;
+            }
+        }
+
+        u8 targetItem = selectedItems[targetSlot];
+        u8 targetItemSlot = selectedSlots[targetSlot];
+        u8 targetMixItem = selectedMixItems[targetSlot];
+        bool targetAlreadyHadSelectedItem = targetItem == selectedItem;
+
+        selectedItems[targetSlot] = selectedItem;
+        selectedSlots[targetSlot] = mCurrentSlot;
+        selectedMixItems[targetSlot] = dItemNo_NONE_e;
+
+        if (sourceSlot != dItemNo_NONE_e) {
+            if (targetAlreadyHadSelectedItem) {
+                if (selectedWasMixItem) {
+                    selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+                } else {
+                    selectedItems[sourceSlot] = dItemNo_NONE_e;
+                    selectedSlots[sourceSlot] = dItemNo_NONE_e;
+                    selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+                }
+            } else {
+                selectedItems[sourceSlot] = targetItem;
+                selectedSlots[sourceSlot] =
+                    targetItem == dItemNo_NONE_e ? dItemNo_NONE_e : targetItemSlot;
+                selectedMixItems[sourceSlot] =
+                    targetItem == dItemNo_NONE_e ? dItemNo_NONE_e : targetMixItem;
+            }
+        }
+
+        for (u8 i = 0; i < 3; i++) {
+            if (i == targetSlot || i == sourceSlot) {
+                continue;
+            }
+
+            if (selectedItems[i] == selectedItem) {
+                selectedItems[i] = dItemNo_NONE_e;
+                selectedSlots[i] = dItemNo_NONE_e;
+                selectedMixItems[i] = dItemNo_NONE_e;
+            } else if (selectedMixItems[i] == selectedItem) {
+                selectedMixItems[i] = dItemNo_NONE_e;
+            }
+        }
+
+        if (selectedWasMixItem && sourceSlot != dItemNo_NONE_e &&
+            selectedItems[sourceSlot] == targetItem)
+        {
+            selectedMixItems[sourceSlot] = dItemNo_NONE_e;
+        }
+
+        uVar1 = selectedItems[0];
+        uVar2 = selectedItems[1];
+        uVar3 = selectedItems[2];
+        mXButtonSlot = selectedSlots[0];
+        mYButtonSlot = selectedSlots[1];
+        field_0x6ac = selectedSlots[2];
+        mixItemIndex0 = selectedMixItems[0];
+        mixItemIndex1 = selectedMixItems[1];
+        mixItemIndex2 = selectedMixItems[2];
+    } else if (field_0x6b3 == 0) {
         uVar1 = dComIfGs_getSelectItemIndex(1);
         if (mItemSlots[mCurrentSlot] == uVar1) {
             uVar2 = dComIfGs_getSelectItemIndex(0);
@@ -1114,6 +1334,27 @@ void dMenu_Ring_c::setItem() {
                 mixItemIndex1 = dItemNo_NONE_e;
             }
         }
+    } else if (field_0x6b3 == 2) {
+        field_0x6ac = mCurrentSlot;
+        uVar3 = mItemSlots[field_0x6ac];
+        mixItemIndex2 = dItemNo_NONE_e;
+
+        if (uVar1 == uVar3) {
+            uVar1 = dItemNo_NONE_e;
+            mXButtonSlot = dItemNo_NONE_e;
+            mixItemIndex0 = dItemNo_NONE_e;
+        }
+        if (uVar2 == uVar3) {
+            uVar2 = dItemNo_NONE_e;
+            mYButtonSlot = dItemNo_NONE_e;
+            mixItemIndex1 = dItemNo_NONE_e;
+        }
+        if (mixItemIndex0 == uVar3) {
+            mixItemIndex0 = dItemNo_NONE_e;
+        }
+        if (mixItemIndex1 == uVar3) {
+            mixItemIndex1 = dItemNo_NONE_e;
+        }
     }
     field_0x6b4[0] = uVar1;
     field_0x6b4[1] = uVar2;
@@ -1121,7 +1362,7 @@ void dMenu_Ring_c::setItem() {
     field_0x6b4[3] = uVar4;
     field_0x6b8[0] = mixItemIndex0;
     field_0x6b8[1] = mixItemIndex1;
-    field_0x6b8[2] = dItemNo_NONE_e;
+    field_0x6b8[2] = mixItemIndex2;
     field_0x6b8[3] = dItemNo_NONE_e;
     field_0x6cd = dItemNo_NONE_e;
     setJumpItem(true);
@@ -1129,7 +1370,7 @@ void dMenu_Ring_c::setItem() {
 
 void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
     for (int i = 0; i < 4; i++) {
-        if (i == 2) {
+        if (i == 2 && !dMenuRing_wiiuControllerStyle()) {
             setSelectItem(i, field_0x6b4[i]);
         } else if (i == field_0x6cd) {
             setSelectItem(i, getItem(field_0x6cb, 0));
@@ -1174,6 +1415,31 @@ void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
 #if TARGET_PC
             mSelectItemSlideElapsed[1] = 0.0f;
 #endif
+        }
+    } else if (field_0x6b3 == 2) {
+        field_0x538[0] = g_ringHIO.mUnselectItemScale;
+        field_0x538[1] = g_ringHIO.mUnselectItemScale;
+        field_0x538[2] = g_ringHIO.mSelectItemScale;
+        if (field_0x6b4[2] != dComIfGs_getSelectItemIndex(2) ||
+            field_0x6b8[2] != dComIfGs_getMixItemIndex(2))
+        {
+            field_0x674[2] = 1;
+#if TARGET_PC
+            mSelectItemSlideElapsed[2] = 0.0f;
+#endif
+        }
+    }
+    if (dMenuRing_wiiuControllerStyle() && field_0x6b3 < 3) {
+        for (int i = 0; i < 3; i++) {
+            if (field_0x6b4[i] != dComIfGs_getSelectItemIndex(i) ||
+                field_0x6b8[i] != dComIfGs_getMixItemIndex(i))
+            {
+                field_0x674[field_0x6b3] = 1;
+#if TARGET_PC
+                mSelectItemSlideElapsed[field_0x6b3] = 0.0f;
+#endif
+                break;
+            }
         }
     }
     if (field_0x674[0] == 1) {
@@ -1271,7 +1537,21 @@ void dMenu_Ring_c::setNameString(u32 i_stringID) {
 void dMenu_Ring_c::setActiveCursor() {
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN && mpItemExplain->getStatus() == 0) {
-        if (mDoCPd_c::getTrigR(PAD_1) && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+        const bool wiiuStyle = dMenuRing_wiiuControllerStyle();
+        const bool rItemTrigger = wiiuStyle && mDoCPd_c::getTrigZ(PAD_1);
+        const bool combineTrigger =
+            mDoCPd_c::getTrigR(PAD_1) && (!wiiuStyle || !rItemTrigger);
+        if (rItemTrigger && !mPlayerIsWolf && item != dItemNo_NONE_e) {
+            for (int i = 0; i < MAX_SELECT_ITEM; i++) {
+                setSelectItemForce(i);
+            }
+            field_0x6b3 = 2;
+            setItem();
+            if (mpItemExplain->getStatus() == 0) {
+                setStatus(STATUS_WAIT);
+                (this->*stick_init[mStatus])();
+            }
+        } else if (combineTrigger && !mPlayerIsWolf && item != dItemNo_NONE_e) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
             }
@@ -1300,7 +1580,9 @@ void dMenu_Ring_c::setActiveCursor() {
                     (this->*stick_init[mStatus])();
                 }
             }
-        } else if (mDoCPd_c::getTrigX(PAD_1) || mDoCPd_c::getTrigY(PAD_1)) {
+        } else if (mDoCPd_c::getTrigX(PAD_1) || mDoCPd_c::getTrigY(PAD_1) ||
+                   (wiiuStyle && mDoCPd_c::getTrigZ(PAD_1)))
+        {
             // If the player is a wolf or somehow manages to access an item slot with no item, error
             Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
         }
@@ -1312,6 +1594,8 @@ void dMenu_Ring_c::setMixItem() {
     bool bVar1 = false;
     u8 selectItemIndex0 = dComIfGs_getSelectItemIndex(0);
     u8 selectItemIndex1 = dComIfGs_getSelectItemIndex(1);
+    u8 selectItemIndex2 = dComIfGs_getSelectItemIndex(2);
+    u8 mixItemIndex2 = dComIfGs_getMixItemIndex(2);
     u8 local_28[4] = {dItemNo_NONE_e, dItemNo_NONE_e, dItemNo_NONE_e, dItemNo_NONE_e};
 
     if (dComIfGs_getMixItemIndex(0) == SLOT_4 &&
@@ -1335,6 +1619,18 @@ void dMenu_Ring_c::setMixItem() {
         field_0x6b8[1] = 0xff;
         field_0x6b3 = 1;
         field_0x6cd = 1;
+        bVar1 = true;
+    } else if (dMenuRing_wiiuControllerStyle() && dComIfGs_getMixItemIndex(2) == SLOT_4 &&
+               mItemSlots[mCurrentSlot] == dComIfGs_getSelectItemIndex(2))
+    {
+        Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_COMBINE_OFF, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+        field_0x6cb = selectItemIndex2;
+        selectItemIndex2 = SLOT_4;
+        local_28[2] = getCursorPos(SLOT_4);
+        mixItemIndex2 = dItemNo_NONE_e;
+        field_0x6b8[2] = dItemNo_NONE_e;
+        field_0x6b3 = 2;
+        field_0x6cd = 2;
         bVar1 = true;
     } else {
         switch (item) {
@@ -1373,6 +1669,30 @@ void dMenu_Ring_c::setMixItem() {
                     selectItemIndex0 = 0xff;
                     mXButtonSlot = 0xff;
                 }
+            } else if (dMenuRing_wiiuControllerStyle() &&
+                       ((dComIfGs_getSelectItemIndex(2) == SLOT_4 &&
+                         dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e) ||
+                        dComIfGs_getMixItemIndex(2) == SLOT_4))
+            {
+                Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_COMBINE_ON, NULL, 0, 0, 1.0f, 1.0f, -1.0f,
+                                         -1.0f, 0);
+                selectItemIndex2 = mItemSlots[mCurrentSlot];
+                mixItemIndex2 = SLOT_4;
+                field_0x6b8[2] = SLOT_4;
+                field_0x6b3 = 2;
+                field_0x6ac = mCurrentSlot;
+                field_0x6cd = 0xff;
+                bVar1 = true;
+                if (selectItemIndex0 == mItemSlots[mCurrentSlot]) {
+                    selectItemIndex0 = dItemNo_NONE_e;
+                    mXButtonSlot = dItemNo_NONE_e;
+                    field_0x6b8[0] = dItemNo_NONE_e;
+                }
+                if (selectItemIndex1 == mItemSlots[mCurrentSlot]) {
+                    selectItemIndex1 = dItemNo_NONE_e;
+                    mYButtonSlot = dItemNo_NONE_e;
+                    field_0x6b8[1] = dItemNo_NONE_e;
+                }
             }
             break;
         }
@@ -1380,12 +1700,17 @@ void dMenu_Ring_c::setMixItem() {
     if (bVar1) {
         field_0x6b4[0] = selectItemIndex0;
         field_0x6b4[1] = selectItemIndex1;
+        field_0x6b4[2] = selectItemIndex2;
+        field_0x6b8[2] = mixItemIndex2;
         setJumpItem(false);
         if (local_28[0] != dItemNo_NONE_e) {
             mXButtonSlot = local_28[0];
         }
         if (local_28[1] != dItemNo_NONE_e) {
             mYButtonSlot = local_28[1];
+        }
+        if (local_28[2] != dItemNo_NONE_e) {
+            field_0x6ac = local_28[2];
         }
     }
 }
@@ -1562,10 +1887,10 @@ bool dMenu_Ring_c::pointerMove() {
     if (hoveredSlot < 0) {
         return false;
     }
+
     if (pointer.pressed) {
         mPointerTouchPressHoveredCurrent = pointer.touch && hoveredSlot == mCurrentSlot;
     }
-    dusk::menu_pointer::set_hover_target(static_cast<dusk::menu_pointer::TargetId>(hoveredSlot));
 
     if (mCurrentSlot != hoveredSlot) {
         mDirectSelectCursorPos.x = mItemSlotPosX[mCurrentSlot];
@@ -1818,9 +2143,23 @@ void dMenu_Ring_c::drawSelectItem() {
 }
 
 void dMenu_Ring_c::setSelectItemForce(int i_idx) {
-    if (i_idx == 2) {
+    if (dMenuRing_wiiuControllerStyle() && i_idx < 3) {
+        if (field_0x674[i_idx] != 0) {
+            for (int i = 0; i < 3; i++) {
+                dComIfGs_setMixItemIndex(i, field_0x6b8[i]);
+                dComIfGs_setSelectItemIndex(i, field_0x6b4[i]);
+            }
+            field_0x674[i_idx] = 0;
+#if TARGET_PC
+            mSelectItemSlideElapsed[i_idx] = 0.0f;
+#endif
+        }
+    } else if (i_idx == 2) {
         if (field_0x674[i_idx] != 0) {
             dComIfGs_setSelectItemIndex(i_idx, field_0x6b4[i_idx]);
+            if (dMenuRing_wiiuControllerStyle()) {
+                dComIfGs_setMixItemIndex(i_idx, field_0x6b8[i_idx]);
+            }
             field_0x674[i_idx] = 0;
 #if TARGET_PC
             mSelectItemSlideElapsed[i_idx] = 0.0f;
@@ -1960,6 +2299,18 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[1] = dItemNo_HAWK_ARROW_e;
             break;
         }
+        if (dMenuRing_wiiuControllerStyle()) {
+            switch (item2) {
+            case dItemNo_NORMAL_BOMB_e:
+            case dItemNo_WATER_BOMB_e:
+            case dItemNo_POKE_BOMB_e:
+                local_18[2] = dItemNo_BOMB_ARROW_e;
+                break;
+            case dItemNo_HAWK_EYE_e:
+                local_18[2] = dItemNo_HAWK_ARROW_e;
+                break;
+            }
+        }
         break;
     case dItemNo_NORMAL_BOMB_e:
     case dItemNo_WATER_BOMB_e:
@@ -1968,6 +2319,8 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[0] = dItemNo_BOMB_ARROW_e;
         } else if (item1 == dItemNo_BOW_e) {
             local_18[1] = dItemNo_BOMB_ARROW_e;
+        } else if (dMenuRing_wiiuControllerStyle() && item2 == dItemNo_BOW_e) {
+            local_18[2] = dItemNo_BOMB_ARROW_e;
         }
         break;
     case dItemNo_HAWK_EYE_e:
@@ -1975,6 +2328,8 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[0] = dItemNo_HAWK_ARROW_e;
         } else if (item1 == dItemNo_BOW_e) {
             local_18[1] = dItemNo_HAWK_ARROW_e;
+        } else if (dMenuRing_wiiuControllerStyle() && item2 == dItemNo_BOW_e) {
+            local_18[2] = dItemNo_HAWK_ARROW_e;
         }
         break;
     case dItemNo_BEE_CHILD_e:
@@ -2028,6 +2383,14 @@ bool dMenu_Ring_c::checkExplainForce() {
         field_0x6c7[0] = dItemNo_NONE_e;
         field_0x6c7[1] = local_18[1];
         field_0x6c7[2] = dItemNo_NONE_e;
+        field_0x6c7[3] = dItemNo_NONE_e;
+    } else if (dMenuRing_wiiuControllerStyle() && local_18[0] == dItemNo_NONE_e &&
+               local_18[1] == dItemNo_NONE_e && local_18[2] != dItemNo_NONE_e &&
+               local_18[3] == dItemNo_NONE_e && dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e)
+    {
+        field_0x6c7[0] = dItemNo_NONE_e;
+        field_0x6c7[1] = dItemNo_NONE_e;
+        field_0x6c7[2] = local_18[2];
         field_0x6c7[3] = dItemNo_NONE_e;
     } else {
         field_0x6c7[0] = dItemNo_NONE_e;
@@ -2150,6 +2513,13 @@ bool dMenu_Ring_c::isMixItemOn() {
             {
                 return true;
             }
+            if (dMenuRing_wiiuControllerStyle() &&
+                (((dComIfGs_getSelectItemIndex(2) == SLOT_4) &&
+                  (dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e)) ||
+                 (dComIfGs_getMixItemIndex(2) == SLOT_4)))
+            {
+                return true;
+            }
             break;
         }
     }
@@ -2165,6 +2535,11 @@ bool dMenu_Ring_c::isMixItemOff() {
         }
         if ((dComIfGs_getMixItemIndex(1) == SLOT_4) &&
             (mItemSlots[mCurrentSlot] == dComIfGs_getSelectItemIndex(1)))
+        {
+            return 1;
+        }
+        if (dMenuRing_wiiuControllerStyle() && (dComIfGs_getMixItemIndex(2) == SLOT_4) &&
+            (mItemSlots[mCurrentSlot] == dComIfGs_getSelectItemIndex(2)))
         {
             return 1;
         }

@@ -94,7 +94,7 @@ public:
     static void stopMotorWaveHard(u32 pad) { return m_gamePad[pad]->stopMotorWaveHard(); }
 
     static JUTGamePad* m_gamePad[4];
-    static interface_of_controller_pad m_cpadInfo[4];
+    static DUSK_GAME_DATA interface_of_controller_pad m_cpadInfo[4];
     static interface_of_controller_pad m_debugCpadInfo[4];
 };
 

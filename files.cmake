@@ -1567,6 +1567,21 @@ set(DUSK_FILES
         src/dusk/mods/svc/config.hpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
+        src/dusk/hud_layout.cpp
+        src/dusk/mods/svc/file_select.cpp
+        src/dusk/mods/svc/file_select.hpp
+        src/dusk/mods/svc/item_aim.cpp
+        src/dusk/mods/svc/item_aim.hpp
+        src/dusk/mods/svc/item_slots.cpp
+        src/dusk/mods/svc/item_slots.hpp
+        src/dusk/mods/svc/combat_input.cpp
+        src/dusk/mods/svc/combat_input.hpp
+        src/dusk/mods/svc/boss_flow.cpp
+        src/dusk/mods/svc/boss_flow.hpp
+        src/dusk/mods/svc/midna_dialog.cpp
+        src/dusk/mods/svc/midna_dialog.hpp
+        src/dusk/mods/svc/hud_layout.cpp
+        src/dusk/mods/svc/hud_layout.hpp
         src/dusk/mods/svc/hook.cpp
         src/dusk/mods/svc/host.cpp
         src/dusk/mods/svc/log.cpp

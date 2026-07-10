@@ -207,9 +207,16 @@ void ModLoader::init_services() {
             &svc::g_textureModule,
             &svc::g_configModule,
             &svc::g_uiModule,
+            &svc::g_hudLayoutModule,
             &svc::g_gameModule,
             &svc::g_cameraModule,
             &svc::g_gfxModule,
+            &svc::g_fileSelectModule,
+            &svc::g_itemAimModule,
+            &svc::g_itemSlotsModule,
+            &svc::g_combatInputModule,
+            &svc::g_bossFlowModule,
+            &svc::g_midnaDialogModule,
         })
     {
         svc::register_module(*module);

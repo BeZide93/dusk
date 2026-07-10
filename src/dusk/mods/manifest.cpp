@@ -8,10 +8,12 @@
 #include <cstring>
 #include <filesystem>
 #include <limits>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
 #include <zstd.h>
 
 #include "aurora/lib/logging.hpp"
@@ -155,6 +157,12 @@ bool running_image_identity(std::vector<uint8_t>& outId, uintptr_t& outBase) {
     dl_iterate_phdr(
         [](dl_phdr_info* info, size_t, void* data) -> int {
             auto* ctx = static_cast<Ctx*>(data);
+#if defined(__ANDROID__)
+            const std::string_view imageName = info->dlpi_name != nullptr ? info->dlpi_name : "";
+            if (!imageName.ends_with("/libmain.so") && imageName != "libmain.so") {
+                return 0;
+            }
+#endif
             // The first callback is the main executable.
             ctx->base = info->dlpi_addr;
             for (int i = 0; i < info->dlpi_phnum; ++i) {
@@ -191,10 +199,37 @@ bool running_image_identity(std::vector<uint8_t>& outId, uintptr_t& outBase) {
 }
 
 std::filesystem::path manifest_path() {
+#if defined(__ANDROID__)
+#if defined(__aarch64__)
+    return "dusklight-arm64-v8a.symdb";
+#elif defined(__x86_64__)
+    return "dusklight-x86_64.symdb";
+#else
+#error "unsupported Android architecture"
+#endif
+#else
     const char* basePath = SDL_GetBasePath();
     std::filesystem::path dir =
         basePath != nullptr ? std::filesystem::path{basePath} : std::filesystem::current_path();
     return dir / "dusklight.symdb";
+#endif
+}
+
+std::vector<uint8_t> read_manifest(const std::filesystem::path& path) {
+#if defined(__ANDROID__)
+    const std::string assetPath = io::fs_path_to_string(path);
+    size_t size = 0;
+    void* contents = SDL_LoadFile(assetPath.c_str(), &size);
+    if (contents == nullptr) {
+        throw std::runtime_error(SDL_GetError());
+    }
+    const auto* bytes = static_cast<const uint8_t*>(contents);
+    std::vector<uint8_t> data(bytes, bytes + size);
+    SDL_free(contents);
+    return data;
+#else
+    return io::FileStream::ReadAllBytes(path);
+#endif
 }
 
 std::string hex_string(const uint8_t* data, size_t len) {
@@ -217,15 +252,17 @@ void initialize() {
     s_state.initialized = true;
 
     const auto path = manifest_path();
+#if !defined(__ANDROID__)
     std::error_code ec;
     if (!std::filesystem::exists(path, ec)) {
         Log.info("no symbol manifest at {}; by-name resolution unavailable",
             io::fs_path_to_string(path));
         return;
     }
+#endif
     std::vector<uint8_t> data;
     try {
-        data = io::FileStream::ReadAllBytes(path);
+        data = read_manifest(path);
     } catch (const std::exception& e) {
         Log.error("failed to read symbol manifest {}: {}", io::fs_path_to_string(path), e.what());
         return;

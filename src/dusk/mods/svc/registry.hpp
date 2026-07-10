@@ -69,8 +69,15 @@ extern const ServiceModule g_overlayModule;
 extern const ServiceModule g_textureModule;
 extern const ServiceModule g_configModule;
 extern const ServiceModule g_uiModule;
+extern const ServiceModule g_hudLayoutModule;
 extern const ServiceModule g_gameModule;
 extern const ServiceModule g_cameraModule;
 extern const ServiceModule g_gfxModule;
+extern const ServiceModule g_fileSelectModule;
+extern const ServiceModule g_itemAimModule;
+extern const ServiceModule g_itemSlotsModule;
+extern const ServiceModule g_combatInputModule;
+extern const ServiceModule g_bossFlowModule;
+extern const ServiceModule g_midnaDialogModule;
 
 }  // namespace dusk::mods::svc

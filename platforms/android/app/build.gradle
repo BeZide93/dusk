@@ -12,6 +12,12 @@ def syncDuskAssets = tasks.register('syncDuskAssets', Sync) {
         into 'res'
         exclude '**/.DS_Store'
     }
+    from(new File(duskRepoDir, 'build/android-arm64/dusklight.symdb')) {
+        rename { 'dusklight-arm64-v8a.symdb' }
+    }
+    from(new File(duskRepoDir, 'build/android-x86_64/dusklight.symdb')) {
+        rename { 'dusklight-x86_64.symdb' }
+    }
     into duskGeneratedAssetsDir
 }
 
