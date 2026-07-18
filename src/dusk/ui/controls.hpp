@@ -82,13 +82,14 @@ struct ControlLayout {
     bool operator==(const ControlLayout&) const = default;
 };
 
-constexpr std::array<std::string_view, 9> kControlLayoutIds = {
+constexpr std::array<std::string_view, 10> kControlLayoutIds = {
     "actionBar",
     "buttonA",
     "buttonB",
     "buttonX",
     "buttonY",
     "buttonZ",
+    "buttonDpadDown",
     "skip",
     "triggerL",
     "triggerR",
