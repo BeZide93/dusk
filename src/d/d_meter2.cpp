@@ -22,6 +22,7 @@
 #include "d/d_meter_string.h"
 #include "f_op/f_op_msg_mng.h"
 #include "d/actor/d_a_horse.h"
+#include "dusk/hud_layout.hpp"
 #include <cstring>
 
 #if TARGET_PC
@@ -581,6 +582,13 @@ void dMeter2_c::moveLife() {
     s16 life_count = 0;
     bool draw_life = false;
 
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_life = true;
+    }
+
     if (dComIfGp_getItemMaxLifeCount() != 0) {
         s16 max_count = dComIfGs_getMaxLife() + dComIfGp_getItemMaxLifeCount();
         if (max_count > 100) {
@@ -714,6 +722,13 @@ void dMeter2_c::moveKantera() {
     var_r7 = 0;
     draw_kantera = false;
 
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_kantera = true;
+    }
+
     if (dComIfGp_getItemMaxOilCount() != 0) {
         var_r7 = dComIfGs_getMaxOil() + dComIfGp_getItemMaxOilCount();
         if (var_r7 > max_oil) {
@@ -834,6 +849,13 @@ void dMeter2_c::moveOxygen() {
     s32 var_r4 = dComIfGp_getMaxOxygen();
     var_r7 = 0;
     draw_oxygen = false;
+
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_oxygen = true;
+    }
 
     if (dComIfGp_getMaxOxygenCount() != 0) {
         var_r7 = dComIfGp_getMaxOxygen() + dComIfGp_getMaxOxygenCount();
@@ -1049,6 +1071,13 @@ void dMeter2_c::moveRupee() {
     s16 r29 = 0;
     bool draw_rupee = false;
 
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_rupee = true;
+    }
+
     if (dComIfGp_getItemRupeeCount() != 0) {
         r29 = dComIfGs_getRupee() + dComIfGp_getItemRupeeCount();
         if (r29 > temp_r5) {
@@ -1197,6 +1226,13 @@ void dMeter2_c::moveKey() {
     bool draw_key;
 
     draw_key = false;
+
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_key = true;
+    }
     if (dComIfGp_getItemKeyNumCount() != 0) {
         var_r5 = dComIfGs_getKeyNum() + dComIfGp_getItemKeyNumCount();
         if (var_r5 > 99) {
@@ -1274,6 +1310,13 @@ void dMeter2_c::moveButtonA() {
     draw_buttonA = false;
     var_r29 = 0;
     emphasis_a = false;
+
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_buttonA = true;
+    }
 
     if (dComIfGp_getDoStatusForce() != 0) {
         dComIfGp_setDoStatus(dComIfGp_getDoStatusForce(), dComIfGp_getDoSetFlagForce());
@@ -1440,6 +1483,13 @@ void dMeter2_c::moveButtonB() {
     draw_buttonB = false;
     var_r29 = 0;
     emphasis_b = false;
+
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_buttonB = true;
+    }
 
     if (dComIfGp_getAStatusForce() != 0) {
         dComIfGp_setAStatus(dComIfGp_getAStatusForce(), dComIfGp_getASetFlagForce());
@@ -1679,6 +1729,13 @@ void dMeter2_c::moveButtonR() {
 void dMeter2_c::moveButtonZ() {
     bool draw_buttonZ = false;
 
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_buttonZ = true;
+    }
+
     if (field_0x324 != g_drawHIO.mButtonZScale) {
         field_0x324 = g_drawHIO.mButtonZScale;
         draw_buttonZ = true;
@@ -1841,6 +1898,14 @@ void dMeter2_c::moveButtonXY() {
     for (int i = 0; i < 2; i++) {
         sp8[i] = 0;
         spC[i] = 0;
+    }
+
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        sp8[0] = true;
+        sp8[1] = true;
     }
 
     if (field_0x33c != g_drawHIO.mButtonXScale) {
@@ -2136,6 +2201,13 @@ void dMeter2_c::moveButtonCross() {
     draw_cross = false;
     var_f31 = 0.0f;
 
+    static u32 sLayoutStamp = 0;
+    const u32 layoutStamp = dusk::hud_layout::LayoutStamp();
+    if (sLayoutStamp != layoutStamp) {
+        sLayoutStamp = layoutStamp;
+        draw_cross = true;
+    }
+
     if (mButtonCrossOFFPosX != g_drawHIO.mButtonCrossOFFPosX) {
         mButtonCrossOFFPosX = g_drawHIO.mButtonCrossOFFPosX;
         draw_cross = true;
@@ -2171,7 +2243,10 @@ void dMeter2_c::moveButtonCross() {
         draw_cross = true;
     }
 
-    if (mpMap != NULL) {
+    if (mpMap != NULL &&
+        dusk::hud_layout::ElementParentMode(dusk::hud_layout::Element::DPad) !=
+            DUSK_MOD_HUD_PARENT_INDEPENDENT)
+    {
         temp_f31 = mpMap->getMapDispEdgeTop();
         temp_f1 = (temp_f31 - mpMeterDraw->getButtonCrossParentInitTransY()) - 15.0f;
 
@@ -2194,6 +2269,12 @@ void dMeter2_c::moveButtonCross() {
 
             var_f31 = mButtonCrossOFFPosY;
         }
+    } else {
+        if (field_0x1b4 != 0) {
+            field_0x1b4 = 0;
+            draw_cross = true;
+        }
+        var_f31 = mButtonCrossOFFPosY;
     }
 
     temp_f30 = mButtonCrossOFFPosX + (((f32)field_0x1b4 / (f32)g_drawHIO.mButtonCrossMoveFrame) *
