@@ -291,11 +291,36 @@ at registration. Registrations follow your mod's lifecycle.
 
 See [Asset Overlays](#asset-overlays) for priority and conflict handling.
 
+### HudLayoutService (`mods/svc/hud_layout.h`)
+
+Registers a render-time HUD layout provider. The host keeps the default HUD when no provider is
+registered or when the active provider returns `NULL`; otherwise it applies the returned
+`DuskModHudLayoutSnapshot` to the existing meter panes. The latest active provider wins, and
+registrations are removed automatically when the owning mod is disabled, reloaded, or fails.
+
+```cpp
+IMPORT_SERVICE(HudLayoutService, svc_hud_layout);
+
+const DuskModHudLayoutSnapshot* get_layout(ModContext*, const char* data_path, void*) {
+    // Return stable storage owned by the mod, or NULL to use the upstream HUD.
+    return &layout;
+}
+
+HudLayoutProviderDesc desc = HUD_LAYOUT_PROVIDER_DESC_INIT;
+desc.get_layout = get_layout;
+HudLayoutProviderHandle handle = 0;
+svc_hud_layout->register_provider(mod_ctx, &desc, &handle);
+```
+
+The `data_path` argument points at the active user data folder. Use `revision` to notify the host
+that cached pane positions should be rebuilt after the snapshot changes.
+
 ### Gameplay Extension Services
 
 The following small provider services expose game lifecycle points that are hard to express as
-asset overlays or ordinary function hooks. The latest active provider for a callback wins, and
-registrations are removed automatically when the owning mod is disabled, reloaded, or fails.
+asset overlays or ordinary function hooks. They follow the same pattern as `HudLayoutService`:
+the latest active provider for a callback wins, and registrations are removed automatically when
+the owning mod is disabled, reloaded, or fails.
 
 - `FileSelectService` (`mods/svc/file_select.h`): custom file-select flows and custom start-stage
   selection for newly created saves.

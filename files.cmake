@@ -1485,6 +1485,8 @@ set(DUSK_FILES
         src/dusk/mods/log_buffer.hpp
         src/dusk/mods/manifest.cpp
         src/dusk/mods/manifest.hpp
+        src/dusk/hud_layout.cpp
+        src/dusk/hud_layout.hpp
         src/dusk/mods/svc/stage_flow.cpp
         src/dusk/mods/svc/stage_flow.hpp
         src/dusk/mods/svc/camera.cpp
@@ -1496,6 +1498,8 @@ set(DUSK_FILES
         src/dusk/mods/svc/file_select.hpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
+        src/dusk/mods/svc/hud_layout.cpp
+        src/dusk/mods/svc/hud_layout.hpp
         src/dusk/mods/svc/aim_control.cpp
         src/dusk/mods/svc/aim_control.hpp
         src/dusk/mods/svc/item_assignment.cpp
