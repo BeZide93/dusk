@@ -61,6 +61,12 @@ android {
     lint {
         abortOnError false
     }
+
+    packaging {
+        jniLibs {
+            keepDebugSymbols += ['**/libmain.so']
+        }
+    }
 }
 
 dependencies {
