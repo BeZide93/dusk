@@ -21,6 +21,7 @@ ModResult install_item_slot_hooks(ModError* error);
 ModResult install_jump_hooks(ModError* error);
 ModResult install_manual_shield_hooks(ModError* error);
 ModResult register_ui(ModError* error);
+void update_bossrush_hooks();
 }
 
 extern "C" {
@@ -65,6 +66,7 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 }
 
 MOD_EXPORT ModResult mod_update(ModError*) {
+    dawnlight::update_bossrush_hooks();
     return MOD_OK;
 }
 

@@ -11,6 +11,7 @@ class JPABaseEmitter;
 #include "d/actor/d_a_obj_bosswarp.h"
 #undef private
 #include "f_op/f_op_actor_mng.h"
+#include "f_pc/f_pc_name.h"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/hook.h"
@@ -20,13 +21,7 @@ IMPORT_SERVICE(HookService, svc_hook);
 namespace dawnlight {
 namespace {
 
-DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
 DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
-DEFINE_HOOK_SYMBOL("demo_camera", void(b_gnd_class*), GanondorfDemoCameraHook);
-
-void update_bossrush(ModContext*, void*, void*, void*) {
-    bossrush::update();
-}
 
 bool update_hub_boss_warp(daObjBossWarp_c* warp) {
     if (warp == nullptr || !bossrush::is_hub_stage()) {
@@ -68,12 +63,11 @@ HookAction before_boss_warp_execute(ModContext*, void* args, void* retval, void*
     return HOOK_SKIP_ORIGINAL;
 }
 
-HookAction before_ganondorf_demo_camera(ModContext*, void* args, void*, void*) {
-    auto* ganondorf = mods::arg<b_gnd_class*>(args, 0);
+void update_ganondorf_sequence() {
+    auto* ganondorf = static_cast<b_gnd_class*>(fopAcM_SearchByName(fpcNm_B_GND_e));
     if (ganondorf == nullptr || ganondorf->mDemoCamMode != 65 ||
-        ganondorf->mDemoCamTimer != 330 || !bossrush::complete_ganondorf_sequence())
-    {
-        return HOOK_CONTINUE;
+        ganondorf->mDemoCamTimer != 330 || !bossrush::complete_ganondorf_sequence()) {
+        return;
     }
 
     camera_process_class* camera = dComIfGp_getCamera(dComIfGp_getPlayerCameraID(0));
@@ -84,25 +78,22 @@ HookAction before_ganondorf_demo_camera(ModContext*, void* args, void*, void*) {
     dComIfGp_event_reset();
     ganondorf->mDemoCamMode = 0;
     ganondorf->mDemoCamTimer = 0;
-    return HOOK_SKIP_ORIGINAL;
 }
 
 }  // namespace
 
 ModResult install_bossrush_hooks(ModError* error) {
-    ModResult result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, update_bossrush);
+    ModResult result = mods::hook_add_pre<BossWarpExecuteHook>(svc_hook, before_boss_warp_execute);
     if (result == MOD_OK) {
-        result = mods::hook_add_pre<BossWarpExecuteHook>(svc_hook, before_boss_warp_execute);
-    }
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<GanondorfDemoCameraHook>(
-            svc_hook, before_ganondorf_demo_camera);
-    }
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight Boss Rush update hook");
+        return MOD_OK;
     }
 
-    return MOD_OK;
+    return mods::set_error(error, result, "failed to install Dawnlight Boss Rush portal hook");
+}
+
+void update_bossrush_hooks() {
+    bossrush::update();
+    update_ganondorf_sequence();
 }
 
 }  // namespace dawnlight

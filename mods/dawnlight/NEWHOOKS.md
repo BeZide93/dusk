@@ -16,7 +16,7 @@ This hook-only branch does not add new host services or game-code callsites. The
   `dFile_select_c::menuSelectStart`, `dFile_select_c::nameInput2`,
   and `dScnName_c::changeGameScene`.
 - Boss Rush flow:
-  `dScnPly_Execute`, `daObjBossWarp_c::execute`, and `demo_camera`.
+  `daObjBossWarp_c::execute`; the main Boss Rush state machine runs from `mod_update()`.
 - Aim helpers:
   `daAlink_c::procBowSubject`, `daAlink_c::procBoomerangSubject`,
   `daAlink_c::procHookshotSubject`, `daAlink_c::procIronBallSubject`,
