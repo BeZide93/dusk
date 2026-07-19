@@ -85,9 +85,6 @@ public:
     void setStatus(u8 i_status) { mStatus = i_status; }
 
 private:
-    void setupSetItemThirdSlotButton();
-    void drawSetItemThirdSlotButton();
-
     /* 0x004 */ JKRExpHeap* mpHeap;
     /* 0x008 */ STControl* mpStick;
     /* 0x00C */ CSTControl* mpCStick;
@@ -101,8 +98,6 @@ private:
     /* 0x050 */ CPaneMgr* mpCircle;
     /* 0x054 */ dKantera_icon_c* mpKanteraMeter;
     /* 0x058 */ J2DScreen* mpScreen;
-    J2DScreen* mpSetItemThirdSlotScreen;
-    CPaneMgr* mpSetItemThirdSlotButton;
     /* 0x05C */ J2DScreen* mpSpotScreen;
     /* 0x060 */ u8 field_0x060[0x064 - 0x060];
     /* 0x064 */ J2DScreen* mpCenterScreen;

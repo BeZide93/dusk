@@ -106,11 +106,8 @@ private:
     std::string mButtonYIconSource;
     std::string mZTriggerIconSource;
     uint64_t mZTriggerIconRevision = 0;
-    std::string mMidnaIconSource;
-    uint64_t mMidnaIconRevision = 0;
     std::string mButtonXCountLabel;
     std::string mButtonYCountLabel;
-    std::string mButtonZCountLabel;
     StickTouch mMoveTouch;
     StickTouch mCameraTouch;
     SDL_FingerID mMenuPointerTouch = 0;

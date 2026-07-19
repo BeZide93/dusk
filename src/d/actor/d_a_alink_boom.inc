@@ -390,9 +390,7 @@ int daAlink_c::procBoomerangSubject() {
     setShapeAngleToAtnActor(0);
 
     if (!checkNextAction(0)) {
-        if (!dusk::mods::svc::aim_control::subject_update(this, DUSK_MOD_AIM_ITEM_BOOMERANG) &&
-            setBodyAngleToCamera())
-        {
+        if (setBodyAngleToCamera()) {
             setBoomerangSight();
         }
     } else {

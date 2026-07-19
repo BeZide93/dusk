@@ -111,11 +111,6 @@ button icon glyph {
     border-color: rgba(203, 170, 255, 36%);
 }
 
-.button-dpad-down {
-    background-color: rgba(118, 79, 158, 58%);
-    border-color: rgba(203, 170, 255, 36%);
-}
-
 .midna-icon {
     position: absolute;
     left: 9dp;
@@ -124,15 +119,13 @@ button icon glyph {
 }
 
 .button-z.has-icon span,
-.button-dpad-down.has-icon span,
 .face.has-item span {
     position: absolute;
     font-size: 13dp;
     line-height: 1;
 }
 
-.button-z.has-icon span,
-.button-dpad-down.has-icon span {
+.button-z.has-icon span {
     right: 9dp;
     bottom: 7dp;
 }

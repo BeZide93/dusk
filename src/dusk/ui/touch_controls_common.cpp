@@ -56,21 +56,6 @@ constexpr std::array<TouchLayoutControlInfo, kTouchLayoutControlCount> kLayoutCo
         .hasControl = true,
     },
     {
-        .layoutId = "buttonDpadDown",
-        .elementId = "button-dpad-down",
-        .props =
-            {
-                .x = 24.f,
-                .y = 72.f,
-                .w = 78.f,
-                .h = 46.f,
-                .scale = 1.f,
-                .anchor = ControlAnchor::BottomLeft,
-            },
-        .control = Control::DPAD_DOWN,
-        .hasControl = true,
-    },
-    {
         .layoutId = "actionBar",
         .elementId = "action-bar",
         .props =
@@ -174,8 +159,7 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
     <button id="skip" class="control skip"><icon><glyph>&#xe044;</glyph></icon></button>
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>
-    <button id="button-z" class="control trigger button-z midna"><img id="button-z-icon" class="item-icon" /><oil-meter id="button-z-oil" class="oil-meter"><oil-fill id="button-z-oil-fill" /></oil-meter><count id="button-z-count" class="item-count"></count><span>Z</span></button>
-    <button id="button-dpad-down" class="control trigger button-dpad-down"><img id="button-dpad-down-icon" class="midna-icon" /><span>&#x25BC;</span></button>
+    <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><span>Z</span></button>
 
     <button id="button-y" class="control face y"><img id="button-y-icon" class="item-icon" /><oil-meter id="button-y-oil" class="oil-meter"><oil-fill id="button-y-oil-fill" /></oil-meter><count id="button-y-count" class="item-count"></count><span>Y</span></button>
     <button id="button-x" class="control face x"><img id="button-x-icon" class="item-icon" /><oil-meter id="button-x-oil" class="oil-meter"><oil-fill id="button-x-oil-fill" /></oil-meter><count id="button-x-count" class="item-count"></count><span>X</span></button>

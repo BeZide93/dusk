@@ -23,7 +23,6 @@
 #include "m_Do/m_Do_Reset.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_graphic.h"
-#include "dusk/mods/svc/item_assignment.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -1967,9 +1966,7 @@ u8 dComIfGs_getMixItemIndex(int i_no) {
 }
 
 void dComIfGp_setSelectItem(int i_selItemIdx) {
-    if (i_selItemIdx == SELECT_ITEM_DOWN &&
-        !dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN))
-    {
+    if (i_selItemIdx == SELECT_ITEM_DOWN) {
         if (dComIfGs_getSelectItemIndex(i_selItemIdx) != 0xFF) {
             u8 selItem_slotNo = dComIfGs_getSelectItemIndex(i_selItemIdx);
             g_dComIfG_gameInfo.play.setSelectItem(i_selItemIdx, selItem_slotNo);
@@ -1995,12 +1992,7 @@ void dComIfGp_setSelectItem(int i_selItemIdx) {
 u8 dComIfGp_getSelectItem(int i_selItemIdx) {
     u8 playItem = g_dComIfG_gameInfo.play.getSelectItem(i_selItemIdx);
 
-    const bool canMixItem =
-        i_selItemIdx == SELECT_ITEM_X || i_selItemIdx == SELECT_ITEM_Y ||
-        (i_selItemIdx == SELECT_ITEM_DOWN &&
-         dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN));
-
-    if (canMixItem &&
+    if ((i_selItemIdx == SELECT_ITEM_X || i_selItemIdx == SELECT_ITEM_Y) &&
         dComIfGs_getMixItemIndex(i_selItemIdx) != 0xFF)
     {
         u8 saveItem = dComIfGs_getItem(dComIfGs_getMixItemIndex(i_selItemIdx), false);

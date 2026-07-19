@@ -289,13 +289,11 @@ int dEvt_control_c::talkXyCheck(dEvt_order_c* order) {
         mTalkXyType = 2;
         itemIndex = SELECT_ITEM_Y;
         break;
-    #if TARGET_PC || PLATFORM_WII || PLATFORM_SHIELD
-    case dEvt_type_SHOWITEM_Z_e:
-        mTalkXyType = 3;
-        itemIndex = SELECT_ITEM_DOWN;
-        break;
-    #endif
     #if PLATFORM_WII || PLATFORM_SHIELD
+    case 8:
+        mTalkXyType = 3;
+        itemIndex = 2;
+        break;
     case 9:
         mTalkXyType = 4;
         itemIndex = 3;
@@ -665,9 +663,6 @@ int dEvt_control_c::entry() {
                 break;
             case dEvt_type_SHOWITEM_X_e:
             case dEvt_type_SHOWITEM_Y_e:
-#if TARGET_PC
-            case dEvt_type_SHOWITEM_Z_e:
-#endif
                 if (dComIfGs_getLife() != 0 && talkXyCheck(order)) {
                     return 1;
                 }

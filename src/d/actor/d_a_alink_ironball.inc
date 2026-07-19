@@ -922,9 +922,7 @@ int daAlink_c::procIronBallSubject() {
     setShapeAngleToAtnActor(0);
 
     if (!checkNextAction(0) && itemButton() && mItemVar0.field_0x3018 == 2) {
-        if (!dusk::mods::svc::aim_control::subject_update(this, DUSK_MOD_AIM_ITEM_IRON_BALL)) {
-            setBodyAngleToCamera();
-        }
+        setBodyAngleToCamera();
     }
 
     return 1;

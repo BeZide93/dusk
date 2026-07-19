@@ -190,8 +190,7 @@ void daAlink_c::setShieldGuard() {
         (checkGuardAccept() && !checkGrabAnime() && !checkUpperReadyThrowAnime() &&
          !checkDkCaught2Anime() && !checkKandelaarSwingAnime() && !checkCutDashAnime() &&
          !checkCutDashChargeAnime() && (!checkEquipAnime() || checkUpperGuardAnime()) &&
-         !checkRideOn() && checkGuardActionChange() &&
-         (!daAlink_guardActionOverridden(this, nullptr) || daAlink_guardActionPressed(this))))
+         !checkRideOn() && checkGuardActionChange()))
     {
         onNoResetFlg2(FLG2_UNK_8000000);
     } else {

@@ -22,7 +22,6 @@
 #include "d/d_meter_string.h"
 #include "f_op/f_op_msg_mng.h"
 #include "d/actor/d_a_horse.h"
-#include "dusk/mods/svc/item_assignment.hpp"
 #include <cstring>
 
 #if TARGET_PC
@@ -162,9 +161,6 @@ int dMeter2_c::_create() {
 
     for (int i = 0; i < 2; i++) {
         dComIfGp_setSelectItem(i);
-    }
-    if (dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN)) {
-        dComIfGp_setSelectItem(SELECT_ITEM_DOWN);
     }
 
     mItemStatus[X_ITEM] = dComIfGp_getSelectItem(0);

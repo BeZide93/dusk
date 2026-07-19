@@ -815,9 +815,6 @@ std::string item_icon_source_for_button(Control control) {
     case Control::Y:
         itemNo = selected_slot_item(1);
         break;
-    case Control::Z:
-        itemNo = selected_slot_item(2);
-        break;
     case Control::B:
         itemNo = b_button_item();
         break;
@@ -839,9 +836,6 @@ std::string item_count_label_for_button(Control control) {
     case Control::Y:
         count = selected_slot_count(1);
         break;
-    case Control::Z:
-        count = selected_slot_count(2);
-        break;
     default:
         break;
     }
@@ -859,9 +853,6 @@ std::optional<float> item_oil_fill_for_button(Control control) noexcept {
         break;
     case Control::Y:
         itemNo = selected_slot_item(1);
-        break;
-    case Control::Z:
-        itemNo = selected_slot_item(2);
         break;
     default:
         break;

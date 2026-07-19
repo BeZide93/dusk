@@ -25,18 +25,6 @@
 #include "f_op/f_op_msg_mng.h"
 #include "f_op/f_op_overlap_mng.h"
 #include "m_Do/m_Do_controller_pad.h"
-#include "dusk/mods/svc/item_assignment.hpp"
-
-static bool dMw_isItemRingTrigger() {
-    return dMw_UP_TRIGGER() ||
-           (!dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN) &&
-            dMw_DOWN_TRIGGER());
-}
-
-static bool dMw_isItemRingDownOrigin() {
-    return !dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN) &&
-           dMw_DOWN_TRIGGER();
-}
 
 #ifdef TARGET_PC
 #include "dusk/frame_interpolation.h"
@@ -662,7 +650,7 @@ void dMw_c::key_wait_proc() {
                 mMenuProc = DMAP_OPEN;
                 dMw_dmap_create();
             }
-        } else if (((dMw_isItemRingTrigger() && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
+        } else if ((((dMw_UP_TRIGGER() || dMw_DOWN_TRIGGER()) && !dMw_LEFT_TRIGGER() && !dMw_RIGHT_TRIGGER()) || dMeter2Info_isMenuInForce(2) || dMeter2Info_isTouchKeyCheck(2)) &&
                    dMeter2Info_isWindowAccept(2) &&
                    (dMeter2Info_getMapStatus() == 0 || dMeter2Info_getMapStatus() == 1) &&
                    dMeter2Info_isItemOpenCheck() &&
@@ -674,7 +662,7 @@ void dMw_c::key_wait_proc() {
                 dMeter2Info_getMeterClass()->emphasisButtonDelete();
             }
 
-            if (dMw_isItemRingDownOrigin()) {
+            if (dMw_DOWN_TRIGGER()) {
                 field_0x14B = 1;
                 dMw_ring_create(2);
             } else {
