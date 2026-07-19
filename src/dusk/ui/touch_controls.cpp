@@ -288,7 +288,7 @@ FaceButtonState z_button_state() {
         return {};
     }
 
-    if (dusk::mods::svc::item_assignment::extended_select_item_slots()) {
+    if (dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN)) {
         const bool itemMode = dComIfGp_getLinkPlayer() != nullptr && daPy_py_c::checkNowWolf() == 0;
         const auto source = itemMode ? item_icon_source_for_button(Control::Z) : std::string();
         return {
@@ -1058,7 +1058,8 @@ void TouchControls::sync_control_displays() noexcept {
     }
 
     const bool midnaVisible =
-        dusk::mods::svc::item_assignment::extended_select_item_slots() && !game_controls_suppressed();
+        dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN) &&
+        !game_controls_suppressed();
     const std::string midnaSource = midnaVisible ? midna_icon_source() : std::string();
     const uint64_t midnaRevision = midnaVisible ? midna_icon_revision() : 0;
     if (midna.root != nullptr) {
@@ -1151,7 +1152,7 @@ void TouchControls::sync_control_displays() noexcept {
     syncIcon(b.root, b.icon, mButtonBIconSource, Control::B, bState);
     syncIcon(x.root, x.icon, mButtonXIconSource, Control::X, xState);
     syncIcon(y.root, y.icon, mButtonYIconSource, Control::Y, yState);
-    if (dusk::mods::svc::item_assignment::extended_select_item_slots()) {
+    if (dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN)) {
         syncIcon(z.root, z.icon, mZTriggerIconSource, Control::Z, zState);
     }
 

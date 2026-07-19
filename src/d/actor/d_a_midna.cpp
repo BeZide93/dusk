@@ -3297,13 +3297,13 @@ int daMidna_c::execute() {
     mSound.framework(0, mReverb);
 
     const bool customPromptResolved = dusk::mods::svc::midna_dialog::prompt_consume_resolution() != 0;
-    const bool customWarpRequested = dusk::mods::svc::midna_dialog::menu_execute_warp(link) != 0;
-    if (customPromptResolved || customWarpRequested) {
+    const bool customActionRequested = dusk::mods::svc::midna_dialog::menu_execute_action(link) != 0;
+    if (customPromptResolved || customActionRequested) {
         dComIfGp_getEvent()->reset(this);
         offStateFlg0(FLG0_UNK_8000);
     }
 
-    if (eventInfo.checkCommandTalk() && !customPromptResolved && !customWarpRequested) {
+    if (eventInfo.checkCommandTalk() && !customPromptResolved && !customActionRequested) {
         if (!checkShadowModeTalkWait() || fopAcM_getTalkEventPartner(link) == this) {
             if (!checkStateFlg0(FLG0_UNK_8000)) {
                 offStateFlg0((daMidna_FLG0)(FLG0_NPC_NEAR | FLG0_NPC_FAR));

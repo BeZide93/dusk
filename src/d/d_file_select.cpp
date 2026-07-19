@@ -24,7 +24,6 @@
 #include <cstring>
 
 #if TARGET_PC
-#include "dusk/mods/svc/file_select.hpp"
 #include "dusk/menu_pointer.h"
 #include "helpers/string.hpp"
 
@@ -152,9 +151,6 @@ dFile_select_c::dFile_select_c(JKRArchive* i_archiveP) {
 }
 
 dFile_select_c::~dFile_select_c() {
-#if TARGET_PC
-    dusk::mods::svc::file_select::destroyed(this);
-#endif
     int i;
 
     for (i = 0; i < 3; i++) {
@@ -387,12 +383,7 @@ void dFile_select_c::_move() {
     }
     #endif
 
-#if TARGET_PC
-    if (!dusk::mods::svc::file_select::update(this))
-#endif
-    {
-        (this->*DataSelProc[mDataSelProc])();
-    }
+    (this->*DataSelProc[mDataSelProc])();
 
     selFileWakuAnm();
     bookIconAnm();
@@ -965,9 +956,6 @@ static u16 msgTbl[3] = {
 void dFile_select_c::dataSelectStart() {
 #if TARGET_PC
     dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
-    if (mIsDataNew[mSelectNum] != 0 && dusk::mods::svc::file_select::open_new_slot(this)) {
-        return;
-    }
 #endif
     mSelIcon->setAlphaRate(0.0f);
 
@@ -1386,9 +1374,6 @@ void dFile_select_c::menuSelect() {
 void dFile_select_c::menuSelectStart() {
 #if TARGET_PC
     dusk::menu_pointer::clear_deferred_activation(dusk::menu_pointer::Context::FileSelect);
-    if (mSelectMenuNum == 1 && dusk::mods::svc::file_select::start_existing_slot(this)) {
-        return;
-    }
 #endif
     #if TARGET_PC
     if (!dusk::getSettings().game.hideTvSettingsScreen || mSelectMenuNum != 1) {
@@ -1752,9 +1737,6 @@ void dFile_select_c::nameInput2() {
         break;
     case 2:
         dComIfGs_setHorseName(mpName->getInputStrPtr());
-#if TARGET_PC
-        dusk::mods::svc::file_select::names_confirmed(this);
-#endif
         mIsSelectEnd = true;
         mDataSelProc = DATASELPROC_NEXT_MODE_WAIT;
     }

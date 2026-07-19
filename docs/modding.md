@@ -297,15 +297,11 @@ The following small provider services expose game lifecycle points that are hard
 asset overlays or ordinary function hooks. The latest active provider for a callback wins, and
 registrations are removed automatically when the owning mod is disabled, reloaded, or fails.
 
-- `FileSelectService` (`mods/svc/file_select.h`): custom file-select flows and custom start-stage
-  selection for newly created saves.
 - `AimControlService` (`mods/svc/aim_control.h`): item aim camera-mode decisions, input routing,
   and optional replacement of per-item subject-aim updates.
 - `ItemAssignmentService` (`mods/svc/item_assignment.h`): changes how many select-item slots are
   available to item-assignment screens and HUD use buttons.
 - `ActionInputService` (`mods/svc/action_input.h`): overrides generic player-action input states.
-- `StageFlowService` (`mods/svc/stage_flow.h`): overrides stage-transition actor behavior and
-  reports sequence-completion decisions.
 - `MidnaDialogService` (`mods/svc/midna_dialog.h`): custom Midna prompt/menu entries and
   resolution callbacks.
 

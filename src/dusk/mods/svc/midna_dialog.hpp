@@ -10,6 +10,6 @@ const char* menu_option();
 bool menu_begin();
 bool menu_resolve(int choice);
 bool menu_cancel();
-bool menu_execute_warp(void* player);
+bool menu_execute_action(void* player);
 
 }  // namespace dusk::mods::svc::midna_dialog

@@ -24,8 +24,8 @@ typedef int (*MidnaDialogMenuBeginFn)(ModContext* ctx, void* user_data);
 typedef int (*MidnaDialogMenuResolveFn)(ModContext* ctx, int choice, void* user_data);
 /* Cancel a custom Midna menu choice. Return non-zero after handling it. */
 typedef int (*MidnaDialogMenuCancelFn)(ModContext* ctx, void* user_data);
-/* Execute a pending custom Midna warp. Return non-zero after replacing the host warp. */
-typedef int (*MidnaDialogMenuExecuteWarpFn)(ModContext* ctx, void* player, void* user_data);
+/* Execute a pending custom Midna menu action. Return non-zero after replacing the host action. */
+typedef int (*MidnaDialogMenuExecuteActionFn)(ModContext* ctx, void* player, void* user_data);
 
 typedef struct MidnaDialogProviderDesc {
     uint32_t struct_size;
@@ -37,7 +37,7 @@ typedef struct MidnaDialogProviderDesc {
     MidnaDialogMenuBeginFn menu_begin;
     MidnaDialogMenuResolveFn menu_resolve;
     MidnaDialogMenuCancelFn menu_cancel;
-    MidnaDialogMenuExecuteWarpFn menu_execute_warp;
+    MidnaDialogMenuExecuteActionFn menu_execute_action;
     void* user_data;
 } MidnaDialogProviderDesc;
 

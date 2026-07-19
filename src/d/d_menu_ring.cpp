@@ -38,17 +38,17 @@
 #include "dusk/ui/touch_controls.hpp"
 #endif
 
-static bool dMenuRing_hasExtendedSelectItemSlots() {
-    return dusk::mods::svc::item_assignment::extended_select_item_slots();
+static bool dMenuRing_hasSelectItemDownSlot() {
+    return dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN);
 }
 
-static constexpr f32 kExtendedSetItemPromptSpacing = 64.0f;
-static constexpr f32 kExtendedSetItemVisualOffsetX = 5.0f;
-static constexpr f32 kExtendedSetItemVisualOffsetY = -5.0f;
-static constexpr f32 kExtendedSetItemVisualScale = 0.9f;
+static constexpr f32 kSetItemThirdSlotPromptSpacing = 64.0f;
+static constexpr f32 kSetItemThirdSlotVisualOffsetX = 5.0f;
+static constexpr f32 kSetItemThirdSlotVisualOffsetY = -5.0f;
+static constexpr f32 kSetItemThirdSlotVisualScale = 0.9f;
 
 static bool dMenuRing_closeTrigger() {
-    return dMw_UP_TRIGGER() || (!dMenuRing_hasExtendedSelectItemSlots() && dMw_DOWN_TRIGGER());
+    return dMw_UP_TRIGGER() || (!dMenuRing_hasSelectItemDownSlot() && dMw_DOWN_TRIGGER());
 }
 
 static void dMenuRing_hidePaneTree(J2DPane* pane) {
@@ -83,20 +83,20 @@ static void dMenuRing_showPaneParents(J2DPane* pane) {
     }
 }
 
-static J2DPane* dMenuRing_getExtendedSetItemAnchor(J2DScreen* screen) {
+static J2DPane* dMenuRing_getSetItemThirdSlotAnchor(J2DScreen* screen) {
     return screen != NULL ? screen->search(MULTI_CHAR('r_btn_n')) : NULL;
 }
 
-static void dMenuRing_applyExtendedSetItemVisualOffset(Vec& pos) {
-    pos.x += kExtendedSetItemVisualOffsetX;
-    pos.y += kExtendedSetItemVisualOffsetY;
+static void dMenuRing_applySetItemThirdSlotVisualOffset(Vec& pos) {
+    pos.x += kSetItemThirdSlotVisualOffsetX;
+    pos.y += kSetItemThirdSlotVisualOffsetY;
 }
 
-static void dMenuRing_applyExtendedSetItemPrompt(J2DScreen* screen) {
-    J2DPane* rButton = dMenuRing_getExtendedSetItemAnchor(screen);
+static void dMenuRing_applySetItemThirdSlotPrompt(J2DScreen* screen) {
+    J2DPane* rButton = dMenuRing_getSetItemThirdSlotAnchor(screen);
     if (rButton != NULL) {
         rButton->translate(
-            rButton->getTranslateX() + kExtendedSetItemPromptSpacing, rButton->getTranslateY());
+            rButton->getTranslateX() + kSetItemThirdSlotPromptSpacing, rButton->getTranslateY());
         rButton->hide();
     }
 }
@@ -226,8 +226,8 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
     field_0x6d1 = 0xff;
     field_0x6d2 = 0xff;
     field_0x6d3 = 0xff;
-    mpExtendedSetItemScreen = NULL;
-    mpExtendedSetItemButton = NULL;
+    mpSetItemThirdSlotScreen = NULL;
+    mpSetItemThirdSlotButton = NULL;
     int i;
     for (int i = 0; i < 3; i++) {
         field_0x580[i] = 0.0f;
@@ -315,11 +315,11 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
         if (dComIfGs_getSelectItemIndex(1) == dComIfGs_getLineUpItem(i)) {
             mYButtonSlot = i;
         }
-        if (dMenuRing_hasExtendedSelectItemSlots() &&
+        if (dMenuRing_hasSelectItemDownSlot() &&
             dComIfGs_getSelectItemIndex(2) == dComIfGs_getLineUpItem(i))
         {
             field_0x6ac = i;
-        } else if (!dMenuRing_hasExtendedSelectItemSlots() &&
+        } else if (!dMenuRing_hasSelectItemDownSlot() &&
                    dComIfGs_getSelectItemIndex(2) == dComIfGs_getWolfAbility(i))
         {
             field_0x6ac = i;
@@ -336,7 +336,7 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             }
         }
         field_0x6be[i] = 0;
-        if (i == 2 && !dMenuRing_hasExtendedSelectItemSlots()) {
+        if (i == 2 && !dMenuRing_hasSelectItemDownSlot()) {
             setSelectItem(i, 0);
         } else {
             setSelectItem(i, 0x43);
@@ -396,11 +396,11 @@ dMenu_Ring_c::dMenu_Ring_c(JKRExpHeap* i_heap, STControl* i_stick, CSTControl* i
             mItemSlotParam2[i] = (mpItemBuf[i][0]->height / 48.0f * (texScale / 100.0f));
         }
     }
-    if (dMenuRing_hasExtendedSelectItemSlots() && !mPlayerIsWolf) {
+    if (dMenuRing_hasSelectItemDownSlot() && !mPlayerIsWolf) {
         mpTextParent[0]->show();
         mpTextParent[0]->setAlphaRate(1.0f);
-        dMenuRing_applyExtendedSetItemPrompt(mpScreen);
-        setupExtendedSetItemButton();
+        dMenuRing_applySetItemThirdSlotPrompt(mpScreen);
+        setupSetItemThirdSlotButton();
     } else {
         mpScreen->search(MULTI_CHAR('r_btn_n'))->hide();
     }
@@ -609,11 +609,11 @@ dMenu_Ring_c::~dMenu_Ring_c() {
     JKR_DELETE(mpKanteraMeter);
     mpKanteraMeter = NULL;
 
-    JKR_DELETE(mpExtendedSetItemButton);
-    mpExtendedSetItemButton = NULL;
+    JKR_DELETE(mpSetItemThirdSlotButton);
+    mpSetItemThirdSlotButton = NULL;
 
-    JKR_DELETE(mpExtendedSetItemScreen);
-    mpExtendedSetItemScreen = NULL;
+    JKR_DELETE(mpSetItemThirdSlotScreen);
+    mpSetItemThirdSlotScreen = NULL;
 
     JKR_DELETE(mpScreen);
     mpScreen = NULL;
@@ -697,37 +697,37 @@ void dMenu_Ring_c::_delete() {
     /* empty function */
 }
 
-void dMenu_Ring_c::setupExtendedSetItemButton() {
-    mpExtendedSetItemScreen = JKR_NEW J2DScreen();
-    if (mpExtendedSetItemScreen == NULL) {
+void dMenu_Ring_c::setupSetItemThirdSlotButton() {
+    mpSetItemThirdSlotScreen = JKR_NEW J2DScreen();
+    if (mpSetItemThirdSlotScreen == NULL) {
         return;
     }
 
     bool loaded =
-        mpExtendedSetItemScreen->setPriority("zelda_game_image.blo", 0x20000,
+        mpSetItemThirdSlotScreen->setPriority("zelda_game_image.blo", 0x20000,
                                           dComIfGp_getMain2DArchive());
     if (!loaded) {
-        JKR_DELETE(mpExtendedSetItemScreen);
-        mpExtendedSetItemScreen = NULL;
+        JKR_DELETE(mpSetItemThirdSlotScreen);
+        mpSetItemThirdSlotScreen = NULL;
         return;
     }
 
-    dPaneClass_showNullPane(mpExtendedSetItemScreen);
-    dMenuRing_hidePaneTree(mpExtendedSetItemScreen->search('ROOT'));
+    dPaneClass_showNullPane(mpSetItemThirdSlotScreen);
+    dMenuRing_hidePaneTree(mpSetItemThirdSlotScreen->search('ROOT'));
 
-    J2DPane* zButton = mpExtendedSetItemScreen->search(MULTI_CHAR('zbtn_n'));
+    J2DPane* zButton = mpSetItemThirdSlotScreen->search(MULTI_CHAR('zbtn_n'));
     if (zButton == NULL) {
-        JKR_DELETE(mpExtendedSetItemScreen);
-        mpExtendedSetItemScreen = NULL;
+        JKR_DELETE(mpSetItemThirdSlotScreen);
+        mpSetItemThirdSlotScreen = NULL;
         return;
     }
 
     dMenuRing_showPaneParents(zButton);
     dMenuRing_showPaneTree(zButton);
-    mpExtendedSetItemButton = JKR_NEW CPaneMgr(mpExtendedSetItemScreen, MULTI_CHAR('zbtn_n'), 2, NULL);
-    if (mpExtendedSetItemButton != NULL) {
-        mpExtendedSetItemButton->setAlphaRate(1.0f);
-        mpExtendedSetItemButton->show();
+    mpSetItemThirdSlotButton = JKR_NEW CPaneMgr(mpSetItemThirdSlotScreen, MULTI_CHAR('zbtn_n'), 2, NULL);
+    if (mpSetItemThirdSlotButton != NULL) {
+        mpSetItemThirdSlotButton->setAlphaRate(1.0f);
+        mpSetItemThirdSlotButton->show();
     }
 }
 
@@ -760,12 +760,12 @@ void dMenu_Ring_c::_move() {
     }
 }
 
-void dMenu_Ring_c::drawExtendedSetItemButton() {
-    if (mpExtendedSetItemScreen == NULL || mpExtendedSetItemButton == NULL) {
+void dMenu_Ring_c::drawSetItemThirdSlotButton() {
+    if (mpSetItemThirdSlotScreen == NULL || mpSetItemThirdSlotButton == NULL) {
         return;
     }
 
-    J2DPane* anchor = dMenuRing_getExtendedSetItemAnchor(mpScreen);
+    J2DPane* anchor = dMenuRing_getSetItemThirdSlotAnchor(mpScreen);
     if (anchor == NULL) {
         return;
     }
@@ -774,13 +774,13 @@ void dMenu_Ring_c::drawExtendedSetItemButton() {
     Vec pos = paneMgr.getGlobalVtxCenter(anchor, true, 0);
     pos.x += mCenterPosX;
     pos.y += mCenterPosY;
-    dMenuRing_applyExtendedSetItemVisualOffset(pos);
+    dMenuRing_applySetItemThirdSlotVisualOffset(pos);
 
-    mpExtendedSetItemButton->scale(kExtendedSetItemVisualScale, kExtendedSetItemVisualScale);
-    mpExtendedSetItemButton->paneTrans(pos.x - mpExtendedSetItemButton->getInitGlobalCenterPosX(),
-                                       pos.y - mpExtendedSetItemButton->getInitGlobalCenterPosY());
-    mpExtendedSetItemButton->setAlphaRate(mAlphaRate);
-    mpExtendedSetItemScreen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
+    mpSetItemThirdSlotButton->scale(kSetItemThirdSlotVisualScale, kSetItemThirdSlotVisualScale);
+    mpSetItemThirdSlotButton->paneTrans(pos.x - mpSetItemThirdSlotButton->getInitGlobalCenterPosX(),
+                                       pos.y - mpSetItemThirdSlotButton->getInitGlobalCenterPosY());
+    mpSetItemThirdSlotButton->setAlphaRate(mAlphaRate);
+    mpSetItemThirdSlotScreen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
 }
 
 void dMenu_Ring_c::_draw() {
@@ -823,7 +823,7 @@ void dMenu_Ring_c::_draw() {
             mpTextParent[1]->setAlphaRate(alphaRate * mAlphaRate);
         }
         mpScreen->draw(mCenterPosX, mCenterPosY, grafPort);
-        drawExtendedSetItemButton();
+        drawSetItemThirdSlotButton();
         if (mStatus != STATUS_EXPLAIN && mPikariFlashingSpeed > 0.0f) {
             Vec pos;
             CPaneMgr paneMgr;
@@ -961,7 +961,7 @@ bool dMenu_Ring_c::isMoveEnd() {
         {
             if (dMw_UP_TRIGGER()) {
                 mRingOrigin = 0;
-            } else if (!dMenuRing_hasExtendedSelectItemSlots() && dMw_DOWN_TRIGGER()) {
+            } else if (!dMenuRing_hasSelectItemDownSlot() && dMw_DOWN_TRIGGER()) {
                 mRingOrigin = 2;
             } else {
                 mRingOrigin = 0xff;
@@ -1197,7 +1197,7 @@ void dMenu_Ring_c::setItem() {
     }
 
     checkExplainForce();
-    if (dMenuRing_hasExtendedSelectItemSlots() && field_0x6b3 < 3) {
+    if (dMenuRing_hasSelectItemDownSlot() && field_0x6b3 < 3) {
         u8 selectedItems[3] = {uVar1, uVar2, uVar3};
         u8 selectedSlots[3] = {mXButtonSlot, mYButtonSlot, field_0x6ac};
         u8 selectedMixItems[3] = {mixItemIndex0, mixItemIndex1, mixItemIndex2};
@@ -1377,7 +1377,7 @@ void dMenu_Ring_c::setItem() {
 
 void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
     for (int i = 0; i < 4; i++) {
-        if (i == 2 && !dMenuRing_hasExtendedSelectItemSlots()) {
+        if (i == 2 && !dMenuRing_hasSelectItemDownSlot()) {
             setSelectItem(i, field_0x6b4[i]);
         } else if (i == field_0x6cd) {
             setSelectItem(i, getItem(field_0x6cb, 0));
@@ -1436,7 +1436,7 @@ void dMenu_Ring_c::setJumpItem(bool i_useVibrationM) {
 #endif
         }
     }
-    if (dMenuRing_hasExtendedSelectItemSlots() && field_0x6b3 < 3) {
+    if (dMenuRing_hasSelectItemDownSlot() && field_0x6b3 < 3) {
         for (int i = 0; i < 3; i++) {
             if (field_0x6b4[i] != dComIfGs_getSelectItemIndex(i) ||
                 field_0x6b8[i] != dComIfGs_getMixItemIndex(i))
@@ -1544,10 +1544,10 @@ void dMenu_Ring_c::setNameString(u32 i_stringID) {
 void dMenu_Ring_c::setActiveCursor() {
     u8 item = dComIfGs_getItem(mItemSlots[mCurrentSlot], false);
     if (mStatus == STATUS_WAIT && mOldStatus != STATUS_EXPLAIN_FORCE && mOldStatus != STATUS_EXPLAIN && mpItemExplain->getStatus() == 0) {
-        const bool extendedSlots = dMenuRing_hasExtendedSelectItemSlots();
-        const bool rItemTrigger = extendedSlots && mDoCPd_c::getTrigZ(PAD_1);
+        const bool hasDownSlot = dMenuRing_hasSelectItemDownSlot();
+        const bool rItemTrigger = hasDownSlot && mDoCPd_c::getTrigZ(PAD_1);
         const bool combineTrigger =
-            mDoCPd_c::getTrigR(PAD_1) && (!extendedSlots || !rItemTrigger);
+            mDoCPd_c::getTrigR(PAD_1) && (!hasDownSlot || !rItemTrigger);
         if (rItemTrigger && !mPlayerIsWolf && item != dItemNo_NONE_e) {
             for (int i = 0; i < MAX_SELECT_ITEM; i++) {
                 setSelectItemForce(i);
@@ -1588,7 +1588,7 @@ void dMenu_Ring_c::setActiveCursor() {
                 }
             }
         } else if (mDoCPd_c::getTrigX(PAD_1) || mDoCPd_c::getTrigY(PAD_1) ||
-                   (extendedSlots && mDoCPd_c::getTrigZ(PAD_1)))
+                   (hasDownSlot && mDoCPd_c::getTrigZ(PAD_1)))
         {
             // If the player is a wolf or somehow manages to access an item slot with no item, error
             Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -1627,7 +1627,7 @@ void dMenu_Ring_c::setMixItem() {
         field_0x6b3 = 1;
         field_0x6cd = 1;
         bVar1 = true;
-    } else if (dMenuRing_hasExtendedSelectItemSlots() && dComIfGs_getMixItemIndex(2) == SLOT_4 &&
+    } else if (dMenuRing_hasSelectItemDownSlot() && dComIfGs_getMixItemIndex(2) == SLOT_4 &&
                mItemSlots[mCurrentSlot] == dComIfGs_getSelectItemIndex(2))
     {
         Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_COMBINE_OFF, NULL, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
@@ -1676,7 +1676,7 @@ void dMenu_Ring_c::setMixItem() {
                     selectItemIndex0 = 0xff;
                     mXButtonSlot = 0xff;
                 }
-            } else if (dMenuRing_hasExtendedSelectItemSlots() &&
+            } else if (dMenuRing_hasSelectItemDownSlot() &&
                        ((dComIfGs_getSelectItemIndex(2) == SLOT_4 &&
                          dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e) ||
                         dComIfGs_getMixItemIndex(2) == SLOT_4))
@@ -2150,7 +2150,7 @@ void dMenu_Ring_c::drawSelectItem() {
 }
 
 void dMenu_Ring_c::setSelectItemForce(int i_idx) {
-    if (dMenuRing_hasExtendedSelectItemSlots() && i_idx < 3) {
+    if (dMenuRing_hasSelectItemDownSlot() && i_idx < 3) {
         if (field_0x674[i_idx] != 0) {
             for (int i = 0; i < 3; i++) {
                 dComIfGs_setMixItemIndex(i, field_0x6b8[i]);
@@ -2164,7 +2164,7 @@ void dMenu_Ring_c::setSelectItemForce(int i_idx) {
     } else if (i_idx == 2) {
         if (field_0x674[i_idx] != 0) {
             dComIfGs_setSelectItemIndex(i_idx, field_0x6b4[i_idx]);
-            if (dMenuRing_hasExtendedSelectItemSlots()) {
+            if (dMenuRing_hasSelectItemDownSlot()) {
                 dComIfGs_setMixItemIndex(i_idx, field_0x6b8[i_idx]);
             }
             field_0x674[i_idx] = 0;
@@ -2306,7 +2306,7 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[1] = dItemNo_HAWK_ARROW_e;
             break;
         }
-        if (dMenuRing_hasExtendedSelectItemSlots()) {
+        if (dMenuRing_hasSelectItemDownSlot()) {
             switch (item2) {
             case dItemNo_NORMAL_BOMB_e:
             case dItemNo_WATER_BOMB_e:
@@ -2326,7 +2326,7 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[0] = dItemNo_BOMB_ARROW_e;
         } else if (item1 == dItemNo_BOW_e) {
             local_18[1] = dItemNo_BOMB_ARROW_e;
-        } else if (dMenuRing_hasExtendedSelectItemSlots() && item2 == dItemNo_BOW_e) {
+        } else if (dMenuRing_hasSelectItemDownSlot() && item2 == dItemNo_BOW_e) {
             local_18[2] = dItemNo_BOMB_ARROW_e;
         }
         break;
@@ -2335,7 +2335,7 @@ bool dMenu_Ring_c::checkExplainForce() {
             local_18[0] = dItemNo_HAWK_ARROW_e;
         } else if (item1 == dItemNo_BOW_e) {
             local_18[1] = dItemNo_HAWK_ARROW_e;
-        } else if (dMenuRing_hasExtendedSelectItemSlots() && item2 == dItemNo_BOW_e) {
+        } else if (dMenuRing_hasSelectItemDownSlot() && item2 == dItemNo_BOW_e) {
             local_18[2] = dItemNo_HAWK_ARROW_e;
         }
         break;
@@ -2391,7 +2391,7 @@ bool dMenu_Ring_c::checkExplainForce() {
         field_0x6c7[1] = local_18[1];
         field_0x6c7[2] = dItemNo_NONE_e;
         field_0x6c7[3] = dItemNo_NONE_e;
-    } else if (dMenuRing_hasExtendedSelectItemSlots() && local_18[0] == dItemNo_NONE_e &&
+    } else if (dMenuRing_hasSelectItemDownSlot() && local_18[0] == dItemNo_NONE_e &&
                local_18[1] == dItemNo_NONE_e && local_18[2] != dItemNo_NONE_e &&
                local_18[3] == dItemNo_NONE_e && dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e)
     {
@@ -2520,7 +2520,7 @@ bool dMenu_Ring_c::isMixItemOn() {
             {
                 return true;
             }
-            if (dMenuRing_hasExtendedSelectItemSlots() &&
+            if (dMenuRing_hasSelectItemDownSlot() &&
                 (((dComIfGs_getSelectItemIndex(2) == SLOT_4) &&
                   (dComIfGs_getMixItemIndex(2) == dItemNo_NONE_e)) ||
                  (dComIfGs_getMixItemIndex(2) == SLOT_4)))
@@ -2545,7 +2545,7 @@ bool dMenu_Ring_c::isMixItemOff() {
         {
             return 1;
         }
-        if (dMenuRing_hasExtendedSelectItemSlots() && (dComIfGs_getMixItemIndex(2) == SLOT_4) &&
+        if (dMenuRing_hasSelectItemDownSlot() && (dComIfGs_getMixItemIndex(2) == SLOT_4) &&
             (mItemSlots[mCurrentSlot] == dComIfGs_getSelectItemIndex(2)))
         {
             return 1;

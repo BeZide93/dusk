@@ -330,15 +330,18 @@ inline static u32 check_owner_action1(u32 param_0, u32 param_1) {
 }
 
 #if TARGET_PC
-inline static bool use_mod_third_person_aim(u32 pad) {
+inline static int mod_aim_camera_mode(u32 pad) {
     const bool supported = check_owner_action(pad, 0x1040) ||
                            check_owner_action(pad, 0x80000) ||
                            check_owner_action(pad, 0x80) ||
                            check_owner_action(pad, 0x4000) ||
                            check_owner_action(pad, 0x400);
     return dusk::mods::svc::aim_control::camera_mode(
-               pad, DUSK_MOD_AIM_ITEM_ANY, false, supported) ==
-           DUSK_MOD_AIM_CAMERA_THIRD_PERSON;
+        pad, DUSK_MOD_AIM_ITEM_ANY, false, supported);
+}
+
+inline static bool mod_aim_uses_camera_mode(u32 pad, int mode) {
+    return mod_aim_camera_mode(pad) == mode;
 }
 #endif
 
@@ -1757,7 +1760,7 @@ s32 dCamera_c::nextMode(s32 i_curMode) {
 #else
         } else if (check_owner_action(mPadID, 0x200000) && !attn->Lockon()
 #if TARGET_PC
-                   && !use_mod_third_person_aim(mPadID)
+                   && !mod_aim_uses_camera_mode(mPadID, DUSK_MOD_AIM_CAMERA_THIRD_PERSON)
 #endif
         ) {
 #endif
@@ -1801,13 +1804,13 @@ s32 dCamera_c::nextMode(s32 i_curMode) {
             next_mode = 4;
         } else if (check_owner_action(mPadID, 0x25040) && !attn->Lockon()
 #if TARGET_PC
-                   && !use_mod_third_person_aim(mPadID)
+                   && !mod_aim_uses_camera_mode(mPadID, DUSK_MOD_AIM_CAMERA_THIRD_PERSON)
 #endif
         ) {
             next_mode = 7;
         } else if ((check_owner_action(mPadID, 0x80480) && !attn->Lockon()
 #if TARGET_PC
-                    && !use_mod_third_person_aim(mPadID)
+                    && !mod_aim_uses_camera_mode(mPadID, DUSK_MOD_AIM_CAMERA_THIRD_PERSON)
 #endif
                    )
                                                         || link->checkHawkWait()) {
@@ -1970,7 +1973,8 @@ s32 dCamera_c::nextType(s32 i_curType) {
             if (check_owner_action(mPadID, 0x200000) && ChangeModeOK(4)
                                                      && !dComIfGp_getAttention()->Lockon()
 #if TARGET_PC
-                                                     && !use_mod_third_person_aim(mPadID)
+                                                     && !mod_aim_uses_camera_mode(
+                                                         mPadID, DUSK_MOD_AIM_CAMERA_THIRD_PERSON)
 #endif
             ) {
                 next_type = specialType[CAM_TYPE_SCOPE];
@@ -6993,17 +6997,17 @@ bool dCamera_c::subjectCamera(s32 param_0) {
     cXyz* bow_pos = player->checkBowCameraArrowPosP(&bow_angle_x, &bow_angle_y);
     bool sp0E = false;
 #if TARGET_PC
-    const bool dusk_scope_aim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
-    const bool mod_over_shoulder_aim =
+    const bool scopeAim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
+    const bool modAimOverShoulder =
         dusk::mods::svc::aim_control::camera_mode(
-            mPadID, DUSK_MOD_AIM_ITEM_ANY, dusk_scope_aim, sp14 || sp13 || sp12 || sp10) ==
+            mPadID, DUSK_MOD_AIM_ITEM_ANY, scopeAim, sp14 || sp13 || sp12 || sp10) ==
         DUSK_MOD_AIM_CAMERA_OVER_SHOULDER;
 #else
-    const bool dusk_scope_aim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
-    constexpr bool mod_over_shoulder_aim = false;
+    const bool scopeAim = check_owner_action(mPadID, 0x200000) && bow_pos != NULL;
+    constexpr bool modAimOverShoulder = false;
 #endif
 
-    if (dusk_scope_aim) {
+    if (scopeAim) {
         sp2D0 = *bow_pos;
         angle_x.Val(bow_angle_x);
         angle_y.Val(bow_angle_y);
@@ -7087,7 +7091,7 @@ bool dCamera_c::subjectCamera(s32 param_0) {
         } else {
             mCStickYState = 0;
         }
-    } else if (sp12 || player->checkIronBallThrowReturnMode() || mod_over_shoulder_aim) {
+    } else if (sp12 || player->checkIronBallThrowReturnMode() || modAimOverShoulder) {
         val0 = 0.0f;
         val2 = 40.0f;
         val1 = 50.0f;
@@ -7162,7 +7166,7 @@ bool dCamera_c::subjectCamera(s32 param_0) {
 
     sp1D4 = dCamMath::xyzRotateX(sp1E0, angle_x);
     sp1E0 = dCamMath::xyzRotateY(sp1D4, angle_y);
-    f32 sp6C = (sp12 || mod_over_shoulder_aim) ? 40.0f : 0.0f;
+    f32 sp6C = (sp12 || modAimOverShoulder) ? 40.0f : 0.0f;
     cXyz sp294(0.0f, sp6C, -val7);
     sp1D4 = dCamMath::xyzRotateX(sp294, angle_x);
     sp294 = dCamMath::xyzRotateY(sp1D4, angle_y);

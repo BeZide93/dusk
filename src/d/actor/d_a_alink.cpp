@@ -70,8 +70,8 @@ static int daAlink_Execute(daAlink_c* i_this);
 static int daAlink_Draw(daAlink_c* i_this);
 static fopAc_ac_c* daAlink_searchTagKandelaar(fopAc_ac_c* i_actor, void* i_data);
 
-static bool daAlink_hasExtendedSelectItemSlots() {
-    return dusk::mods::svc::item_assignment::extended_select_item_slots();
+static bool daAlink_hasSelectItemDownSlot() {
+    return dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN);
 }
 
 static int daAlink_guardActionState(daAlink_c* i_link) {
@@ -96,7 +96,7 @@ static bool daAlink_guardActionPressed(daAlink_c* i_link) {
 }
 
 static u8 daAlink_selectItemButtonCount() {
-    return daAlink_hasExtendedSelectItemSlots() ? 3 : 2;
+    return daAlink_hasSelectItemDownSlot() ? 3 : 2;
 }
 
 static int daAlink_meterUseButtonForSelectItem(u8 i_idx) {
@@ -109,7 +109,7 @@ static int daAlink_meterUseButtonForSelectItem(u8 i_idx) {
 }
 
 static bool daAlink_isLegacyZSelectItemSlot(int i_slot) {
-    return i_slot == SELECT_ITEM_DOWN && !daAlink_hasExtendedSelectItemSlots();
+    return i_slot == SELECT_ITEM_DOWN && !daAlink_hasSelectItemDownSlot();
 }
 
 BOOL daAlink_c::getE3Zhint() {
@@ -9413,7 +9413,7 @@ BOOL daAlink_c::midnaTalkTrigger() const {
     if (dusk::isActionBound(dusk::ActionBinds::CALL_MIDNA, 0)) {
         return dusk::getActionBindTrig(dusk::ActionBinds::CALL_MIDNA, 0);
     }
-    if (daAlink_hasExtendedSelectItemSlots()) {
+    if (daAlink_hasSelectItemDownSlot()) {
         return mDoCPd_c::getTrigDown(PAD_1);
     }
 #endif
@@ -18838,7 +18838,7 @@ int daAlink_c::execute() {
             for (int i = 0; i < daAlink_selectItemButtonCount(); i++) {
                 if (!(mUseButtonFlags & (1 << i)) && !(field_0x2faf & (1 << i))) {
                     dMeter2Info_offUseButton(daAlink_meterUseButtonForSelectItem(i));
-                } else if (i == SELECT_ITEM_DOWN && daAlink_hasExtendedSelectItemSlots()) {
+                } else if (i == SELECT_ITEM_DOWN && daAlink_hasSelectItemDownSlot()) {
                     dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
                 }
             }

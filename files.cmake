@@ -1485,15 +1485,11 @@ set(DUSK_FILES
         src/dusk/mods/log_buffer.hpp
         src/dusk/mods/manifest.cpp
         src/dusk/mods/manifest.hpp
-        src/dusk/mods/svc/stage_flow.cpp
-        src/dusk/mods/svc/stage_flow.hpp
         src/dusk/mods/svc/camera.cpp
         src/dusk/mods/svc/action_input.cpp
         src/dusk/mods/svc/action_input.hpp
         src/dusk/mods/svc/config.cpp
         src/dusk/mods/svc/config.hpp
-        src/dusk/mods/svc/file_select.cpp
-        src/dusk/mods/svc/file_select.hpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
         src/dusk/mods/svc/aim_control.cpp

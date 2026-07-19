@@ -132,8 +132,8 @@ int select_item_slot_count() {
     return call_select_item_slot_count();
 }
 
-bool extended_select_item_slots() {
-    return select_item_slot_count() > 2;
+bool select_item_slot_enabled(int slot) {
+    return slot >= 0 && slot < select_item_slot_count();
 }
 
 }  // namespace item_assignment

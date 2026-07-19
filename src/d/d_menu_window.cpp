@@ -29,11 +29,13 @@
 
 static bool dMw_isItemRingTrigger() {
     return dMw_UP_TRIGGER() ||
-           (!dusk::mods::svc::item_assignment::extended_select_item_slots() && dMw_DOWN_TRIGGER());
+           (!dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN) &&
+            dMw_DOWN_TRIGGER());
 }
 
 static bool dMw_isItemRingDownOrigin() {
-    return !dusk::mods::svc::item_assignment::extended_select_item_slots() && dMw_DOWN_TRIGGER();
+    return !dusk::mods::svc::item_assignment::select_item_slot_enabled(SELECT_ITEM_DOWN) &&
+           dMw_DOWN_TRIGGER();
 }
 
 #ifdef TARGET_PC

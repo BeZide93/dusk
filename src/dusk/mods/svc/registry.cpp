@@ -210,11 +210,9 @@ void ModLoader::init_services() {
             &svc::g_gameModule,
             &svc::g_cameraModule,
             &svc::g_gfxModule,
-            &svc::g_fileSelectModule,
             &svc::g_aimControlModule,
             &svc::g_itemAssignmentModule,
             &svc::g_actionInputModule,
-            &svc::g_stageFlowModule,
             &svc::g_midnaDialogModule,
         })
     {

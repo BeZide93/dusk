@@ -10,7 +10,6 @@
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_horse.h"
 #include "d/d_s_play.h"
-#include "dusk/mods/svc/stage_flow.hpp"
 #include "f_op/f_op_msg_mng.h"
 #include "m_Do/m_Do_graphic.h"
 #include "d/actor/d_a_mant.h"
@@ -3668,18 +3667,6 @@ static void demo_camera(b_gnd_class* i_this) {
             }
 
             if (i_this->mDemoCamTimer == 330) {
-#if TARGET_PC
-                if (dusk::mods::svc::stage_flow::sequence_complete(
-                        DUSK_MOD_STAGE_FLOW_SEQUENCE_FINAL_BATTLE))
-                {
-                    camera->mCamera.Start();
-                    camera->mCamera.SetTrimSize(0);
-                    dComIfGp_event_reset();
-                    i_this->mDemoCamMode = 0;
-                    i_this->mDemoCamTimer = 0;
-                    return;
-                }
-#endif
                 dStage_changeScene(0, 0.0f, 0, fopAcM_GetRoomNo(a_this), 0, -1);
             }
         }

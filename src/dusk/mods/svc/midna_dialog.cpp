@@ -158,8 +158,8 @@ bool menu_cancel() {
     return call(&MidnaDialogProviderDesc::menu_cancel, 0) != 0;
 }
 
-bool menu_execute_warp(void* player) {
-    return call(&MidnaDialogProviderDesc::menu_execute_warp, 0, player) != 0;
+bool menu_execute_action(void* player) {
+    return call(&MidnaDialogProviderDesc::menu_execute_action, 0, player) != 0;
 }
 
 }  // namespace midna_dialog
