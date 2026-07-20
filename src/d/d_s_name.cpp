@@ -14,6 +14,8 @@
 #include "dusk/memory.h"
 #include "dusk/speedrun.h"
 #include "dusk/settings.h"
+// TODO(mod-services): Replace direct file-select service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/file_select.hpp"
 #include "f_op/f_op_overlap_mng.h"
 #include "f_op/f_op_scene_mng.h"
 #include "m_Do/m_Do_Reset.h"
@@ -409,7 +411,9 @@ void dScnName_c::changeGameScene() {
         #endif
         dComIfGp_offEnableNextStage();
 
-        if (dFs_c->isDataNew(dFs_c->getSelectNum())) {
+        if (dusk::mods::svc::file_select::start_stage(this)) {
+            // The active mod selected the start stage.
+        } else if (dFs_c->isDataNew(dFs_c->getSelectNum())) {
             dComIfGp_setNextStage("F_SP108", 21, 1, 13);
         }
         
