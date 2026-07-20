@@ -27,5 +27,7 @@ std::string_view touch_controls_extra_rml_fragment() noexcept;
 std::size_t touch_layout_extra_control_count() noexcept;
 const TouchLayoutControlInfo* touch_layout_extra_control_at(std::size_t index) noexcept;
 bool touch_control_display_override(Control control, TouchControlDisplayOverride* out) noexcept;
+std::uint16_t touch_control_pad_button(Control control, std::uint16_t fallback) noexcept;
+void touch_control_event(Control control, bool pressed) noexcept;
 
 }  // namespace dusk::ui

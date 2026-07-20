@@ -519,6 +519,7 @@ void TouchControls::hide(bool close) {
 
 void TouchControls::set_control_pressed(Control control, bool pressed) {
     set_control_visual(control, pressed);
+    touch_control_event(control, pressed);
     sync_control_button_mask();
 
     switch (control) {
@@ -677,7 +678,8 @@ void TouchControls::sync_control_button_mask() noexcept {
     u16 buttonMask = 0;
     for (std::size_t i = 0; i < mControlTouches.size() && i < kControls.size(); ++i) {
         if (mControlTouches[i].active) {
-            buttonMask |= kControls[i].padButton;
+            buttonMask |= touch_control_pad_button(
+                static_cast<Control>(i), kControls[i].padButton);
         }
     }
     mButtonMask = buttonMask;

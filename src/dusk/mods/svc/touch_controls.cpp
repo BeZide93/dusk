@@ -218,6 +218,28 @@ bool display_override(ui::Control control, ui::TouchControlDisplayOverride* out)
     return true;
 }
 
+std::uint16_t pad_button(ui::Control control, std::uint16_t fallback) noexcept {
+    return call(&TouchControlsProviderDesc::pad_button, fallback,
+        static_cast<int32_t>(control), fallback);
+}
+
+void control_event(ui::Control control, bool pressed) noexcept {
+    auto selection = latest_provider(&TouchControlsProviderDesc::control_event);
+    if (selection.mod == nullptr) {
+        return;
+    }
+
+    try {
+        selection.callback(selection.mod->context.get(), static_cast<int32_t>(control),
+            pressed ? 1 : 0, selection.provider->desc.user_data);
+    } catch (const std::exception& e) {
+        fail_mod(*selection.mod, MOD_ERROR,
+            std::string{"Exception in touch-controls provider: "} + e.what());
+    } catch (...) {
+        fail_mod(*selection.mod, MOD_ERROR, "Unknown exception in touch-controls provider");
+    }
+}
+
 }  // namespace touch_controls
 
 constinit const ServiceModule g_touchControlsModule{

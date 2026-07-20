@@ -58,6 +58,21 @@ constexpr std::array<TouchLayoutControlInfo, kTouchLayoutControlCount> kLayoutCo
         .hasControl = true,
     },
     {
+        .layoutId = "dpadDown",
+        .elementId = "dpad-down",
+        .props =
+            {
+                .x = 176.f,
+                .y = 76.f,
+                .w = 54.f,
+                .h = 54.f,
+                .scale = 1.f,
+                .anchor = ControlAnchor::BottomLeft,
+            },
+        .control = Control::DPAD_DOWN,
+        .hasControl = true,
+    },
+    {
         .layoutId = "actionBar",
         .elementId = "action-bar",
         .props =
@@ -162,6 +177,7 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>
     <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><span>Z</span></button>
+    <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
 
     <button id="button-y" class="control face y"><img id="button-y-icon" class="item-icon" /><oil-meter id="button-y-oil" class="oil-meter"><oil-fill id="button-y-oil-fill" /></oil-meter><count id="button-y-count" class="item-count"></count><span>Y</span></button>
     <button id="button-x" class="control face x"><img id="button-x-icon" class="item-icon" /><oil-meter id="button-x-oil" class="oil-meter"><oil-fill id="button-x-oil-fill" /></oil-meter><count id="button-x-count" class="item-count"></count><span>X</span></button>
@@ -232,6 +248,14 @@ const TouchLayoutControlInfo* find_touch_layout_control(Control control) noexcep
 
 bool touch_control_display_override(Control control, TouchControlDisplayOverride* out) noexcept {
     return mods::svc::touch_controls::display_override(control, out);
+}
+
+std::uint16_t touch_control_pad_button(Control control, std::uint16_t fallback) noexcept {
+    return mods::svc::touch_controls::pad_button(control, fallback);
+}
+
+void touch_control_event(Control control, bool pressed) noexcept {
+    mods::svc::touch_controls::control_event(control, pressed);
 }
 
 SDL_FingerID touch_event_id(const Rml::Event& event) noexcept {

@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "touch_hooks.hpp"
 
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
@@ -10,7 +11,6 @@
 #include <array>
 #include <cstdio>
 #include <string>
-#include <string_view>
 
 IMPORT_SERVICE(TouchControlsService, svc_touch_controls);
 
@@ -19,26 +19,8 @@ namespace {
 
 constexpr int kZItemSlot = SELECT_ITEM_DOWN;
 TouchControlsProviderHandle s_touch_controls_provider = 0;
-
-constexpr const char* kExtraTouchControlsRml = R"RML(
-    <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
-)RML";
-
-const std::array<TouchControlsControlDesc, 1> kExtraTouchControls = {{
-    {
-        .struct_size = sizeof(TouchControlsControlDesc),
-        .layout_id = "dpadDown",
-        .element_id = "dpad-down",
-        .x = 176.f,
-        .y = 76.f,
-        .w = 54.f,
-        .h = 54.f,
-        .scale = 1.f,
-        .anchor = DUSK_MOD_TOUCH_ANCHOR_BOTTOM_LEFT,
-        .control = DUSK_MOD_TOUCH_CONTROL_DPAD_DOWN,
-        .has_control = 1,
-    },
-}};
+bool s_midnaTouchHeld = false;
+bool s_midnaTouchTriggered = false;
 
 std::array<char, 64> s_zItemSource{};
 std::array<char, 64> s_midnaSource{};
@@ -80,23 +62,6 @@ const char* midna_meter_source() {
     return s_midnaSource.data();
 }
 
-const char* extra_rml(ModContext*, void*) {
-    return kExtraTouchControlsRml;
-}
-
-std::size_t extra_control_count(ModContext*, void*) {
-    return z_item_slot_enabled() ? kExtraTouchControls.size() : 0;
-}
-
-int extra_control_at(ModContext*, std::size_t index, TouchControlsControlDesc* out, void*) {
-    if (!z_item_slot_enabled() || out == nullptr || index >= kExtraTouchControls.size()) {
-        return 0;
-    }
-
-    *out = kExtraTouchControls[index];
-    return 1;
-}
-
 int display_override(
     ModContext*, int32_t control, TouchControlsDisplayOverride* out, void*) {
     if (!z_item_slot_enabled() || out == nullptr) {
@@ -132,14 +97,41 @@ int display_override(
     return 0;
 }
 
+uint16_t pad_button(ModContext*, int32_t control, uint16_t fallback, void*) {
+    if (z_item_slot_enabled() && control == DUSK_MOD_TOUCH_CONTROL_DPAD_DOWN) {
+        return 0;
+    }
+    return fallback;
+}
+
+void control_event(ModContext*, int32_t control, int pressed, void*) {
+    if (!z_item_slot_enabled() || control != DUSK_MOD_TOUCH_CONTROL_DPAD_DOWN) {
+        return;
+    }
+
+    const bool isPressed = pressed != 0;
+    if (isPressed && !s_midnaTouchHeld) {
+        s_midnaTouchTriggered = true;
+    }
+    s_midnaTouchHeld = isPressed;
+}
+
 }  // namespace
+
+bool consume_touch_midna_trigger() {
+    if (!s_midnaTouchTriggered) {
+        return false;
+    }
+
+    s_midnaTouchTriggered = false;
+    return true;
+}
 
 ModResult install_touch_hooks(ModError* error) {
     TouchControlsProviderDesc desc = TOUCH_CONTROLS_PROVIDER_DESC_INIT;
-    desc.extra_rml = extra_rml;
-    desc.extra_control_count = extra_control_count;
-    desc.extra_control_at = extra_control_at;
     desc.display_override = display_override;
+    desc.pad_button = pad_button;
+    desc.control_event = control_event;
 
     const ModResult result =
         svc_touch_controls->register_provider(mod_ctx, &desc, &s_touch_controls_provider);

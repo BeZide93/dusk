@@ -12,7 +12,7 @@
 
 namespace dusk::ui {
 
-constexpr std::size_t kTouchLayoutControlCount = 9;
+constexpr std::size_t kTouchLayoutControlCount = 10;
 constexpr std::size_t kTouchLayoutControlCapacity = 16;
 
 std::string_view touch_controls_rml_fragment() noexcept;

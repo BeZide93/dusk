@@ -76,6 +76,10 @@ typedef int (*TouchControlsExtraControlAtFn)(
     ModContext* ctx, size_t index, TouchControlsControlDesc* out_control, void* user_data);
 typedef int (*TouchControlsDisplayOverrideFn)(ModContext* ctx, int32_t control,
     TouchControlsDisplayOverride* out_override, void* user_data);
+typedef uint16_t (*TouchControlsPadButtonFn)(
+    ModContext* ctx, int32_t control, uint16_t fallback_button, void* user_data);
+typedef void (*TouchControlsControlEventFn)(
+    ModContext* ctx, int32_t control, int pressed, void* user_data);
 
 typedef struct TouchControlsProviderDesc {
     uint32_t struct_size;
@@ -83,11 +87,13 @@ typedef struct TouchControlsProviderDesc {
     TouchControlsExtraControlCountFn extra_control_count;
     TouchControlsExtraControlAtFn extra_control_at;
     TouchControlsDisplayOverrideFn display_override;
+    TouchControlsPadButtonFn pad_button;
+    TouchControlsControlEventFn control_event;
     void* user_data;
 } TouchControlsProviderDesc;
 
 #define TOUCH_CONTROLS_PROVIDER_DESC_INIT \
-    {sizeof(TouchControlsProviderDesc), NULL, NULL, NULL, NULL, NULL}
+    {sizeof(TouchControlsProviderDesc), NULL, NULL, NULL, NULL, NULL, NULL, NULL}
 
 typedef struct TouchControlsService {
     ServiceHeader header;

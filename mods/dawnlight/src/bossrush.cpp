@@ -575,8 +575,6 @@ void update_hub() {
 
     sHubPortalsArmed = false;
     set_hub_pending_portal(portal);
-    begin_hub_midna_prompt();
-    resolve_hub_midna_prompt(0);
 }
 
 void reset_hub_runtime_when_away() {

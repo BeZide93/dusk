@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "touch_hooks.hpp"
 
 #include "global.h"
 #include "Z2AudioLib/Z2AudioMgr.h"
@@ -247,7 +248,8 @@ HookAction before_midna_talk_trigger(ModContext*, void* args, void* retval, void
         return HOOK_CONTINUE;
     }
 
-    *static_cast<BOOL*>(retval) = mDoCPd_c::getTrigDown(PAD_1);
+    *static_cast<BOOL*>(retval) =
+        mDoCPd_c::getTrigDown(PAD_1) || consume_touch_midna_trigger();
     return HOOK_SKIP_ORIGINAL;
 }
 
