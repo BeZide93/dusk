@@ -1,5 +1,8 @@
 #include "touch_controls_common.hpp"
 
+// TODO(mod-services): Replace direct touch-control service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/touch_controls.hpp"
+
 #include <aurora/rmlui.hpp>
 
 #include <algorithm>
@@ -53,6 +56,21 @@ constexpr std::array<TouchLayoutControlInfo, kTouchLayoutControlCount> kLayoutCo
                 .anchor = ControlAnchor::TopRight,
             },
         .control = Control::Z,
+        .hasControl = true,
+    },
+    {
+        .layoutId = "dpadDown",
+        .elementId = "dpad-down",
+        .props =
+            {
+                .x = 176.f,
+                .y = 76.f,
+                .w = 54.f,
+                .h = 54.f,
+                .scale = 1.f,
+                .anchor = ControlAnchor::BottomLeft,
+            },
+        .control = Control::DPAD_DOWN,
         .hasControl = true,
     },
     {
@@ -160,6 +178,7 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>
     <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><span>Z</span></button>
+    <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
 
     <button id="button-y" class="control face y"><img id="button-y-icon" class="item-icon" /><oil-meter id="button-y-oil" class="oil-meter"><oil-fill id="button-y-oil-fill" /></oil-meter><count id="button-y-count" class="item-count"></count><span>Y</span></button>
     <button id="button-x" class="control face x"><img id="button-x-icon" class="item-icon" /><oil-meter id="button-x-oil" class="oil-meter"><oil-fill id="button-x-oil-fill" /></oil-meter><count id="button-x-count" class="item-count"></count><span>X</span></button>
@@ -173,26 +192,71 @@ std::string_view touch_controls_rml_fragment() noexcept {
     return kTouchControlsRmlFragment;
 }
 
+std::string_view touch_controls_extra_rml_fragment() noexcept {
+    return mods::svc::touch_controls::extra_rml_fragment();
+}
+
 std::span<const TouchLayoutControlInfo> touch_layout_controls() noexcept {
     return kLayoutControls;
 }
 
+std::size_t touch_layout_extra_control_count() noexcept {
+    return mods::svc::touch_controls::extra_control_count();
+}
+
+const TouchLayoutControlInfo* touch_layout_extra_control_at(std::size_t index) noexcept {
+    return mods::svc::touch_controls::extra_control_at(index);
+}
+
+std::size_t touch_layout_control_count() noexcept {
+    return std::min(kTouchLayoutControlCapacity,
+        kLayoutControls.size() + touch_layout_extra_control_count());
+}
+
+const TouchLayoutControlInfo* touch_layout_control_at(std::size_t index) noexcept {
+    if (index < kLayoutControls.size()) {
+        return &kLayoutControls[index];
+    }
+
+    const std::size_t extraIndex = index - kLayoutControls.size();
+    if (index < kTouchLayoutControlCapacity) {
+        return touch_layout_extra_control_at(extraIndex);
+    }
+    return nullptr;
+}
+
 const TouchLayoutControlInfo* find_touch_layout_control(std::string_view layoutId) noexcept {
-    for (const auto& info : kLayoutControls) {
-        if (info.layoutId == layoutId) {
-            return &info;
+    const std::size_t count = touch_layout_control_count();
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto* info = touch_layout_control_at(i);
+        if (info != nullptr && info->layoutId == layoutId) {
+            return info;
         }
     }
     return nullptr;
 }
 
 const TouchLayoutControlInfo* find_touch_layout_control(Control control) noexcept {
-    for (const auto& info : kLayoutControls) {
-        if (info.hasControl && info.control == control) {
-            return &info;
+    const std::size_t count = touch_layout_control_count();
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto* info = touch_layout_control_at(i);
+        if (info != nullptr && info->hasControl && info->control == control) {
+            return info;
         }
     }
     return nullptr;
+}
+
+bool touch_control_display_override(Control control, TouchControlDisplayOverride* out) noexcept {
+    return mods::svc::touch_controls::display_override(control, out);
+}
+
+std::uint16_t touch_control_pad_button(Control control, std::uint16_t fallback) noexcept {
+    return mods::svc::touch_controls::pad_button(control, fallback);
+}
+
+void touch_control_event(Control control, bool pressed) noexcept {
+    mods::svc::touch_controls::control_event(control, pressed);
 }
 
 SDL_FingerID touch_event_id(const Rml::Event& event) noexcept {

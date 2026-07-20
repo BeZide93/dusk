@@ -42,6 +42,12 @@ constexpr auto kHoldActionDuration = std::chrono::milliseconds(450);
 constexpr float kFaceIconTargetRatio = 0.76f;
 constexpr float kPressedScale = 0.94f;
 constexpr size_t kEquipTargetCount = 4;
+constexpr std::array kDisplayOverrideControls = {
+    Control::DPAD_UP,
+    Control::DPAD_DOWN,
+    Control::DPAD_LEFT,
+    Control::DPAD_RIGHT,
+};
 
 std::array<EquipTarget, kEquipTargetCount> sEquipTargets{};
 std::array<ControlOverride, static_cast<std::size_t>(Control::COUNT)> sControlOverrides{};
@@ -116,6 +122,26 @@ constexpr std::array<ControlInfo, static_cast<std::size_t>(Control::COUNT)> kCon
         .id = "skip",
         .padButton = PAD_BUTTON_START,
     },
+    {
+        .id = "dpad-up",
+        .iconId = "dpad-up-icon",
+        .padButton = PAD_BUTTON_UP,
+    },
+    {
+        .id = "dpad-down",
+        .iconId = "dpad-down-icon",
+        .padButton = PAD_BUTTON_DOWN,
+    },
+    {
+        .id = "dpad-left",
+        .iconId = "dpad-left-icon",
+        .padButton = PAD_BUTTON_LEFT,
+    },
+    {
+        .id = "dpad-right",
+        .iconId = "dpad-right-icon",
+        .padButton = PAD_BUTTON_RIGHT,
+    },
 }};
 
 constexpr const ControlInfo* control_info(Control control) noexcept {
@@ -130,6 +156,7 @@ bool control_override_active(Control control) noexcept {
 
 Rml::String touch_controls_document_source() {
     const auto fragment = touch_controls_rml_fragment();
+    const auto extraFragment = touch_controls_extra_rml_fragment();
     return Rml::String{R"RML(
 <rml>
 <head>
@@ -141,6 +168,7 @@ Rml::String touch_controls_document_source() {
         <stick-knob id="control-knob" />
     </touch-stick>
 )RML"} + Rml::String{fragment.data(), fragment.size()} +
+           Rml::String{extraFragment.data(), extraFragment.size()} +
            Rml::String{R"RML(
 </body>
 </rml>
@@ -239,6 +267,25 @@ FaceButtonState override_button_state(Control control) {
     return {};
 }
 
+FaceButtonState state_from_display_override(const TouchControlDisplayOverride& override) {
+    const char* iconSource = override.iconSource != nullptr ? override.iconSource : "";
+    return {
+        .iconSource = iconSource,
+        .iconRevision = override.iconRevision,
+        .visible = override.visible,
+        .showIcon = override.showIcon && iconSource[0] != '\0',
+    };
+}
+
+FaceButtonState apply_display_override(Control control, FaceButtonState state) {
+    TouchControlDisplayOverride override{};
+    if (!touch_control_display_override(control, &override)) {
+        return state;
+    }
+
+    return state_from_display_override(override);
+}
+
 bool game_controls_suppressed() noexcept {
     return !controls_available(true) || dComIfGp_event_runCheck() ||
            (dComIfGp_getMsgObjectClass() != nullptr && dMsgObject_isTalkNowCheck());
@@ -246,7 +293,7 @@ bool game_controls_suppressed() noexcept {
 
 FaceButtonState xy_button_state(Control control) {
     if (sControlOverrides[static_cast<size_t>(control)] != ControlOverride::Default) {
-        return override_button_state(control);
+        return apply_display_override(control, override_button_state(control));
     }
     if (game_controls_suppressed()) {
         return {};
@@ -254,45 +301,45 @@ FaceButtonState xy_button_state(Control control) {
 
     const bool itemMode = dComIfGp_getLinkPlayer() != nullptr && daPy_py_c::checkNowWolf() == 0;
     const auto source = itemMode ? item_icon_source_for_button(control) : std::string();
-    return {
+    return apply_display_override(control, {
         .iconSource = source,
         .visible = true,
         .showIcon = itemMode && !source.empty(),
-    };
+    });
 }
 
 FaceButtonState z_button_state() {
     if (sControlOverrides[static_cast<size_t>(Control::Z)] != ControlOverride::Default) {
-        return override_button_state(Control::Z);
+        return apply_display_override(Control::Z, override_button_state(Control::Z));
     }
     if (game_controls_suppressed()) {
         return {};
     }
 
     const auto source = midna_icon_source();
-    return {
+    return apply_display_override(Control::Z, {
         .iconSource = source,
         .iconRevision = midna_icon_revision(),
         .visible = true,
         .showIcon = !source.empty(),
-    };
+    });
 }
 
 FaceButtonState b_button_state() {
     if (game_controls_suppressed()) {
-        return {
+        return apply_display_override(Control::B, {
             .iconSource = "",
             .visible = true,
             .showIcon = false,
-        };
+        });
     }
 
     const auto source = item_icon_source_for_button(Control::B);
-    return {
+    return apply_display_override(Control::B, {
         .iconSource = source,
         .visible = true,
         .showIcon = dMeter2Info_isUseButton(METER2_USEBUTTON_B) && !source.empty(),
-    };
+    });
 }
 
 void clear_equip_targets() noexcept {
@@ -472,6 +519,7 @@ void TouchControls::hide(bool close) {
 
 void TouchControls::set_control_pressed(Control control, bool pressed) {
     set_control_visual(control, pressed);
+    touch_control_event(control, pressed);
     sync_control_button_mask();
 
     switch (control) {
@@ -630,7 +678,8 @@ void TouchControls::sync_control_button_mask() noexcept {
     u16 buttonMask = 0;
     for (std::size_t i = 0; i < mControlTouches.size() && i < kControls.size(); ++i) {
         if (mControlTouches[i].active) {
-            buttonMask |= kControls[i].padButton;
+            buttonMask |= touch_control_pad_button(
+                static_cast<Control>(i), kControls[i].padButton);
         }
     }
     mButtonMask = buttonMask;
@@ -861,15 +910,21 @@ void TouchControls::sync_control_layouts() noexcept {
     }
 
     const auto& customControls = getSettings().game.touchControlsLayout.getValue().controls;
-    for (const auto& info : touch_layout_controls()) {
-        auto props = info.props;
-        if (const auto iter = customControls.find(info.layoutId); iter != customControls.end()) {
+    const std::size_t controlCount = touch_layout_control_count();
+    for (std::size_t i = 0; i < controlCount; ++i) {
+        const auto* info = touch_layout_control_at(i);
+        if (info == nullptr) {
+            continue;
+        }
+
+        auto props = info->props;
+        if (const auto iter = customControls.find(info->layoutId); iter != customControls.end()) {
             props = iter->second;
         }
 
         const auto layout = resolve_control_layout(props, docSize);
-        if (info.hasControl) {
-            const auto index = static_cast<std::size_t>(info.control);
+        if (info->hasControl) {
+            const auto index = static_cast<std::size_t>(info->control);
             if (index >= mControlElements.size()) {
                 continue;
             }
@@ -881,7 +936,7 @@ void TouchControls::sync_control_layouts() noexcept {
             apply_control_box_if_changed(elements.root, state.appliedBox, layout.box);
             apply_control_dock_classes(
                 elements.root, touch_control_dock_anchor(layout.visual, docSize));
-            apply_control_transform(info.control);
+            apply_control_transform(info->control);
             continue;
         }
 
@@ -992,6 +1047,13 @@ void TouchControls::sync_control_displays() noexcept {
             }
             release_control(control);
         }
+        for (const auto control : kDisplayOverrideControls) {
+            const auto& elements = mControlElements[static_cast<std::size_t>(control)];
+            if (elements.root != nullptr) {
+                elements.root->SetPseudoClass("hidden", true);
+            }
+            release_control(control);
+        }
         clear_equip_targets();
         return;
     }
@@ -1041,6 +1103,58 @@ void TouchControls::sync_control_displays() noexcept {
         if (zSourceChanged) {
             release_rml_texture(previousSource);
         }
+    }
+
+    const auto syncDisplayOverride = [this](Control control) {
+        TouchControlDisplayOverride override{};
+        const bool hasOverride =
+            !game_controls_suppressed() && touch_control_display_override(control, &override);
+        const FaceButtonState state =
+            hasOverride ? state_from_display_override(override) : FaceButtonState{};
+        const auto index = static_cast<std::size_t>(control);
+        if (index >= mControlElements.size()) {
+            return;
+        }
+
+        auto& elements = mControlElements[index];
+        if (elements.root != nullptr) {
+            elements.root->SetPseudoClass("hidden", !state.visible);
+            elements.root->SetClass("has-icon", state.showIcon);
+        }
+        if (!state.visible) {
+            release_control(control);
+        }
+        if (elements.icon != nullptr) {
+            elements.icon->SetClass("visible", state.showIcon);
+        }
+
+        const bool sourceChanged = state.iconSource != mControlIconSources[index];
+        const bool revisionChanged = state.iconRevision != mControlIconRevisions[index];
+        if (!sourceChanged && !revisionChanged) {
+            return;
+        }
+
+        const std::string previousSource = mControlIconSources[index];
+        mControlIconSources[index] = state.iconSource;
+        mControlIconRevisions[index] = state.iconRevision;
+        if (elements.icon == nullptr) {
+            release_rml_texture(previousSource);
+        } else if (state.iconSource.empty()) {
+            elements.icon->RemoveAttribute("src");
+        } else {
+            release_rml_texture(state.iconSource);
+            if (!sourceChanged) {
+                elements.icon->RemoveAttribute("src");
+            }
+            elements.icon->SetAttribute("src", state.iconSource);
+        }
+        if (sourceChanged) {
+            release_rml_texture(previousSource);
+        }
+    };
+
+    for (const auto control : kDisplayOverrideControls) {
+        syncDisplayOverride(control);
     }
 
     const auto syncIcon = [this](Rml::Element* button, Rml::Element* icon, std::string& lastSource,

@@ -106,6 +106,8 @@ private:
     std::string mButtonYIconSource;
     std::string mZTriggerIconSource;
     uint64_t mZTriggerIconRevision = 0;
+    std::array<std::string, static_cast<std::size_t>(Control::COUNT)> mControlIconSources{};
+    std::array<uint64_t, static_cast<std::size_t>(Control::COUNT)> mControlIconRevisions{};
     std::string mButtonXCountLabel;
     std::string mButtonYCountLabel;
     StickTouch mMoveTouch;
