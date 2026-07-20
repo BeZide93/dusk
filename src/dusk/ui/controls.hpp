@@ -95,12 +95,15 @@ constexpr std::array<std::string_view, 9> kControlLayoutIds = {
 };
 
 constexpr bool is_control_layout_id(std::string_view id) noexcept {
+    if (id.empty() || id.size() > 64) {
+        return false;
+    }
     for (const auto knownId : kControlLayoutIds) {
         if (id == knownId) {
             return true;
         }
     }
-    return false;
+    return true;
 }
 
 constexpr ControlRect resolve_anchored_rect(

@@ -645,6 +645,12 @@ bool complete_ganondorf_sequence() {
     return true;
 }
 
+bool should_update_ganondorf_sequence() {
+    return reserve().isBossRush() &&
+           current_entry().clearMode == BossRushEntry::GanondorfSequence &&
+           is_current_stage(current_entry());
+}
+
 bool is_hub_stage() {
     return reserve().isBossRush() && reserve().getBossRushState() == kBossRushStateHub &&
            is_boss_hub_stage_name();

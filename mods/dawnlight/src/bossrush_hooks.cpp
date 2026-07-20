@@ -1,99 +1,136 @@
 #include "bossrush.hpp"
 
-#include "SSystem/SComponent/c_math.h"
-#include "d/d_com_inf_game.h"
-#include "d/d_stage.h"
-#include "d/actor/d_a_b_gnd.h"
 #include "m_Do/m_Do_ext.h"
 class JPABaseEmitter;
 #include "d/actor/d_a_alink.h"
-#define private public
 #include "d/actor/d_a_obj_bosswarp.h"
-#undef private
-#include "f_op/f_op_actor_mng.h"
-#include "f_pc/f_pc_name.h"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/hook.h"
+#include "mods/svc/midna_dialog.h"
+#include "mods/svc/stage_flow.h"
 
 IMPORT_SERVICE(HookService, svc_hook);
+IMPORT_SERVICE(MidnaDialogService, svc_midna_dialog);
+IMPORT_SERVICE(StageFlowService, svc_stage_flow);
 
 namespace dawnlight {
 namespace {
 
-DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
+MidnaDialogProviderHandle s_midna_dialog_provider = 0;
+StageFlowProviderHandle s_stage_flow_provider = 0;
 
-bool update_hub_boss_warp(daObjBossWarp_c* warp) {
+DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
+
+void update_bossrush(ModContext*, void*, void*, void*) {
+    bossrush::update();
+}
+
+int transition_actor_update(ModContext*, void* actor, int actor_kind, void*) {
+    if (actor_kind != DUSK_MOD_STAGE_FLOW_TRANSITION_ACTOR_BOSS_WARP) {
+        return DUSK_MOD_STAGE_FLOW_TRANSITION_DEFAULT;
+    }
+
+    auto* warp = static_cast<daObjBossWarp_c*>(actor);
     if (warp == nullptr || !bossrush::is_hub_stage()) {
-        return false;
+        return DUSK_MOD_STAGE_FLOW_TRANSITION_DEFAULT;
     }
-
-    const bool active = bossrush::is_hub_center_portal(warp->getSceneListNo());
-    warp->appear(0);
-    if (active) {
-        warp->mpBrkAnm->play();
-        warp->mpBtkAnm[0]->play();
-        warp->mpBtkAnm[1]->play();
-    } else {
-        warp->mpBrkAnm->setPlaySpeed(0.0f);
-        warp->mpBtkAnm[0]->setPlaySpeed(0.0f);
-        warp->mpBtkAnm[1]->setPlaySpeed(0.0f);
-    }
-    if (warp->mScalingUp) {
-        cLib_chaseF(&warp->scale.y, 1.0f, 0.016f);
-    }
-    if (warp->mpParticle[3] != nullptr) {
-        JGeometry::TVec3<f32> particleScale;
-        JGeometry::setTVec3f(&warp->scale.x, &particleScale.x);
-        warp->mpParticle[3]->setGlobalScale(particleScale);
-    }
-    if (active && warp->mpBrkAnm != nullptr && warp->mpBrkAnm->getFrame() != 0.0f) {
-        mDoAud_seStartLevel(Z2SE_OBJ_MDN_ESCAPE_HOLE, &warp->current.pos, 0, 0);
-    }
-    warp->setBaseMtx();
-    return true;
+    return bossrush::is_hub_center_portal(warp->getSceneListNo()) ?
+        DUSK_MOD_STAGE_FLOW_TRANSITION_ACTIVE :
+        DUSK_MOD_STAGE_FLOW_TRANSITION_STATIC;
 }
 
-HookAction before_boss_warp_execute(ModContext*, void* args, void* retval, void*) {
-    auto* warp = mods::arg<daObjBossWarp_c*>(args, 0);
-    if (!update_hub_boss_warp(warp)) {
-        return HOOK_CONTINUE;
+int sequence_complete(ModContext*, int sequence_kind, void*) {
+    if (sequence_kind != DUSK_MOD_STAGE_FLOW_SEQUENCE_FINAL_BATTLE) {
+        return 0;
     }
-    *static_cast<int*>(retval) = 1;
-    return HOOK_SKIP_ORIGINAL;
+    return bossrush::complete_ganondorf_sequence();
 }
 
-void update_ganondorf_sequence() {
-    auto* ganondorf = static_cast<b_gnd_class*>(fopAcM_SearchByName(fpcNm_B_GND_e));
-    if (ganondorf == nullptr || ganondorf->mDemoCamMode != 65 ||
-        ganondorf->mDemoCamTimer != 330 || !bossrush::complete_ganondorf_sequence()) {
-        return;
+const char* prompt_text(ModContext*, void*) {
+    return bossrush::has_hub_midna_prompt() ? bossrush::hub_midna_prompt_text() : nullptr;
+}
+
+int prompt_begin(ModContext*, void*) {
+    return bossrush::begin_hub_midna_prompt();
+}
+
+int prompt_resolve(ModContext*, int choice, void*) {
+    return bossrush::resolve_hub_midna_prompt(choice);
+}
+
+int prompt_consume_resolution(ModContext*, void*) {
+    const bool hubPromptResolved = bossrush::consume_hub_midna_prompt_resolution();
+    const bool hubWarpPromptResolved = bossrush::consume_midna_hub_warp_prompt_resolution();
+    return hubPromptResolved || hubWarpPromptResolved;
+}
+
+const char* menu_option(ModContext*, void*) {
+    return bossrush::has_midna_hub_warp_prompt() ? bossrush::midna_hub_warp_option_text() : nullptr;
+}
+
+int menu_begin(ModContext*, void*) {
+    return bossrush::begin_midna_hub_warp_prompt();
+}
+
+int menu_resolve(ModContext*, int choice, void*) {
+    return bossrush::resolve_midna_hub_warp_prompt(choice);
+}
+
+int menu_cancel(ModContext*, void*) {
+    return bossrush::cancel_midna_hub_warp_prompt();
+}
+
+int menu_execute_warp(ModContext*, void* player_ptr, void*) {
+    if (!bossrush::consume_midna_hub_warp_request()) {
+        return 0;
     }
 
-    camera_process_class* camera = dComIfGp_getCamera(dComIfGp_getPlayerCameraID(0));
-    if (camera != nullptr) {
-        camera->mCamera.Start();
-        camera->mCamera.SetTrimSize(0);
+    auto* player = static_cast<daAlink_c*>(player_ptr);
+    if (bossrush::prepare_midna_hub_warp() &&
+        (player == nullptr || !player->procDungeonWarpReadyInit()))
+    {
+        bossrush::warp_to_hub_now();
     }
-    dComIfGp_event_reset();
-    ganondorf->mDemoCamMode = 0;
-    ganondorf->mDemoCamTimer = 0;
+    return 1;
 }
 
 }  // namespace
 
 ModResult install_bossrush_hooks(ModError* error) {
-    ModResult result = mods::hook_add_pre<BossWarpExecuteHook>(svc_hook, before_boss_warp_execute);
-    if (result == MOD_OK) {
-        return MOD_OK;
+    StageFlowProviderDesc stageFlow = STAGE_FLOW_PROVIDER_DESC_INIT;
+    stageFlow.transition_actor_update = transition_actor_update;
+    stageFlow.sequence_complete = sequence_complete;
+
+    ModResult result =
+        svc_stage_flow->register_provider(mod_ctx, &stageFlow, &s_stage_flow_provider);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to register Dawnlight stage-flow provider");
     }
 
-    return mods::set_error(error, result, "failed to install Dawnlight Boss Rush portal hook");
-}
+    MidnaDialogProviderDesc midnaDialog = MIDNA_DIALOG_PROVIDER_DESC_INIT;
+    midnaDialog.prompt_text = prompt_text;
+    midnaDialog.prompt_begin = prompt_begin;
+    midnaDialog.prompt_resolve = prompt_resolve;
+    midnaDialog.prompt_consume_resolution = prompt_consume_resolution;
+    midnaDialog.menu_option = menu_option;
+    midnaDialog.menu_begin = menu_begin;
+    midnaDialog.menu_resolve = menu_resolve;
+    midnaDialog.menu_cancel = menu_cancel;
+    midnaDialog.menu_execute_warp = menu_execute_warp;
 
-void update_bossrush_hooks() {
-    bossrush::update();
-    update_ganondorf_sequence();
+    result = svc_midna_dialog->register_provider(
+        mod_ctx, &midnaDialog, &s_midna_dialog_provider);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to register Dawnlight Midna-dialog provider");
+    }
+
+    result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, update_bossrush);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Boss Rush update hook");
+    }
+
+    return MOD_OK;
 }
 
 }  // namespace dawnlight

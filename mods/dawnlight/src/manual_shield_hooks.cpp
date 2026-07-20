@@ -87,6 +87,22 @@ HookAction before_guard_attack_init(ModContext*, void* args, void* retval, void*
     return HOOK_SKIP_ORIGINAL;
 }
 
+HookAction before_check_item_action(ModContext*, void* args, void* retval, void*) {
+    auto* link = mods::arg<daAlink_c*>(args, 0);
+    if (!manual_shielding_enabled() || link == nullptr || retval == nullptr) {
+        return HOOK_CONTINUE;
+    }
+    if (!shield_action_context(link) || !manual_shield_attack_trigger(link)) {
+        return HOOK_CONTINUE;
+    }
+
+    link->setBStatus(BUTTON_STATUS_SHIELD_ATTACK);
+    s_manualGuardAttackOwner = link;
+    *static_cast<BOOL*>(retval) = link->procGuardAttackInit();
+    s_manualGuardAttackOwner = nullptr;
+    return HOOK_SKIP_ORIGINAL;
+}
+
 void after_check_item_action(ModContext*, void* args, void* retval, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     auto* result = static_cast<BOOL*>(retval);
@@ -119,6 +135,9 @@ ModResult install_manual_shield_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<GuardAttackInitHook>(svc_hook, before_guard_attack_init);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<CheckItemActionHook>(svc_hook, before_check_item_action);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<CheckItemActionHook>(svc_hook, after_check_item_action);

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "controls.hpp"
+#include "touch_control_hooks.hpp"
 
 #include <RmlUi/Core.h>
 #include <SDL3/SDL_touch.h>
@@ -13,17 +13,12 @@
 namespace dusk::ui {
 
 constexpr std::size_t kTouchLayoutControlCount = 9;
-
-struct TouchLayoutControlInfo {
-    std::string_view layoutId;
-    const char* elementId = nullptr;
-    ControlProps props;
-    Control control = Control::COUNT;
-    bool hasControl = false;
-};
+constexpr std::size_t kTouchLayoutControlCapacity = 16;
 
 std::string_view touch_controls_rml_fragment() noexcept;
 std::span<const TouchLayoutControlInfo> touch_layout_controls() noexcept;
+std::size_t touch_layout_control_count() noexcept;
+const TouchLayoutControlInfo* touch_layout_control_at(std::size_t index) noexcept;
 const TouchLayoutControlInfo* find_touch_layout_control(std::string_view layoutId) noexcept;
 const TouchLayoutControlInfo* find_touch_layout_control(Control control) noexcept;
 

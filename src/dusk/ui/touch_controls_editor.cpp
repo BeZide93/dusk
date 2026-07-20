@@ -88,7 +88,7 @@ bool is_vertical_edge(TouchControlsEditor::EditHandle handle) noexcept {
 }
 
 bool control_valid(std::size_t index) noexcept {
-    return index < touch_layout_controls().size();
+    return index < kTouchLayoutControlCapacity && touch_layout_control_at(index) != nullptr;
 }
 
 float squared_distance(Rml::Vector2f a, Rml::Vector2f b) noexcept {
@@ -109,10 +109,11 @@ TouchControlsEditor::TouchControlsEditor()
       mWorkingLayout(getSettings().game.touchControlsLayout.getValue()) {
     mWorkingLayout.version = ControlLayout::Version;
 
-    const auto controls = touch_layout_controls();
-    for (std::size_t i = 0; i < controls.size() && i < mElements.size(); ++i) {
+    const std::size_t controlCount = touch_layout_control_count();
+    for (std::size_t i = 0; i < controlCount && i < mElements.size(); ++i) {
+        const auto* control = touch_layout_control_at(i);
         mElements[i].root =
-            mDocument != nullptr ? mDocument->GetElementById(controls[i].elementId) : nullptr;
+            mDocument != nullptr && control != nullptr ? mDocument->GetElementById(control->elementId) : nullptr;
     }
 
     bind_control_events();
@@ -195,8 +196,8 @@ bool TouchControlsEditor::focus() {
 }
 
 void TouchControlsEditor::bind_control_events() noexcept {
-    const auto controls = touch_layout_controls();
-    for (std::size_t i = 0; i < controls.size() && i < mElements.size(); ++i) {
+    const std::size_t controlCount = touch_layout_control_count();
+    for (std::size_t i = 0; i < controlCount && i < mElements.size(); ++i) {
         auto* element = mElements[i].root;
         if (element == nullptr) {
             continue;
@@ -283,8 +284,8 @@ void TouchControlsEditor::sync_control_layouts() noexcept {
         return;
     }
 
-    const auto controls = touch_layout_controls();
-    for (std::size_t i = 0; i < controls.size() && i < mElements.size(); ++i) {
+    const std::size_t controlCount = touch_layout_control_count();
+    for (std::size_t i = 0; i < controlCount && i < mElements.size(); ++i) {
         const auto layout = resolve_control_layout(props_for(i), docSize);
         auto& element = mElements[i];
         element.layout.visualRect = layout.visual;
@@ -332,23 +333,25 @@ void TouchControlsEditor::set_selected_control(std::size_t index) noexcept {
 }
 
 void TouchControlsEditor::clear_selected_control() noexcept {
-    mSelectedIndex = kTouchLayoutControlCount;
+    mSelectedIndex = kTouchLayoutControlCapacity;
     sync_selection_frame();
 }
 
 ControlProps TouchControlsEditor::props_for(std::size_t index) const {
-    const auto controls = touch_layout_controls();
     if (!control_valid(index)) {
         return {};
     }
 
-    const auto& info = controls[index];
-    if (const auto iter = mWorkingLayout.controls.find(info.layoutId);
+    const auto* info = touch_layout_control_at(index);
+    if (info == nullptr) {
+        return {};
+    }
+    if (const auto iter = mWorkingLayout.controls.find(info->layoutId);
         iter != mWorkingLayout.controls.end())
     {
         return iter->second;
     }
-    return info.props;
+    return info->props;
 }
 
 void TouchControlsEditor::store_props(
@@ -368,7 +371,11 @@ void TouchControlsEditor::store_props(
     props.scale = std::max(props.scale, kMinScale);
     props = encode_control_props(visual, docSize, props, touch_control_dock_anchor(visual, docSize));
     mWorkingLayout.version = ControlLayout::Version;
-    mWorkingLayout.controls[std::string{touch_layout_controls()[index].layoutId}] = props;
+    const auto* info = touch_layout_control_at(index);
+    if (info == nullptr) {
+        return;
+    }
+    mWorkingLayout.controls[std::string{info->layoutId}] = props;
     sync_control_layouts();
     sync_selection_frame();
 }
@@ -379,7 +386,11 @@ void TouchControlsEditor::restore_active_control() noexcept {
     }
 
     auto& controls = mWorkingLayout.controls;
-    const auto key = std::string{touch_layout_controls()[mPointerEdit.index].layoutId};
+    const auto* info = touch_layout_control_at(mPointerEdit.index);
+    if (info == nullptr) {
+        return;
+    }
+    const auto key = std::string{info->layoutId};
     if (mPointerEdit.storedProps) {
         controls[key] = *mPointerEdit.storedProps;
     } else {
@@ -405,8 +416,11 @@ bool TouchControlsEditor::begin_edit(
     const auto props = props_for(index);
     const auto layout = resolve_control_layout(props, docSize);
     std::optional<ControlProps> storedProps;
-    if (const auto iter = mWorkingLayout.controls.find(touch_layout_controls()[index].layoutId);
-        iter != mWorkingLayout.controls.end())
+    const auto* info = touch_layout_control_at(index);
+    if (info == nullptr) {
+        return false;
+    }
+    if (const auto iter = mWorkingLayout.controls.find(info->layoutId); iter != mWorkingLayout.controls.end())
     {
         storedProps = iter->second;
     }
@@ -564,7 +578,12 @@ Rml::Vector2f TouchControlsEditor::min_visual_size(std::size_t index) const noex
         return {kMinControlDp, kMinControlDp};
     }
 
-    const auto id = touch_layout_controls()[index].layoutId;
+    const auto* info = touch_layout_control_at(index);
+    if (info == nullptr) {
+        return {kMinControlDp, kMinControlDp};
+    }
+
+    const auto id = info->layoutId;
     if (id == "actionBar") {
         return {kMinActionBarWidthDp, kMinActionBarHeightDp};
     }

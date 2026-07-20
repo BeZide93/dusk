@@ -50,6 +50,7 @@
 #include "d/actor/d_a_canoe.h"
 #include "d/actor/d_a_ni.h"
 #include "d/d_s_play.h"
+#include "dusk/mods/svc/midna_dialog.hpp"
 
 #if TARGET_PC
 #include "dusk/action_bindings.h"
@@ -11517,7 +11518,8 @@ int daAlink_c::orderZTalk() {
 
     if (checkMidnaRide()) {
         fopAc_ac_c* zhint = dComIfGp_att_getZHint();
-        if (zhint != NULL) {
+        const bool customMidnaPrompt = dusk::mods::svc::midna_dialog::prompt_text() != nullptr;
+        if (zhint != NULL || customMidnaPrompt) {
             setMidnaTalkStatus(BUTTON_STATUS_CHECK);
         }
 

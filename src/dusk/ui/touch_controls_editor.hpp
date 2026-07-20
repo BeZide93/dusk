@@ -45,7 +45,7 @@ private:
     };
 
     struct PointerEdit {
-        std::size_t index = kTouchLayoutControlCount;
+        std::size_t index = kTouchLayoutControlCapacity;
         SDL_FingerID touchId = 0;
         Rml::Vector2f startPointerDp;
         ControlRect startVisual;
@@ -88,11 +88,11 @@ private:
     Rml::Element* mSaveButton = nullptr;
     Rml::Element* mResetButton = nullptr;
     Rml::Element* mCancelButton = nullptr;
-    std::array<EditElement, kTouchLayoutControlCount> mElements{};
+    std::array<EditElement, kTouchLayoutControlCapacity> mElements{};
     ControlLayout mWorkingLayout;
     PointerEdit mPointerEdit;
     std::optional<ControlRect> mAppliedSelectionFrame;
-    std::size_t mSelectedIndex = kTouchLayoutControlCount;
+    std::size_t mSelectedIndex = kTouchLayoutControlCapacity;
 };
 
 }  // namespace dusk::ui

@@ -14,11 +14,12 @@ add_mod(dawnlight_mod
         src/manual_shield_hooks.cpp
         src/mod.cpp
         src/save_compat.cpp
+        src/touch_hooks.cpp
         src/ui.cpp
     MOD_JSON mod.json
     RES_DIR res
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/mods"
 )
 
-target_include_directories(dawnlight_mod PRIVATE src)
+target_include_directories(dawnlight_mod PRIVATE src "${CMAKE_SOURCE_DIR}/src")
 target_link_libraries(dawnlight_mod PRIVATE nlohmann_json::nlohmann_json)

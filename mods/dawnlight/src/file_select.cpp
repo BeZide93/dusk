@@ -8,31 +8,20 @@
 #include "d/d_file_select.h"
 #include "d/d_lib.h"
 #include "d/d_meter2_info.h"
-#include "d/d_s_name.h"
-#include "d/d_save.h"
 #include "d/d_stage.h"
-#include "f_op/f_op_overlap_mng.h"
 #include "f_op/f_op_msg_mng.h"
 #include "m_Do/m_Do_audio.h"
 #include "m_Do/m_Do_controller_pad.h"
-#include "m_Do/m_Do_Reset.h"
-#include "mods/hook.hpp"
 #include "mods/service.hpp"
-#include "mods/svc/hook.h"
+#include "mods/svc/file_select.h"
 
 #include <cstring>
 #include <unordered_map>
 
-IMPORT_SERVICE(HookService, svc_hook);
+IMPORT_SERVICE(FileSelectService, svc_file_select);
 
 namespace dawnlight {
 namespace {
-
-DEFINE_HOOK(&dFile_select_c::_move, FileSelectMoveHook);
-DEFINE_HOOK(&dFile_select_c::dataSelectStart, FileSelectDataSelectStartHook);
-DEFINE_HOOK(&dFile_select_c::menuSelectStart, FileSelectMenuSelectStartHook);
-DEFINE_HOOK(&dFile_select_c::nameInput2, FileSelectNameInput2Hook);
-DEFINE_HOOK(&dScnName_c::changeGameScene, NameChangeGameSceneHook);
 
 enum class Flow {
     None,
@@ -422,7 +411,8 @@ void update_file_select(dFile_select_c* fileSelect, FileSelectState& current) {
     }
 }
 
-bool file_update(dFile_select_c* fileSelect) {
+int file_update(ModContext*, void* file_select, void*) {
+    auto* fileSelect = static_cast<dFile_select_c*>(file_select);
     auto it = s_states.find(fileSelect);
     const bool active = it != s_states.end() && it->second.flow != Flow::None;
     if (active) {
@@ -432,7 +422,8 @@ bool file_update(dFile_select_c* fileSelect) {
     return active;
 }
 
-bool file_open(dFile_select_c* fileSelect) {
+int file_open(ModContext*, void* file_select, void*) {
+    auto* fileSelect = static_cast<dFile_select_c*>(file_select);
     FileSelectState& current = state(fileSelect);
     current = {};
     current.targetSlot = fileSelect->mSelectNum;
@@ -445,7 +436,8 @@ bool file_open(dFile_select_c* fileSelect) {
     return 1;
 }
 
-bool existing_start(dFile_select_c* fileSelect) {
+int existing_start(ModContext*, void* file_select, void*) {
+    auto* fileSelect = static_cast<dFile_select_c*>(file_select);
     FileSelectState& current = state(fileSelect);
     current = {};
     current.targetSlot = fileSelect->mSelectNum;
@@ -455,7 +447,8 @@ bool existing_start(dFile_select_c* fileSelect) {
     return 1;
 }
 
-void names_confirmed(dFile_select_c* fileSelect) {
+void names_confirmed(ModContext*, void* file_select, void*) {
+    auto* fileSelect = static_cast<dFile_select_c*>(file_select);
     FileSelectState& current = state(fileSelect);
     if (current.newGamePlus) {
         game_modes::apply_new_game_plus(fileSelect, current.sourceSlot, current.targetSlot);
@@ -466,13 +459,18 @@ void names_confirmed(dFile_select_c* fileSelect) {
     if (current.bossRush) {
         game_modes::apply_boss_rush(dComIfGs_getSaveData());
     }
+    current = {};
+}
+
+void destroyed(ModContext*, void* file_select, void*) {
+    auto* fileSelect = static_cast<dFile_select_c*>(file_select);
     s_states.erase(fileSelect);
 }
 
-bool start_stage() {
+int start_stage(ModContext*, void*, void*) {
     if (bossrush::is_active()) {
         bossrush::set_next_stage_for_current();
-        return true;
+        return 1;
     }
 
     if (is_intro_skipped(dComIfGs_getSaveData())) {
@@ -480,79 +478,27 @@ bool start_stage() {
             dComIfGs_offSaveSwitch(dStage_SaveTbl_FARON, 12);
         }
         dComIfGs_onSaveSwitch(dStage_SaveTbl_FARON, 20);
-        dSv_player_return_place_c& returnPlace =
-            dComIfGs_getSaveData()->getPlayer().getPlayerReturnPlace();
-        dComIfGp_setNextStage(returnPlace.getName(), returnPlace.getPlayerStatus(),
-            returnPlace.getRoomNo(), -1, 0.0f, 0, 1, 0, 0, 0, 0);
-        return true;
+        return 1;
     }
 
-    return false;
-}
-
-HookAction before_file_select_move(ModContext*, void* args, void*, void*) {
-    auto* fileSelect = mods::arg<dFile_select_c*>(args, 0);
-    return file_update(fileSelect) ? HOOK_SKIP_ORIGINAL : HOOK_CONTINUE;
-}
-
-HookAction before_data_select_start(ModContext*, void* args, void*, void*) {
-    auto* fileSelect = mods::arg<dFile_select_c*>(args, 0);
-    if (fileSelect->mIsDataNew[fileSelect->mSelectNum] == 0 || !file_open(fileSelect)) {
-        return HOOK_CONTINUE;
-    }
-    return HOOK_SKIP_ORIGINAL;
-}
-
-HookAction before_menu_select_start(ModContext*, void* args, void*, void*) {
-    auto* fileSelect = mods::arg<dFile_select_c*>(args, 0);
-    if (fileSelect->mSelectMenuNum != 1 || !existing_start(fileSelect)) {
-        return HOOK_CONTINUE;
-    }
-    return HOOK_SKIP_ORIGINAL;
-}
-
-void after_name_input2(ModContext*, void* args, void*, void*) {
-    auto* fileSelect = mods::arg<dFile_select_c*>(args, 0);
-    auto it = s_states.find(fileSelect);
-    if (it == s_states.end()) {
-        return;
-    }
-    const FileSelectState& current = it->second;
-    if (current.flow != Flow::None || (!current.newGamePlus && !current.introSkip && !current.bossRush)) {
-        return;
-    }
-    if (fileSelect->mDataSelProc == dFile_select_c::DATASELPROC_NEXT_MODE_WAIT) {
-        names_confirmed(fileSelect);
-    }
-}
-
-void after_name_scene_change_game_scene(ModContext*, void*, void*, void*) {
-    if (mDoRst::isReset() || fopOvlpM_IsPeek()) {
-        return;
-    }
-
-    start_stage();
+    return 0;
 }
 
 }  // namespace
 
 ModResult install_file_select_hooks(ModError* error) {
-    ModResult result = mods::hook_add_pre<FileSelectMoveHook>(svc_hook, before_file_select_move);
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<FileSelectDataSelectStartHook>(svc_hook, before_data_select_start);
-    }
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<FileSelectMenuSelectStartHook>(svc_hook, before_menu_select_start);
-    }
-    if (result == MOD_OK) {
-        result = mods::hook_add_post<FileSelectNameInput2Hook>(svc_hook, after_name_input2);
-    }
-    if (result == MOD_OK) {
-        result = mods::hook_add_post<NameChangeGameSceneHook>(
-            svc_hook, after_name_scene_change_game_scene);
-    }
+    FileSelectProviderDesc desc = FILE_SELECT_PROVIDER_DESC_INIT;
+    desc.update = file_update;
+    desc.open_new_slot = file_open;
+    desc.start_existing_slot = existing_start;
+    desc.names_confirmed = names_confirmed;
+    desc.destroyed = destroyed;
+    desc.start_stage = start_stage;
+
+    FileSelectProviderHandle handle = 0;
+    const ModResult result = svc_file_select->register_provider(mod_ctx, &desc, &handle);
     if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight file-select hooks");
+        return mods::set_error(error, result, "failed to register Dawnlight file-select provider");
     }
     return MOD_OK;
 }

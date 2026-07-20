@@ -20,8 +20,8 @@ ModResult install_item_integrity_hooks(ModError* error);
 ModResult install_item_slot_hooks(ModError* error);
 ModResult install_jump_hooks(ModError* error);
 ModResult install_manual_shield_hooks(ModError* error);
+ModResult install_touch_hooks(ModError* error);
 ModResult register_ui(ModError* error);
-void update_bossrush_hooks();
 }
 
 extern "C" {
@@ -51,6 +51,9 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
     if (const ModResult result = dawnlight::install_item_slot_hooks(error); result != MOD_OK) {
         return result;
     }
+    if (const ModResult result = dawnlight::install_touch_hooks(error); result != MOD_OK) {
+        return result;
+    }
     if (const ModResult result = dawnlight::install_manual_shield_hooks(error); result != MOD_OK) {
         return result;
     }
@@ -66,7 +69,6 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 }
 
 MOD_EXPORT ModResult mod_update(ModError*) {
-    dawnlight::update_bossrush_hooks();
     return MOD_OK;
 }
 

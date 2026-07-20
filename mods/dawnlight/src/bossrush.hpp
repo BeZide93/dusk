@@ -8,6 +8,7 @@ void apply_new_save_preset();
 bool is_active();
 void set_next_stage_for_current();
 bool complete_ganondorf_sequence();
+bool should_update_ganondorf_sequence();
 bool is_hub_stage();
 bool is_hub_center_portal(u8 sceneListNo);
 bool has_hub_midna_prompt();

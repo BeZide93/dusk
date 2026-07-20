@@ -12,6 +12,7 @@
 #include "f_pc/f_pc_name.h"
 #include "d/actor/d_a_obj_life_container.h"
 #include "d/actor/d_a_obj_ystone.h"
+#include "dusk/mods/svc/stage_flow.hpp"
 #include <cstring>
 
 static DUSK_CONST char* l_arcName = "ef_Portal";
@@ -217,6 +218,35 @@ BOOL daObjBossWarp_c::checkDistance() {
 }
 
 int daObjBossWarp_c::execute() {
+#if TARGET_PC
+    const int modPortalMode = dusk::mods::svc::stage_flow::transition_actor_update(
+        this, DUSK_MOD_STAGE_FLOW_TRANSITION_ACTOR_BOSS_WARP);
+    if (modPortalMode != 0) {
+        appear(0);
+        if (modPortalMode == 2) {
+            mpBrkAnm->play();
+            mpBtkAnm[0]->play();
+            mpBtkAnm[1]->play();
+        } else {
+            mpBrkAnm->setPlaySpeed(0.0f);
+            mpBtkAnm[0]->setPlaySpeed(0.0f);
+            mpBtkAnm[1]->setPlaySpeed(0.0f);
+        }
+        if (mScalingUp) {
+            cLib_chaseF(&scale.y, 1.0f, 0.016f);
+        }
+        if (mpParticle[3] != NULL) {
+            JGeometry::TVec3<f32> particleScale;
+            JGeometry::setTVec3f(&scale.x, &particleScale.x);
+            mpParticle[3]->setGlobalScale(particleScale);
+        }
+        if (modPortalMode == 2 && mpBrkAnm != NULL && mpBrkAnm->getFrame() != 0.0f) {
+            mDoAud_seStartLevel(Z2SE_OBJ_MDN_ESCAPE_HOLE, &current.pos, 0, 0);
+        }
+        setBaseMtx();
+        return 1;
+    }
+#endif
     if (dStage_stagInfo_GetSTType(dComIfGp_getStage()->getStagInfo()) != 3) {
         u8 sw = getSwNo();
         if (sw == 0xff || fopAcM_isSwitch(this, sw)) {
