@@ -10,6 +10,8 @@
 #include "d/d_msg_out_font.h"
 #include "m_Do/m_Do_graphic.h"
 #include "d/d_lib.h"
+// TODO(mod-services): Replace direct Midna dialog service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/midna_dialog.hpp"
 #include "JSystem/JUtility/JUTFont.h"
 
 #if TARGET_PC
@@ -1964,7 +1966,9 @@ void jmessage_tSequenceProcessor::do_end() {
     } else {
         if (pReference->getSelectNum() == 3) {
             if (pReference->getSelectType() == 0) {
-                if (!pReference->isMidona()) {
+                if (!pReference->isMidona() ||
+                    dusk::mods::svc::midna_dialog::custom_menu_option_available())
+                {
                     pReference->setStopFlag(3);
                 }
             } else {
@@ -2803,7 +2807,9 @@ void jmessage_tRenderingProcessor::do_begin(void const* pEntry, char const* pszT
 void jmessage_tRenderingProcessor::do_end() {
     jmessage_tReference* pReference = (jmessage_tReference*)getReference();
 
-    if (dMsgObject_getSelectWordFlag() != 0) {
+    if (!dusk::mods::svc::midna_dialog::apply_custom_menu_option(pReference) &&
+        dMsgObject_getSelectWordFlag() != 0)
+    {
         for (int i = 0; i < dMsgObject_getSelectWordFlag(); i++) {
             char buffer[200];
             SAFE_STRCPY(buffer, dMsgObject_getSelectWord(i));

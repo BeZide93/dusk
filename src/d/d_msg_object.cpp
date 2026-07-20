@@ -28,6 +28,8 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "m_Do/m_Do_lib.h"
+// TODO(mod-services): Replace direct Midna dialog service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/midna_dialog.hpp"
 
 #if TARGET_PC
 #include "dusk/menu_pointer.h"
@@ -539,10 +541,12 @@ int dMsgObject_c::_draw() {
         }
         if (mpScrnDraw != NULL) {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
-            mpScrnDraw->setString(pRef->getTextPtr(), pRef->getTextSPtr());
-            mpScrnDraw->setRubyString(pRef->getRubyPtr());
-            mpScrnDraw->setSelectString(pRef->getSelTextPtr(0), pRef->getSelTextPtr(1),
-                                        pRef->getSelTextPtr(2));
+            if (!dusk::mods::svc::midna_dialog::draw_custom_prompt(mpScrnDraw, pRef)) {
+                mpScrnDraw->setString(pRef->getTextPtr(), pRef->getTextSPtr());
+                mpScrnDraw->setRubyString(pRef->getRubyPtr());
+                mpScrnDraw->setSelectString(pRef->getSelTextPtr(0), pRef->getSelTextPtr(1),
+                                            pRef->getSelTextPtr(2));
+            }
             mpScrnDraw->setSelectRubyString(pRef->getSelRubyPtr(0), pRef->getSelRubyPtr(1),
                                             pRef->getSelRubyPtr(2));
         }
@@ -869,7 +873,9 @@ void dMsgObject_c::openProc() {
         if (field_0x16a == 0) {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
             field_0x1a3 = 0;
-            if (mpRefer->getMsgID() == 0x7fa) {
+            if (mpRefer->getMsgID() == 0x7fa ||
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
+            {
                 mpScrnDraw->selectAnimeInit(3, pRef->getSelectPos(), pRef->getSelTBoxWidth(),
                                             pRef->getSelectRubyFlag());
             } else {
@@ -889,7 +895,9 @@ void dMsgObject_c::openProc() {
                 field_0x1a3 = 2;
                 field_0x16a = 9;
             }
-            if (mpRefer->getMsgID() == 0x7fa) {
+            if (mpRefer->getMsgID() == 0x7fa ||
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
+            {
                 mpScrnDraw->selectAnimeMove(2, getSelectCursorPosLocal(), uVar12);
             } else {
                 if (getSelectCursorPosLocal() != 0xff) {
@@ -954,7 +962,9 @@ void dMsgObject_c::openProc() {
         }
         field_0x16a = 0;
         if (isMidonaMessage()) {
-            if (mpRefer->getMsgID() == 0x7fa) {
+            if (mpRefer->getMsgID() == 0x7fa ||
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
+            {
                 setStatusLocal(9);
             } else {
                 setStatusLocal(8);
@@ -1209,6 +1219,25 @@ void dMsgObject_c::selectProc() {
     }
     field_0x100->select_idx = pRef->getSelectPos();
     if (isSend() && field_0x1a3 != 0 && iVar8) {
+        if (field_0x1a3 == 2 &&
+            dusk::mods::svc::midna_dialog::resolve_cancelled_selection())
+        {
+            field_0x1a3 = 0;
+            setSelectCancelPosLocal(0);
+            field_0x16a = 0;
+            dMsgObject_onKillMessageFlag();
+            return;
+        }
+
+        if (field_0x1a3 == 1 &&
+            dusk::mods::svc::midna_dialog::resolve_cursor_selection(getSelectCursorPosLocal()))
+        {
+            field_0x1a3 = 0;
+            setSelectCancelPosLocal(0);
+            field_0x16a = 0;
+            dMsgObject_onKillMessageFlag();
+            return;
+        }
         field_0x1a3 = 0;
         if (mDoCPd_c::getTrigB(0)) {
             mSelectPushFlag = 2;
@@ -1911,7 +1940,8 @@ bool dMsgObject_c::isHowlMessage() {
 
 bool dMsgObject_c::isMidonaMessage() {
     if (mFukiKind == 13 && (mpRefer->getMsgID() == 0x7d3 || mpRefer->getMsgID() == 0x7f6 ||
-                            mpRefer->getMsgID() == 0x7fa))
+                            mpRefer->getMsgID() == 0x7fa ||
+                            dusk::mods::svc::midna_dialog::custom_menu_option_available()))
     {
         return 1;
     }

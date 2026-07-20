@@ -1494,6 +1494,8 @@ set(DUSK_FILES
         src/dusk/mods/svc/file_select.hpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
+        src/dusk/mods/svc/midna_dialog.cpp
+        src/dusk/mods/svc/midna_dialog.hpp
         src/dusk/mods/svc/hook.cpp
         src/dusk/mods/svc/host.cpp
         src/dusk/mods/svc/log.cpp

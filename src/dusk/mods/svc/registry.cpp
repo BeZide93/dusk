@@ -212,6 +212,7 @@ void ModLoader::init_services() {
             &svc::g_gfxModule,
             &svc::g_fileSelectModule,
             &svc::g_stageFlowModule,
+            &svc::g_midnaDialogModule,
         })
     {
         svc::register_module(*module);
