@@ -4,6 +4,11 @@
 #include "f_op/f_op_actor_mng.h"
 #include "d/d_msg_flow.h"
 
+namespace dusk::mods::svc::stage_flow {
+void run_boss_warp_transition(void* actor, int mode);
+bool transition_actor_update(void* actor, int actorKind);
+}
+
 /**
  * @ingroup actors-objects
  * @class daObjBossWarp_c
@@ -14,6 +19,9 @@
  */
 class daObjBossWarp_c : public fopAc_ac_c {
 public:
+    friend void dusk::mods::svc::stage_flow::run_boss_warp_transition(void*, int);
+    friend bool dusk::mods::svc::stage_flow::transition_actor_update(void*, int);
+
     enum Action {
         /* 0x0 */ ACT_WAIT,
         /* 0x1 */ ACT_ORDER_EVENT,

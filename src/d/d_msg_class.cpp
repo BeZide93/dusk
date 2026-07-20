@@ -1965,7 +1965,9 @@ void jmessage_tSequenceProcessor::do_end() {
     } else {
         if (pReference->getSelectNum() == 3) {
             if (pReference->getSelectType() == 0) {
-                if (!pReference->isMidona() || dusk::mods::svc::midna_dialog::menu_option() != nullptr) {
+                if (!pReference->isMidona() ||
+                    dusk::mods::svc::midna_dialog::custom_menu_option_available())
+                {
                     pReference->setStopFlag(3);
                 }
             } else {
@@ -2804,16 +2806,9 @@ void jmessage_tRenderingProcessor::do_begin(void const* pEntry, char const* pszT
 void jmessage_tRenderingProcessor::do_end() {
     jmessage_tReference* pReference = (jmessage_tReference*)getReference();
 
-    const char* customMidnaOption = dusk::mods::svc::midna_dialog::menu_option();
-    if (customMidnaOption != nullptr) {
-        char option0[200];
-        char option1[200];
-        strcpy(option0, pReference->getSelTextPtr(1));
-        strcpy(option1, pReference->getSelTextPtr(2));
-        strcpy(pReference->getSelTextPtr(0), option0);
-        strcpy(pReference->getSelTextPtr(1), option1);
-        SAFE_STRCPY(pReference->getSelTextPtr(2), customMidnaOption);
-    } else if (dMsgObject_getSelectWordFlag() != 0) {
+    if (!dusk::mods::svc::midna_dialog::apply_custom_menu_option(pReference) &&
+        dMsgObject_getSelectWordFlag() != 0)
+    {
         for (int i = 0; i < dMsgObject_getSelectWordFlag(); i++) {
             char buffer[200];
             SAFE_STRCPY(buffer, dMsgObject_getSelectWord(i));

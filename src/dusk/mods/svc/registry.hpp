@@ -75,5 +75,6 @@ extern const ServiceModule g_gfxModule;
 extern const ServiceModule g_fileSelectModule;
 extern const ServiceModule g_stageFlowModule;
 extern const ServiceModule g_midnaDialogModule;
+extern const ServiceModule g_touchControlsModule;
 
 }  // namespace dusk::mods::svc

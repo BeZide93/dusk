@@ -1504,6 +1504,8 @@ set(DUSK_FILES
         src/dusk/mods/svc/registry.hpp
         src/dusk/mods/svc/resource.cpp
         src/dusk/mods/svc/texture.cpp
+        src/dusk/mods/svc/touch_controls.cpp
+        src/dusk/mods/svc/touch_controls.hpp
         src/dusk/mods/svc/ui.cpp
         src/dusk/mods/svc/ui.hpp
         src/dusk/mouse.cpp

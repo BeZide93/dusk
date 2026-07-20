@@ -1,6 +1,6 @@
 #pragma once
 
-#include "touch_control_hooks.hpp"
+#include "touch_controls_extension.hpp"
 
 #include <RmlUi/Core.h>
 #include <SDL3/SDL_touch.h>

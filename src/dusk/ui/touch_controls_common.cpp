@@ -1,5 +1,7 @@
 #include "touch_controls_common.hpp"
 
+#include "dusk/mods/svc/touch_controls.hpp"
+
 #include <aurora/rmlui.hpp>
 
 #include <algorithm>
@@ -8,14 +10,6 @@
 
 namespace dusk::ui {
 namespace {
-
-#if defined(_MSC_VER)
-#define DUSK_UI_HOOKPOINT __declspec(noinline)
-#elif defined(__clang__) || defined(__GNUC__)
-#define DUSK_UI_HOOKPOINT __attribute__((noinline, used))
-#else
-#define DUSK_UI_HOOKPOINT
-#endif
 
 constexpr std::array<TouchLayoutControlInfo, kTouchLayoutControlCount> kLayoutControls = {{
     {
@@ -168,7 +162,6 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>
     <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><span>Z</span></button>
-    <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
 
     <button id="button-y" class="control face y"><img id="button-y-icon" class="item-icon" /><oil-meter id="button-y-oil" class="oil-meter"><oil-fill id="button-y-oil-fill" /></oil-meter><count id="button-y-count" class="item-count"></count><span>Y</span></button>
     <button id="button-x" class="control face x"><img id="button-x-icon" class="item-icon" /><oil-meter id="button-x-oil" class="oil-meter"><oil-fill id="button-x-oil-fill" /></oil-meter><count id="button-x-count" class="item-count"></count><span>X</span></button>
@@ -176,35 +169,26 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
     <button id="button-a" class="control face a"><span>A</span></button>
 )RML";
 
-volatile std::size_t s_touchHookAnchor = 0;
-
 }  // namespace
 
 std::string_view touch_controls_rml_fragment() noexcept {
     return kTouchControlsRmlFragment;
 }
 
-// Keep the default hookpoints materialized for mod-service trampolines.
-DUSK_UI_HOOKPOINT std::string_view touch_controls_extra_rml_fragment() noexcept {
-    if (s_touchHookAnchor != 0) {
-        return kTouchControlsRmlFragment.substr(0, 0);
-    }
-    return {};
+std::string_view touch_controls_extra_rml_fragment() noexcept {
+    return mods::svc::touch_controls::extra_rml_fragment();
 }
 
 std::span<const TouchLayoutControlInfo> touch_layout_controls() noexcept {
     return kLayoutControls;
 }
 
-DUSK_UI_HOOKPOINT std::size_t touch_layout_extra_control_count() noexcept {
-    return s_touchHookAnchor;
+std::size_t touch_layout_extra_control_count() noexcept {
+    return mods::svc::touch_controls::extra_control_count();
 }
 
-DUSK_UI_HOOKPOINT const TouchLayoutControlInfo* touch_layout_extra_control_at(std::size_t index) noexcept {
-    if (index < s_touchHookAnchor && !kLayoutControls.empty()) {
-        return &kLayoutControls[0];
-    }
-    return nullptr;
+const TouchLayoutControlInfo* touch_layout_extra_control_at(std::size_t index) noexcept {
+    return mods::svc::touch_controls::extra_control_at(index);
 }
 
 std::size_t touch_layout_control_count() noexcept {
@@ -246,14 +230,9 @@ const TouchLayoutControlInfo* find_touch_layout_control(Control control) noexcep
     return nullptr;
 }
 
-DUSK_UI_HOOKPOINT bool touch_control_display_override(Control, TouchControlDisplayOverride* out) noexcept {
-    if (s_touchHookAnchor != 0 && out != nullptr) {
-        out->visible = false;
-    }
-    return false;
+bool touch_control_display_override(Control control, TouchControlDisplayOverride* out) noexcept {
+    return mods::svc::touch_controls::display_override(control, out);
 }
-
-#undef DUSK_UI_HOOKPOINT
 
 SDL_FingerID touch_event_id(const Rml::Event& event) noexcept {
     return event.GetParameter<SDL_FingerID>("finger_id", 0);

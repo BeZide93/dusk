@@ -11518,7 +11518,8 @@ int daAlink_c::orderZTalk() {
 
     if (checkMidnaRide()) {
         fopAc_ac_c* zhint = dComIfGp_att_getZHint();
-        const bool customMidnaPrompt = dusk::mods::svc::midna_dialog::prompt_text() != nullptr;
+        const bool customMidnaPrompt =
+            dusk::mods::svc::midna_dialog::custom_prompt_available();
         if (zhint != NULL || customMidnaPrompt) {
             setMidnaTalkStatus(BUTTON_STATUS_CHECK);
         }

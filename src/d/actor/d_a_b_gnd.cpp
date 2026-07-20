@@ -3669,14 +3669,7 @@ static void demo_camera(b_gnd_class* i_this) {
 
             if (i_this->mDemoCamTimer == 330) {
 #if TARGET_PC
-                if (dusk::mods::svc::stage_flow::sequence_complete(
-                        DUSK_MOD_STAGE_FLOW_SEQUENCE_FINAL_BATTLE))
-                {
-                    camera->mCamera.Start();
-                    camera->mCamera.SetTrimSize(0);
-                    dComIfGp_event_reset();
-                    i_this->mDemoCamMode = 0;
-                    i_this->mDemoCamTimer = 0;
+                if (dusk::mods::svc::stage_flow::final_battle_sequence_complete(camera, i_this)) {
                     return;
                 }
 #endif

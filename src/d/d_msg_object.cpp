@@ -540,15 +540,7 @@ int dMsgObject_c::_draw() {
         }
         if (mpScrnDraw != NULL) {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
-            const char* customPrompt = dusk::mods::svc::midna_dialog::prompt_text();
-            if (customPrompt != nullptr) {
-                char yes[] = "Yes";
-                char no[] = "No";
-                char empty[] = "";
-                mpScrnDraw->setString(customPrompt, customPrompt);
-                mpScrnDraw->setRubyString(empty);
-                mpScrnDraw->setSelectString(empty, yes, no);
-            } else {
+            if (!dusk::mods::svc::midna_dialog::draw_custom_prompt(mpScrnDraw, pRef)) {
                 mpScrnDraw->setString(pRef->getTextPtr(), pRef->getTextSPtr());
                 mpScrnDraw->setRubyString(pRef->getRubyPtr());
                 mpScrnDraw->setSelectString(pRef->getSelTextPtr(0), pRef->getSelTextPtr(1),
@@ -881,7 +873,7 @@ void dMsgObject_c::openProc() {
             jmessage_tReference* pRef = (jmessage_tReference*)mpRenProc->getReference();
             field_0x1a3 = 0;
             if (mpRefer->getMsgID() == 0x7fa ||
-                dusk::mods::svc::midna_dialog::menu_option() != nullptr)
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
             {
                 mpScrnDraw->selectAnimeInit(3, pRef->getSelectPos(), pRef->getSelTBoxWidth(),
                                             pRef->getSelectRubyFlag());
@@ -903,7 +895,7 @@ void dMsgObject_c::openProc() {
                 field_0x16a = 9;
             }
             if (mpRefer->getMsgID() == 0x7fa ||
-                dusk::mods::svc::midna_dialog::menu_option() != nullptr)
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
             {
                 mpScrnDraw->selectAnimeMove(2, getSelectCursorPosLocal(), uVar12);
             } else {
@@ -970,7 +962,7 @@ void dMsgObject_c::openProc() {
         field_0x16a = 0;
         if (isMidonaMessage()) {
             if (mpRefer->getMsgID() == 0x7fa ||
-                dusk::mods::svc::midna_dialog::menu_option() != nullptr)
+                dusk::mods::svc::midna_dialog::custom_menu_option_available())
             {
                 setStatusLocal(9);
             } else {
@@ -1227,7 +1219,7 @@ void dMsgObject_c::selectProc() {
     field_0x100->select_idx = pRef->getSelectPos();
     if (isSend() && field_0x1a3 != 0 && iVar8) {
         if (field_0x1a3 == 2 &&
-            (dusk::mods::svc::midna_dialog::menu_cancel() || dusk::mods::svc::midna_dialog::prompt_resolve(1)))
+            dusk::mods::svc::midna_dialog::resolve_cancelled_selection())
         {
             field_0x1a3 = 0;
             setSelectCancelPosLocal(0);
@@ -1237,8 +1229,7 @@ void dMsgObject_c::selectProc() {
         }
 
         if (field_0x1a3 == 1 &&
-            (dusk::mods::svc::midna_dialog::menu_resolve(getSelectCursorPosLocal()) ||
-             dusk::mods::svc::midna_dialog::prompt_resolve(getSelectCursorPosLocal())))
+            dusk::mods::svc::midna_dialog::resolve_cursor_selection(getSelectCursorPosLocal()))
         {
             field_0x1a3 = 0;
             setSelectCancelPosLocal(0);
@@ -1949,7 +1940,7 @@ bool dMsgObject_c::isHowlMessage() {
 bool dMsgObject_c::isMidonaMessage() {
     if (mFukiKind == 13 && (mpRefer->getMsgID() == 0x7d3 || mpRefer->getMsgID() == 0x7f6 ||
                             mpRefer->getMsgID() == 0x7fa ||
-                            dusk::mods::svc::midna_dialog::menu_option() != nullptr))
+                            dusk::mods::svc::midna_dialog::custom_menu_option_available()))
     {
         return 1;
     }

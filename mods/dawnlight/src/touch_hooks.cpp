@@ -4,50 +4,45 @@
 #include "d/d_com_inf_game.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
-#include "dusk/ui/touch_control_hooks.hpp"
-#include "mods/hook.hpp"
 #include "mods/service.hpp"
-#include "mods/svc/hook.h"
+#include "mods/svc/touch_controls.h"
 
 #include <array>
 #include <cstdio>
 #include <string>
 #include <string_view>
 
-IMPORT_SERVICE(HookService, svc_hook);
+IMPORT_SERVICE(TouchControlsService, svc_touch_controls);
 
 namespace dawnlight {
 namespace {
 
 constexpr int kZItemSlot = SELECT_ITEM_DOWN;
-const std::array<dusk::ui::TouchLayoutControlInfo, 1> kExtraTouchControls = {{
+TouchControlsProviderHandle s_touch_controls_provider = 0;
+
+constexpr const char* kExtraTouchControlsRml = R"RML(
+    <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
+)RML";
+
+const std::array<TouchControlsControlDesc, 1> kExtraTouchControls = {{
     {
-        .layoutId = "dpadDown",
-        .elementId = "dpad-down",
-        .props =
-            {
-                .x = 176.f,
-                .y = 76.f,
-                .w = 54.f,
-                .h = 54.f,
-                .scale = 1.f,
-                .anchor = dusk::ui::ControlAnchor::BottomLeft,
-            },
-        .control = dusk::ui::Control::DPAD_DOWN,
-        .hasControl = true,
+        .struct_size = sizeof(TouchControlsControlDesc),
+        .layout_id = "dpadDown",
+        .element_id = "dpad-down",
+        .x = 176.f,
+        .y = 76.f,
+        .w = 54.f,
+        .h = 54.f,
+        .scale = 1.f,
+        .anchor = DUSK_MOD_TOUCH_ANCHOR_BOTTOM_LEFT,
+        .control = DUSK_MOD_TOUCH_CONTROL_DPAD_DOWN,
+        .has_control = 1,
     },
 }};
 
 std::array<char, 64> s_zItemSource{};
 std::array<char, 64> s_midnaSource{};
 uint64_t s_midnaRevision = 0;
-
-DEFINE_HOOK_SYMBOL("dusk::ui::touch_layout_extra_control_count", std::size_t(),
-    TouchExtraControlCountHook);
-DEFINE_HOOK_SYMBOL("dusk::ui::touch_layout_extra_control_at",
-    const dusk::ui::TouchLayoutControlInfo*(std::size_t), TouchExtraControlAtHook);
-DEFINE_HOOK_SYMBOL("dusk::ui::touch_control_display_override",
-    bool(dusk::ui::Control, dusk::ui::TouchControlDisplayOverride*), TouchDisplayOverrideHook);
 
 bool valid_icon_item(u8 itemNo) {
     return itemNo != 0 && itemNo != dItemNo_NONE_e;
@@ -85,78 +80,74 @@ const char* midna_meter_source() {
     return s_midnaSource.data();
 }
 
-HookAction before_extra_control_count(ModContext*, void*, void* retval, void*) {
-    if (!z_item_slot_enabled()) {
-        return HOOK_CONTINUE;
-    }
-
-    *static_cast<std::size_t*>(retval) = kExtraTouchControls.size();
-    return HOOK_SKIP_ORIGINAL;
+const char* extra_rml(ModContext*, void*) {
+    return kExtraTouchControlsRml;
 }
 
-HookAction before_extra_control_at(ModContext*, void* args, void* retval, void*) {
-    if (!z_item_slot_enabled()) {
-        return HOOK_CONTINUE;
-    }
-
-    const std::size_t index = mods::arg<std::size_t>(args, 0);
-    *static_cast<const dusk::ui::TouchLayoutControlInfo**>(retval) =
-        index < kExtraTouchControls.size() ? &kExtraTouchControls[index] : nullptr;
-    return HOOK_SKIP_ORIGINAL;
+std::size_t extra_control_count(ModContext*, void*) {
+    return z_item_slot_enabled() ? kExtraTouchControls.size() : 0;
 }
 
-HookAction before_display_override(ModContext*, void* args, void* retval, void*) {
-    const auto control = mods::arg<dusk::ui::Control>(args, 0);
-    auto* out = mods::arg<dusk::ui::TouchControlDisplayOverride*>(args, 1);
+int extra_control_at(ModContext*, std::size_t index, TouchControlsControlDesc* out, void*) {
+    if (!z_item_slot_enabled() || out == nullptr || index >= kExtraTouchControls.size()) {
+        return 0;
+    }
+
+    *out = kExtraTouchControls[index];
+    return 1;
+}
+
+int display_override(
+    ModContext*, int32_t control, TouchControlsDisplayOverride* out, void*) {
     if (!z_item_slot_enabled() || out == nullptr) {
-        return HOOK_CONTINUE;
+        return 0;
     }
 
-    if (control == dusk::ui::Control::Z) {
+    if (control == DUSK_MOD_TOUCH_CONTROL_Z) {
         const bool itemMode = dComIfGp_getLinkPlayer() != nullptr && daPy_py_c::checkNowWolf() == 0;
         const u8 itemNo = dComIfGp_getSelectItem(kZItemSlot);
         const char* source = itemMode ? z_item_icon_source(itemNo) : "";
         *out = {
-            .iconSource = source,
-            .iconRevision = itemMode && valid_icon_item(itemNo) ? item_icon_revision(itemNo) : 0,
-            .visible = true,
-            .showIcon = source[0] != '\0',
+            .struct_size = sizeof(TouchControlsDisplayOverride),
+            .icon_source = source,
+            .icon_revision = itemMode && valid_icon_item(itemNo) ? item_icon_revision(itemNo) : 0,
+            .visible = 1,
+            .show_icon = source[0] != '\0',
         };
-        *static_cast<bool*>(retval) = true;
-        return HOOK_SKIP_ORIGINAL;
+        return 1;
     }
 
-    if (control == dusk::ui::Control::DPAD_DOWN) {
+    if (control == DUSK_MOD_TOUCH_CONTROL_DPAD_DOWN) {
         const char* source = midna_meter_source();
         *out = {
-            .iconSource = source,
-            .iconRevision = s_midnaRevision,
-            .visible = true,
-            .showIcon = true,
+            .struct_size = sizeof(TouchControlsDisplayOverride),
+            .icon_source = source,
+            .icon_revision = s_midnaRevision,
+            .visible = 1,
+            .show_icon = 1,
         };
-        *static_cast<bool*>(retval) = true;
-        return HOOK_SKIP_ORIGINAL;
+        return 1;
     }
 
-    return HOOK_CONTINUE;
-}
-
-ModResult add_hook(ModResult result, ModError* error) {
-    return result == MOD_OK ? MOD_OK :
-        mods::set_error(error, result, "failed to install Dawnlight touch control hooks");
+    return 0;
 }
 
 }  // namespace
 
 ModResult install_touch_hooks(ModError* error) {
-    ModResult result = mods::hook_add_pre<TouchExtraControlCountHook>(svc_hook, before_extra_control_count);
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<TouchExtraControlAtHook>(svc_hook, before_extra_control_at);
+    TouchControlsProviderDesc desc = TOUCH_CONTROLS_PROVIDER_DESC_INIT;
+    desc.extra_rml = extra_rml;
+    desc.extra_control_count = extra_control_count;
+    desc.extra_control_at = extra_control_at;
+    desc.display_override = display_override;
+
+    const ModResult result =
+        svc_touch_controls->register_provider(mod_ctx, &desc, &s_touch_controls_provider);
+    if (result != MOD_OK) {
+        return mods::set_error(
+            error, result, "failed to register Dawnlight touch-controls provider");
     }
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<TouchDisplayOverrideHook>(svc_hook, before_display_override);
-    }
-    return add_hook(result, error);
+    return MOD_OK;
 }
 
 }  // namespace dawnlight

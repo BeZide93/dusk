@@ -3296,14 +3296,8 @@ int daMidna_c::execute() {
     setBodyPartPos();
     mSound.framework(0, mReverb);
 
-    const bool customPromptResolved = dusk::mods::svc::midna_dialog::prompt_consume_resolution() != 0;
-    const bool customWarpRequested = dusk::mods::svc::midna_dialog::menu_execute_warp(link) != 0;
-    if (customPromptResolved || customWarpRequested) {
-        dComIfGp_getEvent()->reset(this);
-        offStateFlg0(FLG0_UNK_8000);
-    }
-
-    if (eventInfo.checkCommandTalk() && !customPromptResolved && !customWarpRequested) {
+    const bool customFlowHandled = dusk::mods::svc::midna_dialog::consume_pending_flow(this, link);
+    if (eventInfo.checkCommandTalk() && !customFlowHandled) {
         if (!checkShadowModeTalkWait() || fopAcM_getTalkEventPartner(link) == this) {
             if (!checkStateFlg0(FLG0_UNK_8000)) {
                 offStateFlg0((daMidna_FLG0)(FLG0_NPC_NEAR | FLG0_NPC_FAR));
@@ -3317,34 +3311,13 @@ int daMidna_c::execute() {
                 }
                 onStateFlg0(FLG0_UNK_8000);
                 mMsgFlow.init(this, 0xbb9, 0, NULL);
-                if (dusk::mods::svc::midna_dialog::prompt_begin()) {
-                    dMsgObject_setWord(dusk::mods::svc::midna_dialog::prompt_text());
-                    dMsgObject_setSelectWordFlag(2);
-                    dMsgObject_setSelectWord(0, "Yes");
-                    dMsgObject_setSelectWord(1, "No");
-                    dMsgObject_setSelectWord(2, "");
-                } else if (dusk::mods::svc::midna_dialog::menu_begin()) {
-                    dMsgObject_setSelectWordFlag(3);
-                    dMsgObject_setSelectWord(0, "");
-                    dMsgObject_setSelectWord(1, "");
-                    dMsgObject_setSelectWord(2, "");
-                }
+                dusk::mods::svc::midna_dialog::begin_custom_flow();
             } else {
                 const bool flowDone = mMsgFlow.doFlow(this, NULL, 0);
-                int choice = mMsgFlow.getChoiceNo();
-                if (flowDone && choice < 0 &&
-                    (dusk::mods::svc::midna_dialog::prompt_text() != nullptr ||
-                     dusk::mods::svc::midna_dialog::menu_option() != nullptr))
+                if (!dusk::mods::svc::midna_dialog::finish_custom_flow(
+                        this, flowDone, mMsgFlow.getChoiceNo()) &&
+                    flowDone)
                 {
-                    choice = dMsgObject_getSelectCursorPos();
-                }
-                if (choice >= 0 &&
-                    (dusk::mods::svc::midna_dialog::menu_resolve(choice) ||
-                     dusk::mods::svc::midna_dialog::prompt_resolve(choice)))
-                {
-                    dComIfGp_getEvent()->reset(this);
-                    offStateFlg0(FLG0_UNK_8000);
-                } else if (flowDone) {
                 int item_id;
                 u16 event_id = mMsgFlow.getEventId(&item_id);
                 if (checkStateFlg0(FLG0_NO_DRAW)) {
