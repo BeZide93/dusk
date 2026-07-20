@@ -73,5 +73,6 @@ extern const ServiceModule g_gameModule;
 extern const ServiceModule g_cameraModule;
 extern const ServiceModule g_gfxModule;
 extern const ServiceModule g_fileSelectModule;
+extern const ServiceModule g_stageFlowModule;
 
 }  // namespace dusk::mods::svc

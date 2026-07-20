@@ -12,6 +12,8 @@
 #include "f_pc/f_pc_name.h"
 #include "d/actor/d_a_obj_life_container.h"
 #include "d/actor/d_a_obj_ystone.h"
+// TODO(mod-services): Replace direct stage-flow service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/stage_flow.hpp"
 #include <cstring>
 
 static DUSK_CONST char* l_arcName = "ef_Portal";
@@ -217,6 +219,13 @@ BOOL daObjBossWarp_c::checkDistance() {
 }
 
 int daObjBossWarp_c::execute() {
+#if TARGET_PC
+    if (dusk::mods::svc::stage_flow::transition_actor_update(
+            this, DUSK_MOD_STAGE_FLOW_TRANSITION_ACTOR_BOSS_WARP))
+    {
+        return 1;
+    }
+#endif
     if (dStage_stagInfo_GetSTType(dComIfGp_getStage()->getStagInfo()) != 3) {
         u8 sw = getSwNo();
         if (sw == 0xff || fopAcM_isSwitch(this, sw)) {

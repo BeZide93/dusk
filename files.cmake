@@ -1485,6 +1485,8 @@ set(DUSK_FILES
         src/dusk/mods/log_buffer.hpp
         src/dusk/mods/manifest.cpp
         src/dusk/mods/manifest.hpp
+        src/dusk/mods/svc/stage_flow.cpp
+        src/dusk/mods/svc/stage_flow.hpp
         src/dusk/mods/svc/camera.cpp
         src/dusk/mods/svc/config.cpp
         src/dusk/mods/svc/config.hpp
