@@ -13,6 +13,8 @@
 #include "d/d_demo.h"
 #include "d/d_msg_object.h"
 #include "d/d_s_play.h"
+// TODO(mod-services): Replace direct Midna dialog service callsites with narrower upstream hooks if accepted.
+#include "dusk/mods/svc/midna_dialog.hpp"
 #include "d/d_debug_viewer.h"
 #include "dusk/frame_interpolation.h"
 
@@ -3295,7 +3297,8 @@ int daMidna_c::execute() {
     setBodyPartPos();
     mSound.framework(0, mReverb);
 
-    if (eventInfo.checkCommandTalk()) {
+    const bool customFlowHandled = dusk::mods::svc::midna_dialog::consume_pending_flow(this, link);
+    if (eventInfo.checkCommandTalk() && !customFlowHandled) {
         if (!checkShadowModeTalkWait() || fopAcM_getTalkEventPartner(link) == this) {
             if (!checkStateFlg0(FLG0_UNK_8000)) {
                 offStateFlg0((daMidna_FLG0)(FLG0_NPC_NEAR | FLG0_NPC_FAR));
@@ -3309,7 +3312,13 @@ int daMidna_c::execute() {
                 }
                 onStateFlg0(FLG0_UNK_8000);
                 mMsgFlow.init(this, 0xbb9, 0, NULL);
-            } else if (mMsgFlow.doFlow(this, NULL, 0)) {
+                dusk::mods::svc::midna_dialog::begin_custom_flow();
+            } else {
+                const bool flowDone = mMsgFlow.doFlow(this, NULL, 0);
+                if (!dusk::mods::svc::midna_dialog::finish_custom_flow(
+                        this, flowDone, mMsgFlow.getChoiceNo()) &&
+                    flowDone)
+                {
                 int item_id;
                 u16 event_id = mMsgFlow.getEventId(&item_id);
                 if (checkStateFlg0(FLG0_NO_DRAW)) {
@@ -3350,6 +3359,7 @@ int daMidna_c::execute() {
 
                     dComIfGp_getEvent()->reset(this);
                     offStateFlg0(FLG0_UNK_8000);
+                }
                 }
             }
         }
