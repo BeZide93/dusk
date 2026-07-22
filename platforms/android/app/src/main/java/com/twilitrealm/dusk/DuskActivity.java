@@ -95,6 +95,7 @@ public class DuskActivity extends SDLActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         extractBundledMods();
+        extractBundledSymbolManifests();
         super.onCreate(savedInstanceState);
         hideSystemBars();
     }
@@ -130,6 +131,31 @@ public class DuskActivity extends SDLActivity {
             }
         } catch (IOException e) {
             Log.w(TAG, "Failed to extract bundled mods", e);
+        }
+    }
+
+    private void extractBundledSymbolManifests() {
+        try {
+            String[] names = getAssets().list("symbols");
+            if (names == null || names.length == 0) {
+                return;
+            }
+            byte[] buffer = new byte[65536];
+            for (String name : names) {
+                if (!name.endsWith(".symdb")) {
+                    continue;
+                }
+                try (InputStream in = getAssets().open("symbols/" + name);
+                     OutputStream out = new FileOutputStream(new File(getFilesDir(), name)))
+                {
+                    int count;
+                    while ((count = in.read(buffer)) > 0) {
+                        out.write(buffer, 0, count);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            Log.w(TAG, "Failed to extract symbol manifests", e);
         }
     }
 

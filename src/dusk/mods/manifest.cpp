@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <limits>
 #include <utility>
 #include <vector>
@@ -13,6 +15,7 @@
 #include <zstd.h>
 
 #include "aurora/lib/logging.hpp"
+#include "dusk/main.h"
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
@@ -237,6 +240,117 @@ std::string hex_string(const uint8_t* data, size_t len) {
     return out;
 }
 
+bool load_manifest_blob(const uint8_t* blob, size_t blobLen, const std::vector<uint8_t>& imageId,
+    uintptr_t imageBase, const char* source) {
+    if (blobLen < sizeof(Header)) {
+        Log.error("{} symbol manifest is truncated ({} bytes)", source, blobLen);
+        return false;
+    }
+
+    Header header{};
+    std::memcpy(&header, blob, sizeof(header));
+    if (std::memcmp(header.magic, kMagic, sizeof(kMagic)) != 0 || header.version != kVersion) {
+        Log.error("{} symbol manifest has wrong magic/version", source);
+        return false;
+    }
+    const auto compression = static_cast<Compression>(header.compression);
+    if ((compression != Compression::None && compression != Compression::Zstd) ||
+        header.buildIdLen > sizeof(header.buildId) ||
+        header.compressedLen > blobLen - sizeof(Header) ||
+        header.uncompressedLen > std::numeric_limits<size_t>::max() ||
+        (compression == Compression::None && header.compressedLen != header.uncompressedLen))
+    {
+        Log.error("{} symbol manifest is malformed", source);
+        return false;
+    }
+
+    if (imageId.size() != header.buildIdLen ||
+        std::memcmp(imageId.data(), header.buildId, imageId.size()) != 0)
+    {
+        Log.error("{} symbol manifest is stale: built for {}, running image is {}", source,
+            hex_string(header.buildId, header.buildIdLen),
+            hex_string(imageId.data(), imageId.size()));
+        return false;
+    }
+
+    const auto compressedLen = static_cast<size_t>(header.compressedLen);
+    const auto uncompressedLen = static_cast<size_t>(header.uncompressedLen);
+    std::vector<uint8_t> data;
+    const auto* storedPayload = blob + sizeof(Header);
+    if (compression == Compression::None) {
+        data.assign(storedPayload, storedPayload + compressedLen);
+    } else {
+        data.resize(uncompressedLen);
+        const size_t decompressedLen =
+            ZSTD_decompress(data.data(), data.size(), storedPayload, compressedLen);
+        if (ZSTD_isError(decompressedLen)) {
+            Log.error("failed to decompress {} symbol manifest: {}", source,
+                ZSTD_getErrorName(decompressedLen));
+            return false;
+        }
+        if (decompressedLen != data.size()) {
+            Log.error("{} symbol manifest decompressed to {} bytes, expected {}", source,
+                decompressedLen, data.size());
+            return false;
+        }
+    }
+
+    const uint64_t entriesEnd = uint64_t{header.entryCount} * sizeof(Entry);
+    if (entriesEnd > data.size()) {
+        Log.error("decompressed {} symbol manifest is malformed", source);
+        return false;
+    }
+
+    s_state.data = std::move(data);
+    s_state.entries = reinterpret_cast<const Entry*>(s_state.data.data());
+    s_state.entryCount = header.entryCount;
+    s_state.strings = reinterpret_cast<const char*>(s_state.data.data() + entriesEnd);
+    s_state.stringsLen = s_state.data.size() - entriesEnd;
+    s_state.imageBase = imageBase;
+    for (uint32_t i = 0; i < s_state.entryCount; ++i) {
+        const Entry& entry = s_state.entries[i];
+        if ((entry.flags & kFlagInlineSites) != 0 && entry.nameOff < s_state.stringsLen) {
+            s_state.inlineSites.emplace_back(entry.rva, entry.nameOff);
+        }
+    }
+    std::sort(s_state.inlineSites.begin(), s_state.inlineSites.end());
+    s_state.inlineSites.erase(std::unique(s_state.inlineSites.begin(), s_state.inlineSites.end(),
+                                  [](const auto& a, const auto& b) { return a.first == b.first; }),
+        s_state.inlineSites.end());
+    s_state.loaded = true;
+    Log.info("{} symbol manifest loaded: {} symbols, build id {}", source, s_state.entryCount,
+        hex_string(header.buildId, header.buildIdLen));
+    return true;
+}
+
+bool load_external_manifest(const std::vector<uint8_t>& imageId, uintptr_t imageBase) {
+#if defined(DUSK_EXTERNAL_SYMBOL_MANIFEST)
+    std::vector<std::filesystem::path> paths;
+    if (!dusk::CachePath.empty()) {
+        paths.push_back(dusk::CachePath / DUSK_EXTERNAL_SYMBOL_MANIFEST);
+    }
+    if (!dusk::ConfigPath.empty() && dusk::ConfigPath != dusk::CachePath) {
+        paths.push_back(dusk::ConfigPath / DUSK_EXTERNAL_SYMBOL_MANIFEST);
+    }
+
+    for (const auto& path : paths) {
+        std::ifstream file(path, std::ios::binary);
+        if (!file) {
+            continue;
+        }
+        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)),
+            std::istreambuf_iterator<char>());
+        if (load_manifest_blob(bytes.data(), bytes.size(), imageId, imageBase, "external")) {
+            return true;
+        }
+    }
+#else
+    (void)imageId;
+    (void)imageBase;
+#endif
+    return false;
+}
+
 }  // namespace
 
 void initialize() {
@@ -250,6 +364,15 @@ void initialize() {
         return;
     }
     if (s_symdbDescriptor.rva == 0) {
+        std::vector<uint8_t> imageId;
+        uintptr_t imageBase = 0;
+        if (!running_image_identity(imageId, imageBase)) {
+            Log.error("cannot determine the running image's build id; ignoring symbol manifest");
+            return;
+        }
+        if (load_external_manifest(imageId, imageBase)) {
+            return;
+        }
         Log.info("no symbol manifest embedded; by-name resolution unavailable");
         return;
     }
