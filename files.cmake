@@ -1485,11 +1485,15 @@ set(DUSK_FILES
         src/dusk/mods/log_buffer.hpp
         src/dusk/mods/manifest.cpp
         src/dusk/mods/manifest.hpp
+        src/dusk/hud_layout.cpp
+        src/dusk/hud_layout.hpp
         src/dusk/mods/svc/camera.cpp
         src/dusk/mods/svc/config.cpp
         src/dusk/mods/svc/config.hpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
+        src/dusk/mods/svc/hud_layout.cpp
+        src/dusk/mods/svc/hud_layout.hpp
         src/dusk/mods/svc/hook.cpp
         src/dusk/mods/svc/host.cpp
         src/dusk/mods/svc/log.cpp
