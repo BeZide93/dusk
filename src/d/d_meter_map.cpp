@@ -16,6 +16,7 @@
 #include "f_op/f_op_overlap_mng.h"
 #include "m_Do/m_Do_controller_pad.h"
 #include "d/d_camera.h"
+#include "dusk/hud_layout.hpp"
 #if TARGET_PC
 #include "dusk/settings.h"
 #include <algorithm>
@@ -630,10 +631,19 @@ void dMeterMap_c::draw() {
     ) {
         J2DGrafContext* graf = dComIfGp_getCurrentGrafPort();
         graf->setup2D();
-        f32 sizeX = mSizeW;
-        f32 sizeY = mSizeH;
+        const auto hudTransform =
+            dusk::hud_layout::ElementTransform(dusk::hud_layout::Element::Minimap);
+        f32 sizeX = mSizeW * hudTransform.scale;
+        f32 sizeY = mSizeH * hudTransform.scale;
         f32 drawPosX = mDrawPosX;
-        f32 drawPosY = mDrawPosY;
+        if (dusk::hud_layout::ElementSlideDirection(dusk::hud_layout::Element::Minimap) ==
+            DUSK_MOD_HUD_SLIDE_RIGHT_TO_LEFT)
+        {
+            const f32 insidePosX = mDrawPosX - (static_cast<f32>(mSlidePositionOffset) * 2.0f);
+            drawPosX = insidePosX - (mDrawPosX - insidePosX);
+        }
+        drawPosX += hudTransform.offsetX;
+        f32 drawPosY = mDrawPosY + hudTransform.offsetY;
 
         u8 alpha = mMapAlpha;
         #if DEBUG
