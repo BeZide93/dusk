@@ -17,6 +17,10 @@ def syncDuskAssets = tasks.register('syncDuskAssets', Sync) {
         into 'mods'
         include '*.dusk'
     }
+    from(new File(projectDir, 'src/main/bundled_symbols')) {
+        into 'symbols'
+        include '*.symdb'
+    }
     into duskGeneratedAssetsDir
 }
 

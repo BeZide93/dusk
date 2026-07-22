@@ -94,11 +94,19 @@ done
 MODS_STAGING_DIR="$ROOT_DIR/platforms/android/app/src/main/bundled_mods"
 rm -rf "$MODS_STAGING_DIR"
 mkdir -p "$MODS_STAGING_DIR"
+SYMBOLS_STAGING_DIR="$ROOT_DIR/platforms/android/app/src/main/bundled_symbols"
+rm -rf "$SYMBOLS_STAGING_DIR"
+mkdir -p "$SYMBOLS_STAGING_DIR"
 for abi in $ANDROID_STAGE_ABIS; do
   case "$abi" in
     arm64-v8a) build_dir="$ROOT_DIR/build/android-arm64" ;;
     x86_64) build_dir="$ROOT_DIR/build/android-x86_64" ;;
   esac
+  symdb="$build_dir/dusklight-$abi.symdb"
+  if [[ -f "$symdb" ]]; then
+    cp -f "$symdb" "$SYMBOLS_STAGING_DIR/$(basename "$symdb")"
+    echo "Staged symbol manifest $symdb"
+  fi
   [[ -d "$build_dir/bundled_mods" ]] || continue
   for pkg in "$build_dir/bundled_mods"/*.dusk; do
     [[ -f "$pkg" ]] || continue
