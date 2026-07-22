@@ -1,0 +1,7 @@
+{
+  "id": "dev.bezide.dawnlight.hud_editing",
+  "name": "Dawnlight HUD Editing",
+  "version": "0.1.0",
+  "author": "BeZide93",
+  "description": "Standalone Dawnlight-compatible HUD layout editing via hud_layout_settings.json."
+}
