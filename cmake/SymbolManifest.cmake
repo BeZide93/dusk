@@ -112,6 +112,19 @@ function(setup_symbol_manifest target)
         set(_input --binary "$<TARGET_FILE:${target}>")
     endif ()
 
+    if (ANDROID)
+        set(_manifest_name "dusklight-${ANDROID_ABI}.symdb")
+        set(_manifest_out "${CMAKE_BINARY_DIR}/${_manifest_name}")
+        target_compile_definitions(${target} PRIVATE
+                DUSK_EXTERNAL_SYMBOL_MANIFEST="${_manifest_name}")
+        add_custom_command(TARGET ${target} POST_BUILD
+                COMMAND "${SYMGEN_EXE}" manifest ${_input} -o "${_manifest_out}"
+                BYPRODUCTS "${_manifest_out}"
+                COMMENT "Generating external symbol manifest"
+                VERBATIM)
+        return()
+    endif ()
+
     if (APPLE)
         # Room for the symbol manifest and several prepatch arenas.
         target_link_options(${target} PRIVATE "LINKER:-headerpad,0x1000")
