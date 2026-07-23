@@ -16,11 +16,10 @@ if (!(Test-Path -LiteralPath $src)) {
     throw "Missing native library: $src"
 }
 
-New-Item -ItemType Directory -Path $arm64Dir -Force | Out-Null
-
-# Avoid accidentally packaging stale ABI folders from older local builds.
+# Avoid accidentally packaging stale ABI folders or stale libraries from older local builds.
+New-Item -ItemType Directory -Path $jniRoot -Force | Out-Null
 $jniRootResolved = (Resolve-Path -LiteralPath $jniRoot).Path
-foreach ($staleAbi in @('x86', 'x86_64')) {
+foreach ($staleAbi in @('x86', 'x86_64', 'arm64-v8a')) {
     $candidate = Join-Path $jniRoot $staleAbi
     if (Test-Path -LiteralPath $candidate) {
         $candidateResolved = (Resolve-Path -LiteralPath $candidate).Path
@@ -31,6 +30,7 @@ foreach ($staleAbi in @('x86', 'x86_64')) {
     }
 }
 
+New-Item -ItemType Directory -Path $arm64Dir -Force | Out-Null
 Copy-Item -LiteralPath $src -Destination $tmp -Force
 
 $androidHome = $env:ANDROID_HOME
@@ -62,10 +62,5 @@ if ($stripTool) {
 }
 
 Move-Item -LiteralPath $tmp -Destination $dst -Force
-
-$libPng = Join-Path $arm64Dir 'libpng16.so'
-if (!(Test-Path -LiteralPath $libPng)) {
-    Write-Warning "libpng16.so is missing from $arm64Dir. The APK may fail at startup if libmain.so depends on it."
-}
 
 Get-ChildItem -LiteralPath $arm64Dir | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize

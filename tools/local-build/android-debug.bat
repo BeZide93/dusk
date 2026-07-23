@@ -24,7 +24,7 @@ if errorlevel 1 goto fail
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_stage-android-arm64.ps1" -RepoRoot "%CD%"
 if errorlevel 1 goto fail
 
-call platforms\android\gradlew.bat -p platforms\android :app:packageDebug
+call platforms\android\gradlew.bat -p platforms\android :app:clean :app:packageDebug
 if errorlevel 1 goto fail
 
 if not exist "apk\debug" mkdir "apk\debug"
