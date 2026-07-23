@@ -1,4 +1,5 @@
 #include "config.hpp"
+#include "hud_layout.hpp"
 #include "touch_hooks.hpp"
 
 #include "global.h"
@@ -7,12 +8,16 @@
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_item.h"
+#include "d/d_item_data.h"
+#include "d/d_meter_HIO.h"
 #include "d/d_meter2_info.h"
 #include "d/d_menu_item_explain.h"
 #include "d/d_pane_class.h"
 #include "JSystem/J2DGraph/J2DScreen.h"
+#include "JSystem/J2DGraph/J2DPicture.h"
 #define private public
 #include "d/d_menu_ring.h"
+#include "d/d_meter2_draw.h"
 #undef private
 #include "m_Do/m_Do_controller_pad.h"
 #include "mods/hook.hpp"
@@ -37,6 +42,8 @@ DEFINE_HOOK(&dMenu_Ring_c::_create, RingCreateHook);
 DEFINE_HOOK(&dMenu_Ring_c::_delete, RingDeleteHook);
 DEFINE_HOOK(&dMenu_Ring_c::_draw, RingDrawHook);
 DEFINE_HOOK(&dMenu_Ring_c::setActiveCursor, RingSetActiveCursorHook);
+DEFINE_HOOK(&dMeter2Draw_c::draw, MeterDrawHook);
+DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemButtonChange, CheckItemButtonChangeHook);
 DEFINE_HOOK(&daAlink_c::checkItemChangeFromButton, CheckItemChangeFromButtonHook);
@@ -61,6 +68,31 @@ struct RingZButtonPrompt {
 };
 
 RingZButtonPrompt s_ringZPrompt;
+alignas(32) u8 s_zHudItemTexBuf[2][2][0xC00];
+u8 s_zHudItemTexPage = 0;
+u8 s_zHudLastItem = dItemNo_NONE_e;
+
+ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
+    return reinterpret_cast<ResTIMG*>(s_zHudItemTexBuf[page][layer]);
+}
+
+u8 hud_texture_item(u8 itemNo) {
+    return itemNo == dItemNo_LIGHT_ARROW_e ? dItemNo_BOW_e : itemNo;
+}
+
+u8 hud_layout_item(u8 itemNo) {
+    return itemNo == dItemNo_HAWK_ARROW_e ? dItemNo_BOW_e : hud_texture_item(itemNo);
+}
+
+u8 clamp_hud_alpha(const f32 alpha) {
+    if (alpha <= 0.0f) {
+        return 0;
+    }
+    if (alpha >= 255.0f) {
+        return 255;
+    }
+    return static_cast<u8>(alpha);
+}
 
 void hide_pane_tree(J2DPane* pane) {
     if (pane == nullptr) {
@@ -183,6 +215,234 @@ void draw_ring_z_prompt(dMenu_Ring_c* ring) {
                                     pos.y - s_ringZPrompt.button->getInitGlobalCenterPosY());
     s_ringZPrompt.button->setAlphaRate(ring->mAlphaRate);
     s_ringZPrompt.screen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
+}
+
+bool pane_current_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right, f32& bottom) {
+    if (pane == nullptr) {
+        return false;
+    }
+
+    Mtx mtx;
+    for (u8 i = 0; i < 4; ++i) {
+        Vec vtx = pane->getGlobalVtx(&mtx, i, false, 0);
+        if (i == 0) {
+            left = right = vtx.x;
+            top = bottom = vtx.y;
+            continue;
+        }
+        if (vtx.x < left) {
+            left = vtx.x;
+        }
+        if (vtx.x > right) {
+            right = vtx.x;
+        }
+        if (vtx.y < top) {
+            top = vtx.y;
+        }
+        if (vtx.y > bottom) {
+            bottom = vtx.y;
+        }
+    }
+    return true;
+}
+
+bool add_pane_current_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right,
+    f32& bottom, bool& hasBounds) {
+    f32 paneLeft;
+    f32 paneTop;
+    f32 paneRight;
+    f32 paneBottom;
+    if (!pane_current_global_bounds(pane, paneLeft, paneTop, paneRight, paneBottom)) {
+        return false;
+    }
+
+    if (!hasBounds) {
+        left = paneLeft;
+        top = paneTop;
+        right = paneRight;
+        bottom = paneBottom;
+        hasBounds = true;
+        return true;
+    }
+
+    if (paneLeft < left) left = paneLeft;
+    if (paneRight > right) right = paneRight;
+    if (paneTop < top) top = paneTop;
+    if (paneBottom > bottom) bottom = paneBottom;
+    return true;
+}
+
+void pane_trans_to_global_center(CPaneMgr* pane, const f32 targetX, const f32 targetY) {
+    f32 transX = targetX - pane->getInitGlobalCenterPosX();
+    f32 transY = targetY - pane->getInitGlobalCenterPosY();
+    pane->paneTrans(transX, transY);
+
+    f32 left;
+    f32 top;
+    f32 right;
+    f32 bottom;
+    if (!pane_current_global_bounds(pane, left, top, right, bottom)) {
+        return;
+    }
+
+    const f32 centerX = (left + right) * 0.5f;
+    const f32 centerY = (top + bottom) * 0.5f;
+    const f32 localWidth = pane->getSizeX();
+    const f32 localHeight = pane->getSizeY();
+    const f32 globalScaleX = localWidth != 0.0f ? (right - left) / localWidth : 1.0f;
+    const f32 globalScaleY = localHeight != 0.0f ? (bottom - top) / localHeight : 1.0f;
+
+    if (globalScaleX != 0.0f) {
+        transX += (targetX - centerX) / globalScaleX;
+    }
+    if (globalScaleY != 0.0f) {
+        transY += (targetY - centerY) / globalScaleY;
+    }
+    pane->paneTrans(transX, transY);
+}
+
+void change_z_hud_item_texture(dMeter2Draw_c* meter, const u8 itemNo) {
+    const u8 textureItem = hud_texture_item(itemNo);
+    if (s_zHudLastItem == textureItem) {
+        return;
+    }
+
+    s_zHudItemTexPage ^= 1;
+    ResTIMG* primary = z_hud_item_tex(s_zHudItemTexPage, 0);
+    ResTIMG* secondary = z_hud_item_tex(s_zHudItemTexPage, 1);
+    const s32 textureCount =
+        dMeter2Info_readItemTexture(textureItem, primary,
+            static_cast<J2DPicture*>(meter->mpItemR->getPanePtr()), secondary,
+            meter->mpItemXYPane[2], nullptr, nullptr, nullptr, nullptr, -1);
+    if (textureCount <= 1) {
+        meter->mpItemXYPane[2]->hide();
+    } else {
+        meter->mpItemXYPane[2]->show();
+    }
+
+    const f32 textureScale = g_drawHIO.mItemScaleAdjustON ?
+        g_drawHIO.mItemScalePercent / 100.0f :
+        dItem_data::getTexScale(textureItem) / 100.0f;
+    meter->field_0x6c4[2] =
+        textureScale * ((primary->width * meter->mpItemR->getInitSizeX()) / 48.0f);
+    meter->field_0x6d0[2] =
+        textureScale * ((primary->height * meter->mpItemR->getInitSizeY()) / 48.0f);
+    meter->field_0x6ac[2] = (meter->mpItemR->getInitSizeX() - meter->field_0x6c4[2]) * 0.5f;
+    meter->field_0x6b8[2] = (meter->mpItemR->getInitSizeY() - meter->field_0x6d0[2]) * 0.5f;
+    meter->mpItemR->resize(meter->field_0x6c4[2], meter->field_0x6d0[2]);
+    meter->mpItemXYPane[2]->resize(meter->field_0x6c4[2], meter->field_0x6d0[2]);
+    s_zHudLastItem = textureItem;
+}
+
+void layout_z_hud_item(dMeter2Draw_c* meter, const u8 itemNo) {
+    meter->setItemParamZ(hud_layout_item(itemNo));
+    meter->mpItemR->getPanePtr()->rotate(meter->mpItemR->getSizeX() * 0.5f,
+        meter->mpItemR->getSizeY() * 0.5f, ROTATE_Z,
+        meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].rotation);
+
+    const DuskModHudTransform hudTransform = hud_layout_z_transform();
+    const DuskModHudButtonLayout buttonLayout = hud_layout_z_button_layout();
+    const f32 hudScale = hudTransform.scale;
+    const f32 itemScale = buttonLayout.item_scale > 0.0f ? buttonLayout.item_scale : 1.0f;
+    const f32 itemOffsetX = buttonLayout.item_offset_x;
+    const f32 itemOffsetY = buttonLayout.item_offset_y;
+
+    meter->mpItemR->scale(g_drawHIO.mButtonZItemScale * hudScale * itemScale,
+        g_drawHIO.mButtonZItemScale * hudScale * itemScale);
+    meter->mpItemR->paneTrans(g_drawHIO.mButtonZItemPosX + meter->field_0x6ac[2] +
+            itemOffsetX + hudTransform.offset_x,
+        g_drawHIO.mButtonZItemPosY + meter->field_0x6b8[2] + itemOffsetY +
+            hudTransform.offset_y);
+
+    meter->mpLightXY[2]->scale(g_drawHIO.mButtonZItemBaseScale * hudScale * itemScale,
+        g_drawHIO.mButtonZItemBaseScale * hudScale * itemScale);
+    meter->mpLightXY[2]->paneTrans(g_drawHIO.mButtonZItemBasePosX + itemOffsetX +
+            hudTransform.offset_x,
+        g_drawHIO.mButtonZItemBasePosY + itemOffsetY + hudTransform.offset_y);
+}
+
+void update_z_hud_item_alpha(dMeter2Draw_c* meter) {
+    const f32 buttonAlpha =
+        g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha);
+    const f32 parentAlpha = meter->mpButtonParent->getAlphaRate();
+    u8 itemAlpha = 255;
+    u8 itemBaseAlpha = clamp_hud_alpha(
+        g_drawHIO.mButtonZItemBaseAlpha * (buttonAlpha * meter->mpLightXY[2]->getInitAlpha()));
+    u8 buttonBaseAlpha = clamp_hud_alpha(255.0f * buttonAlpha);
+
+    if (!dMeter2Info_isUseButton(METER2_USEBUTTON_Z)) {
+        itemAlpha = g_drawHIO.mButtonXYItemDimAlpha;
+        itemBaseAlpha = g_drawHIO.mButtonXYItemDimAlpha;
+        buttonBaseAlpha = g_drawHIO.mButtonXYBaseDimAlpha;
+    }
+
+    meter->mpItemR->setAlpha(clamp_hud_alpha(static_cast<f32>(itemAlpha) * parentAlpha));
+    meter->mpLightXY[2]->setAlpha(clamp_hud_alpha(static_cast<f32>(itemBaseAlpha) * parentAlpha));
+    meter->mpButtonXY[2]->setAlpha(clamp_hud_alpha(static_cast<f32>(buttonBaseAlpha) * parentAlpha));
+}
+
+void update_z_hud_item(dMeter2Draw_c* meter) {
+    if (!z_item_slot_enabled() || meter == nullptr || meter->mpItemR == nullptr ||
+        meter->mpLightXY[2] == nullptr || meter->mpButtonXY[2] == nullptr ||
+        meter->mpItemXYPane[2] == nullptr || daPy_py_c::checkNowWolf())
+    {
+        return;
+    }
+
+    if (meter->mpTextXY[2] != nullptr) {
+        meter->mpTextXY[2]->hide();
+    }
+
+    const u8 itemNo = dComIfGp_getSelectItem(kZItemSlot);
+    J2DPane* itemParent = meter->mpScreen != nullptr ?
+        meter->mpScreen->search(MULTI_CHAR('item_r_n')) : nullptr;
+    if (itemNo == dItemNo_NONE_e || itemNo == 0) {
+        if (itemParent != nullptr) itemParent->hide();
+        meter->mpItemR->hide();
+        meter->mpLightXY[2]->hide();
+        return;
+    }
+
+    if (itemParent != nullptr) itemParent->show();
+    meter->mpItemR->show();
+    meter->mpLightXY[2]->show();
+    change_z_hud_item_texture(meter, itemNo);
+    layout_z_hud_item(meter, itemNo);
+    update_z_hud_item_alpha(meter);
+}
+
+void move_midna_hud_to_dpad(dMeter2Draw_c* meter) {
+    if (!z_item_slot_enabled() || meter == nullptr || meter->mpButtonMidona == nullptr) {
+        return;
+    }
+
+    const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
+    const DuskModHudTransform midnaTransform = hud_layout_midna_transform();
+    const f32 dpadScale = g_drawHIO.mButtonCrossScale * dpadTransform.scale;
+    const f32 midnaScale = g_drawHIO.mMidnaIconScale * dpadScale * midnaTransform.scale;
+
+    f32 left = 0.0f;
+    f32 top = 0.0f;
+    f32 right = 0.0f;
+    f32 bottom = 0.0f;
+    bool hasBounds = false;
+    for (int i = 0; i < 5; ++i) {
+        add_pane_current_global_bounds(meter->mpJujiI[i], left, top, right, bottom, hasBounds);
+        add_pane_current_global_bounds(meter->mpJujiM[i], left, top, right, bottom, hasBounds);
+    }
+    if (!hasBounds) {
+        add_pane_current_global_bounds(meter->mpButtonCrossParent, left, top, right, bottom,
+            hasBounds);
+    }
+    if (!hasBounds) {
+        return;
+    }
+
+    const f32 midnaHalfHeight = meter->mpButtonMidona->getInitSizeY() * midnaScale * 0.5f;
+    const f32 targetX = (left + right) * 0.5f + midnaTransform.offset_x;
+    const f32 targetY = bottom + midnaHalfHeight + midnaTransform.offset_y;
+    meter->mpButtonMidona->scale(midnaScale, midnaScale);
+    pane_trans_to_global_center(meter->mpButtonMidona, targetX, targetY);
 }
 
 u8 combine_select_item(u8 playItem, u8 mixSlot) {
@@ -481,12 +741,22 @@ void after_ring_create(ModContext*, void* args, void*, void*) {
     create_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
 }
 
-void before_ring_delete(ModContext*, void* args, void*, void*) {
+HookAction before_ring_delete(ModContext*, void* args, void*, void*) {
     destroy_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+    return HOOK_CONTINUE;
 }
 
 void after_ring_draw(ModContext*, void* args, void*, void*) {
     draw_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+}
+
+HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
+    update_z_hud_item(mods::arg<dMeter2Draw_c*>(args, 0));
+    return HOOK_CONTINUE;
+}
+
+void after_meter_midna_alpha(ModContext*, void* args, void*, void*) {
+    move_midna_hud_to_dpad(mods::arg<dMeter2Draw_c*>(args, 0));
 }
 
 HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
@@ -669,6 +939,7 @@ void after_player_execute(ModContext*, void* args, void*, void*) {
         return;
     }
 
+    sync_play_select_item(kZItemSlot);
     if (resolved_select_item(kZItemSlot) != dItemNo_NONE_e) {
         dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
     }
@@ -694,6 +965,12 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<RingDrawHook>(svc_hook, after_ring_draw);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterDrawHook>(svc_hook, before_meter_draw);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterMidnaAlphaHook>(svc_hook, after_meter_midna_alpha);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<RingSetActiveCursorHook>(svc_hook, before_ring_set_active_cursor);

@@ -815,6 +815,20 @@ const DuskModHudLayoutSnapshot* get_layout(ModContext*, const char* dataPath, vo
     return &s_layout;
 }
 
+DuskModHudTransform element_transform(const HudElement element) {
+    if (s_dirty) {
+        rebuild_layout();
+    }
+    return s_layout.elements[static_cast<size_t>(element)];
+}
+
+DuskModHudButtonLayout button_layout(const HudButton button) {
+    if (s_dirty) {
+        rebuild_layout();
+    }
+    return s_layout.buttons[static_cast<size_t>(button)];
+}
+
 ModResult add_section(UiElementHandle pane, const char* title) {
     return svc_ui->pane_add_section(mod_ctx, pane, title);
 }
@@ -1164,6 +1178,22 @@ ModResult build_hud_layout_files_tab(
     ModContext* ctx, UiWindowHandle window, UiElementHandle left, UiElementHandle right,
     void* userData, ModError* error) {
     return build_files_tab_impl(ctx, window, left, right, userData, error);
+}
+
+DuskModHudTransform hud_layout_z_transform() {
+    return element_transform(kElementZ);
+}
+
+DuskModHudTransform hud_layout_dpad_transform() {
+    return element_transform(kElementDPad);
+}
+
+DuskModHudTransform hud_layout_midna_transform() {
+    return element_transform(kElementMidna);
+}
+
+DuskModHudButtonLayout hud_layout_z_button_layout() {
+    return button_layout(kButtonZ);
 }
 
 void update_hud_layout() {
