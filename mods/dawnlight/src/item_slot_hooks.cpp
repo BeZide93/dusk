@@ -53,6 +53,7 @@ DEFINE_HOOK(&daAlink_c::checkItemButtonChange, CheckItemButtonChangeHook);
 DEFINE_HOOK(&daAlink_c::checkItemChangeFromButton, CheckItemChangeFromButtonHook);
 DEFINE_HOOK(&daAlink_c::checkSetItemTrigger, CheckSetItemTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemSetButton, CheckItemSetButtonHook);
+DEFINE_HOOK(&daAlink_c::setHeavyBoots, SetHeavyBootsHook);
 DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
 
 struct PendingAssign {
@@ -78,6 +79,8 @@ u8 s_zHudItemTexPage = 0;
 u8 s_zHudLastItem = dItemNo_NONE_e;
 J2DPicture* s_zItemNumTex[3] = {};
 dKantera_icon_c* s_zOilMeter = nullptr;
+daAlink_c* s_zHeavyBootsGuardLink = nullptr;
+u8 s_zHeavyBootsGuardFrames = 0;
 
 ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
     return reinterpret_cast<ResTIMG*>(s_zHudItemTexBuf[page][layer]);
@@ -746,6 +749,24 @@ bool item_needs_z_valid_button(int itemNo) {
     return itemNo == dItemNo_HVY_BOOTS_e || itemNo == dItemNo_SPINNER_e;
 }
 
+void arm_z_heavy_boots_guard(daAlink_c* link) {
+    s_zHeavyBootsGuardLink = link;
+    s_zHeavyBootsGuardFrames = 4;
+}
+
+void tick_z_heavy_boots_guard(daAlink_c* link) {
+    if (s_zHeavyBootsGuardFrames == 0) {
+        return;
+    }
+
+    if (s_zHeavyBootsGuardLink == link || s_zHeavyBootsGuardLink == nullptr) {
+        --s_zHeavyBootsGuardFrames;
+        if (s_zHeavyBootsGuardFrames == 0) {
+            s_zHeavyBootsGuardLink = nullptr;
+        }
+    }
+}
+
 u8 cursor_for_slot(dMenu_Ring_c* ring, u8 slot) {
     return slot == dItemNo_NONE_e ? dItemNo_NONE_e : ring->getCursorPos(slot);
 }
@@ -1163,13 +1184,20 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
     }
 
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (link->checkGroupItem(itemNo, resolved_select_item(i)) && link->itemTriggerCheck(1 << i)) {
-            if (itemNo != dItemNo_HVY_BOOTS_e) {
-                link->mSelectItemId = i;
-            }
-            *static_cast<int*>(retval) = 1;
-            return HOOK_SKIP_ORIGINAL;
+        if (!link->checkGroupItem(itemNo, resolved_select_item(i)) || !link->itemTriggerCheck(1 << i)) {
+            continue;
         }
+
+        if (itemNo == dItemNo_HVY_BOOTS_e) {
+            if (i == kZItemSlot && !link->checkEquipHeavyBoots()) {
+                arm_z_heavy_boots_guard(link);
+            }
+        } else {
+            link->mSelectItemId = i;
+        }
+
+        *static_cast<int*>(retval) = 1;
+        return HOOK_SKIP_ORIGINAL;
     }
 
     *static_cast<int*>(retval) = 0;
@@ -1191,12 +1219,27 @@ HookAction before_check_item_set_button(ModContext*, void* args, void* retval, v
     return HOOK_SKIP_ORIGINAL;
 }
 
+HookAction before_set_heavy_boots(ModContext*, void* args, void* retval, void*) {
+    auto* link = mods::arg<daAlink_c*>(args, 0);
+    const int enable = mods::arg<int>(args, 1);
+    if (!z_item_slot_enabled() || link == nullptr || enable != 0 || s_zHeavyBootsGuardFrames == 0 ||
+        s_zHeavyBootsGuardLink != link || !link->checkEquipHeavyBoots() ||
+        !link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(kZItemSlot)))
+    {
+        return HOOK_CONTINUE;
+    }
+
+    *static_cast<int*>(retval) = 0;
+    return HOOK_SKIP_ORIGINAL;
+}
+
 void after_player_execute(ModContext*, void* args, void*, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     if (!z_item_slot_enabled() || link == nullptr || link->checkWolf()) {
         return;
     }
 
+    tick_z_heavy_boots_guard(link);
     sync_play_select_item(kZItemSlot);
     if (resolved_select_item(kZItemSlot) != dItemNo_NONE_e) {
         dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
@@ -1256,6 +1299,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<CheckItemSetButtonHook>(svc_hook, before_check_item_set_button);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<SetHeavyBootsHook>(svc_hook, before_set_heavy_boots);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
