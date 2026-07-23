@@ -52,6 +52,7 @@ DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemButtonChange, CheckItemButtonChangeHook);
 DEFINE_HOOK(&daAlink_c::checkItemChangeFromButton, CheckItemChangeFromButtonHook);
 DEFINE_HOOK(&daAlink_c::checkSetItemTrigger, CheckSetItemTriggerHook);
+DEFINE_HOOK(&daAlink_c::checkItemSetButton, CheckItemSetButtonHook);
 DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
 
 struct PendingAssign {
@@ -738,6 +739,10 @@ int find_select_button(daAlink_c* link, int itemNo) {
     return kSelectItemNotFound;
 }
 
+bool item_needs_z_valid_button(int itemNo) {
+    return itemNo == dItemNo_HVY_BOOTS_e || itemNo == dItemNo_SPINNER_e;
+}
+
 u8 cursor_for_slot(dMenu_Ring_c* ring, u8 slot) {
     return slot == dItemNo_NONE_e ? dItemNo_NONE_e : ring->getCursorPos(slot);
 }
@@ -1168,6 +1173,21 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
     return HOOK_SKIP_ORIGINAL;
 }
 
+HookAction before_check_item_set_button(ModContext*, void* args, void* retval, void*) {
+    auto* link = mods::arg<daAlink_c*>(args, 0);
+    const int itemNo = mods::arg<int>(args, 1);
+    if (!z_item_slot_enabled() || link == nullptr || !item_needs_z_valid_button(itemNo)) {
+        return HOOK_CONTINUE;
+    }
+
+    if (!link->checkGroupItem(itemNo, resolved_select_item(kZItemSlot))) {
+        return HOOK_CONTINUE;
+    }
+
+    *static_cast<int*>(retval) = SELECT_ITEM_X;
+    return HOOK_SKIP_ORIGINAL;
+}
+
 void after_player_execute(ModContext*, void* args, void*, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     if (!z_item_slot_enabled() || link == nullptr || link->checkWolf()) {
@@ -1230,6 +1250,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<CheckSetItemTriggerHook>(svc_hook, before_check_set_item_trigger);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<CheckItemSetButtonHook>(svc_hook, before_check_item_set_button);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
