@@ -12,6 +12,7 @@
 #include "d/d_item_data.h"
 #include "d/d_meter_HIO.h"
 #include "d/d_meter2_info.h"
+#include "d/d_menu_window.h"
 #include "d/d_menu_item_explain.h"
 #include "d/d_pane_class.h"
 #include "JSystem/J2DGraph/J2DScreen.h"
@@ -44,6 +45,7 @@ DEFINE_HOOK(&dMenu_Ring_c::_create, RingCreateHook);
 DEFINE_HOOK(&dMenu_Ring_c::_delete, RingDeleteHook);
 DEFINE_HOOK(&dMenu_Ring_c::_draw, RingDrawHook);
 DEFINE_HOOK(&dMenu_Ring_c::setActiveCursor, RingSetActiveCursorHook);
+DEFINE_HOOK(&dMw_DOWN_TRIGGER, MenuDownTriggerHook);
 DEFINE_HOOK(&dMeter2Draw_c::draw, MeterDrawHook);
 DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
@@ -1024,6 +1026,15 @@ HookAction before_midna_talk_trigger(ModContext*, void* args, void* retval, void
     return HOOK_SKIP_ORIGINAL;
 }
 
+HookAction before_menu_down_trigger(ModContext*, void*, void* retval, void*) {
+    if (!z_item_slot_enabled()) {
+        return HOOK_CONTINUE;
+    }
+
+    *static_cast<BOOL*>(retval) = FALSE;
+    return HOOK_SKIP_ORIGINAL;
+}
+
 HookAction before_check_item_button_change(ModContext*, void* args, void*, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     if (!z_item_slot_enabled() || link == nullptr) {
@@ -1207,6 +1218,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<MidnaTalkTriggerHook>(svc_hook, before_midna_talk_trigger);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MenuDownTriggerHook>(svc_hook, before_menu_down_trigger);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<CheckItemButtonChangeHook>(svc_hook, before_check_item_button_change);
