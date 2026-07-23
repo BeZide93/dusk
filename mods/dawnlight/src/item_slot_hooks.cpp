@@ -7,6 +7,7 @@
 #include "Z2AudioLib/Z2SeMgr.h"
 #include "d/actor/d_a_alink.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_kantera_icon_meter.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
 #include "d/d_meter_HIO.h"
@@ -24,6 +25,7 @@
 #include "mods/service.hpp"
 #include "mods/svc/hook.h"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -71,6 +73,8 @@ RingZButtonPrompt s_ringZPrompt;
 alignas(32) u8 s_zHudItemTexBuf[2][2][0xC00];
 u8 s_zHudItemTexPage = 0;
 u8 s_zHudLastItem = dItemNo_NONE_e;
+J2DPicture* s_zItemNumTex[3] = {};
+dKantera_icon_c* s_zOilMeter = nullptr;
 
 ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
     return reinterpret_cast<ResTIMG*>(s_zHudItemTexBuf[page][layer]);
@@ -361,16 +365,146 @@ void layout_z_hud_item(dMeter2Draw_c* meter, const u8 itemNo) {
         g_drawHIO.mButtonZItemBasePosY + itemOffsetY + hudTransform.offset_y);
 }
 
+bool is_z_lantern_item(const u8 itemNo) {
+    return itemNo == dItemNo_KANTERA_e || itemNo == dItemNo_KANTERA2_e;
+}
+
+bool z_item_has_ammo(const u8 itemNo) {
+    switch (itemNo) {
+    case dItemNo_NORMAL_BOMB_e:
+    case dItemNo_WATER_BOMB_e:
+    case dItemNo_POKE_BOMB_e:
+    case dItemNo_BOMB_ARROW_e:
+    case dItemNo_BOW_e:
+    case dItemNo_LIGHT_ARROW_e:
+    case dItemNo_ARROW_LV1_e:
+    case dItemNo_ARROW_LV2_e:
+    case dItemNo_ARROW_LV3_e:
+    case dItemNo_HAWK_ARROW_e:
+    case dItemNo_PACHINKO_e:
+    case dItemNo_BEE_CHILD_e:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool z_item_ammo_values(const u8 itemNo, u8& itemNum, u8& itemMax) {
+    if (!z_item_has_ammo(itemNo)) {
+        return false;
+    }
+
+    switch (itemNo) {
+    case dItemNo_BOW_e:
+    case dItemNo_LIGHT_ARROW_e:
+    case dItemNo_ARROW_LV1_e:
+    case dItemNo_ARROW_LV2_e:
+    case dItemNo_ARROW_LV3_e:
+    case dItemNo_HAWK_ARROW_e:
+        itemNum = static_cast<u8>(dComIfGs_getArrowNum());
+        itemMax = static_cast<u8>(dComIfGs_getArrowMax());
+        return true;
+    case dItemNo_BOMB_ARROW_e: {
+        itemNum = static_cast<u8>(std::max<s16>(0, dComIfGp_getSelectItemNum(kZItemSlot)));
+        itemMax = static_cast<u8>(std::max(0, dComIfGp_getSelectItemMaxNum(kZItemSlot)));
+        itemNum = std::min(itemNum, static_cast<u8>(dComIfGs_getArrowNum()));
+        itemMax = std::max(itemMax, static_cast<u8>(dComIfGs_getArrowMax()));
+        return true;
+    }
+    case dItemNo_PACHINKO_e:
+        itemNum = static_cast<u8>(dComIfGs_getPachinkoNum());
+        itemMax = static_cast<u8>(dComIfGs_getPachinkoMax());
+        return true;
+    default:
+        itemNum = static_cast<u8>(std::max<s16>(0, dComIfGp_getSelectItemNum(kZItemSlot)));
+        itemMax = static_cast<u8>(std::max(0, dComIfGp_getSelectItemMaxNum(kZItemSlot)));
+        return true;
+    }
+}
+
+bool ensure_z_item_num_textures() {
+    if (s_zItemNumTex[0] != nullptr && s_zItemNumTex[1] != nullptr &&
+        s_zItemNumTex[2] != nullptr)
+    {
+        return true;
+    }
+
+    ResTIMG* timg = static_cast<ResTIMG*>(dComIfGp_getMain2DArchive()->getResource(
+        'TIMG', dMeter2Info_getNumberTextureName(0)));
+    if (timg == nullptr) {
+        return false;
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        if (s_zItemNumTex[i] == nullptr) {
+            s_zItemNumTex[i] = JKR_NEW J2DPicture(timg);
+        }
+        if (s_zItemNumTex[i] == nullptr) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void set_z_item_num_textures(u8 itemNum, const u8 itemMax) {
+    if (!ensure_z_item_num_textures()) {
+        return;
+    }
+
+    if (itemNum > itemMax) {
+        itemNum = itemMax;
+    }
+
+    JUtility::TColor black;
+    JUtility::TColor white;
+    if (itemNum == itemMax) {
+        black.set(30, 30, 30, 0);
+        white.set(255, 200, 50, 255);
+    } else if (itemNum == 0) {
+        black.set(30, 30, 30, 0);
+        white.set(180, 180, 180, 255);
+    } else {
+        black.set(0, 0, 0, 0);
+        white.set(255, 255, 255, 255);
+    }
+
+    for (J2DPicture* digit : s_zItemNumTex) {
+        digit->setBlackWhite(black, white);
+    }
+
+    auto set_digit = [](const int index, const int digit) {
+        ResTIMG* timg = static_cast<ResTIMG*>(dComIfGp_getMain2DArchive()->getResource(
+            'TIMG', dMeter2Info_getNumberTextureName(digit)));
+        if (timg != nullptr) {
+            s_zItemNumTex[index]->changeTexture(timg, 0);
+        }
+    };
+
+    if (itemNum < 100) {
+        set_digit(0, itemNum / 10);
+        set_digit(1, itemNum % 10);
+        s_zItemNumTex[2]->hide();
+    } else {
+        set_digit(0, itemNum / 100);
+        itemNum %= 100;
+        set_digit(1, itemNum / 10);
+        set_digit(2, itemNum % 10);
+        s_zItemNumTex[2]->show();
+    }
+}
+
 void update_z_hud_item_alpha(dMeter2Draw_c* meter) {
     const f32 buttonAlpha =
         g_drawHIO.mButtonZAlpha * (g_drawHIO.mParentAlpha * g_drawHIO.mMainHUDButtonsAlpha);
     const f32 parentAlpha = meter->mpButtonParent->getAlphaRate();
-    u8 itemAlpha = 255;
+    u8 itemAlpha = meter->mpItemR->getInitAlpha();
     u8 itemBaseAlpha = clamp_hud_alpha(
         g_drawHIO.mButtonZItemBaseAlpha * (buttonAlpha * meter->mpLightXY[2]->getInitAlpha()));
     u8 buttonBaseAlpha = clamp_hud_alpha(255.0f * buttonAlpha);
 
-    if (!dMeter2Info_isUseButton(METER2_USEBUTTON_Z)) {
+    if (dComIfGp_getSelectItem(kZItemSlot) == dItemNo_NONE_e ||
+        dComIfGp_getSelectItem(kZItemSlot) == 0)
+    {
         itemAlpha = g_drawHIO.mButtonXYItemDimAlpha;
         itemBaseAlpha = g_drawHIO.mButtonXYItemDimAlpha;
         buttonBaseAlpha = g_drawHIO.mButtonXYBaseDimAlpha;
@@ -379,6 +513,91 @@ void update_z_hud_item_alpha(dMeter2Draw_c* meter) {
     meter->mpItemR->setAlpha(clamp_hud_alpha(static_cast<f32>(itemAlpha) * parentAlpha));
     meter->mpLightXY[2]->setAlpha(clamp_hud_alpha(static_cast<f32>(itemBaseAlpha) * parentAlpha));
     meter->mpButtonXY[2]->setAlpha(clamp_hud_alpha(static_cast<f32>(buttonBaseAlpha) * parentAlpha));
+}
+
+void draw_z_ammo(dMeter2Draw_c* meter, const u8 itemNo, const f32 itemAlphaRate) {
+    u8 itemNum = 0;
+    u8 itemMax = 0;
+    if (!z_item_ammo_values(itemNo, itemNum, itemMax) || itemMax == 0 ||
+        !ensure_z_item_num_textures())
+    {
+        return;
+    }
+
+    set_z_item_num_textures(itemNum, itemMax);
+
+    const DuskModHudTransform hudTransform = hud_layout_z_transform();
+    const DuskModHudButtonLayout buttonLayout = hud_layout_z_button_layout();
+    const f32 itemScale = buttonLayout.item_scale > 0.0f ? buttonLayout.item_scale : 1.0f;
+    const f32 ammoScale =
+        hudTransform.scale * itemScale * (buttonLayout.ammo_scale > 0.0f ? buttonLayout.ammo_scale : 1.0f);
+    const f32 digitSize = meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_scale * 16.0f * ammoScale;
+
+    Vec vtx0 = meter->mpItemR->getPanePtr()->getGlbVtx(0);
+    Vec vtx3 = meter->mpItemR->getPanePtr()->getGlbVtx(3);
+    const f32 centerX = (vtx0.x + vtx3.x) * 0.5f;
+    const f32 centerY = (vtx0.y + vtx3.y) * 0.5f;
+    const u8 alpha = clamp_hud_alpha(itemAlphaRate * 255.0f);
+
+    for (int i = 0; i < 3; ++i) {
+        if (i == 2 && itemNum < 100) {
+            continue;
+        }
+        s_zItemNumTex[i]->setAlpha(alpha);
+        s_zItemNumTex[i]->draw(meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_x +
+                buttonLayout.ammo_offset_x + centerX + digitSize * i,
+            meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_y +
+                buttonLayout.ammo_offset_y + centerY + meter->mpItemR->getSizeY(),
+            digitSize, digitSize, false, false, false);
+    }
+}
+
+void draw_z_oil_meter(dMeter2Draw_c* meter, const u8 itemNo, const f32 itemAlphaRate) {
+    if (!is_z_lantern_item(itemNo) || dComIfGs_getMaxOil() == 0) {
+        return;
+    }
+
+    if (s_zOilMeter == nullptr) {
+        s_zOilMeter = JKR_NEW dKantera_icon_c();
+    }
+    if (s_zOilMeter == nullptr) {
+        return;
+    }
+
+    const DuskModHudTransform hudTransform = hud_layout_z_transform();
+    const DuskModHudButtonLayout buttonLayout = hud_layout_z_button_layout();
+    const f32 itemScale = buttonLayout.item_scale > 0.0f ? buttonLayout.item_scale : 1.0f;
+    Vec vtx0 = meter->mpItemR->getPanePtr()->getGlbVtx(0);
+    Vec vtx3 = meter->mpItemR->getPanePtr()->getGlbVtx(3);
+
+    s_zOilMeter->setPos(((vtx0.x + vtx3.x) * 0.5f) + 9.0f * hudTransform.scale * itemScale,
+        vtx3.y);
+    s_zOilMeter->setScale(0.6f * hudTransform.scale * itemScale,
+        0.6f * hudTransform.scale * itemScale);
+    s_zOilMeter->setNowGauge(dComIfGs_getMaxOil(), dComIfGs_getOil());
+    s_zOilMeter->setAlphaRate(itemAlphaRate);
+    s_zOilMeter->drawSelf();
+}
+
+void draw_z_hud_item_meters(dMeter2Draw_c* meter) {
+    if (!z_item_slot_enabled() || meter == nullptr || meter->mpItemR == nullptr ||
+        meter->mpButtonParent == nullptr || daPy_py_c::checkNowWolf())
+    {
+        return;
+    }
+
+    const u8 itemNo = dComIfGp_getSelectItem(kZItemSlot);
+    if (itemNo == dItemNo_NONE_e || itemNo == 0 || !meter->mpItemR->isVisible()) {
+        return;
+    }
+
+    const f32 itemAlphaRate = static_cast<f32>(meter->mpItemR->getAlpha()) / 255.0f;
+    if (itemAlphaRate <= 0.0f) {
+        return;
+    }
+
+    draw_z_ammo(meter, itemNo, itemAlphaRate);
+    draw_z_oil_meter(meter, itemNo, itemAlphaRate);
 }
 
 void update_z_hud_item(dMeter2Draw_c* meter) {
@@ -406,6 +625,7 @@ void update_z_hud_item(dMeter2Draw_c* meter) {
     if (itemParent != nullptr) itemParent->show();
     meter->mpItemR->show();
     meter->mpLightXY[2]->show();
+    dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
     change_z_hud_item_texture(meter, itemNo);
     layout_z_hud_item(meter, itemNo);
     update_z_hud_item_alpha(meter);
@@ -755,6 +975,10 @@ HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
+void after_meter_draw(ModContext*, void* args, void*, void*) {
+    draw_z_hud_item_meters(mods::arg<dMeter2Draw_c*>(args, 0));
+}
+
 void after_meter_midna_alpha(ModContext*, void* args, void*, void*) {
     move_midna_hud_to_dpad(mods::arg<dMeter2Draw_c*>(args, 0));
 }
@@ -968,6 +1192,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<MeterDrawHook>(svc_hook, before_meter_draw);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterDrawHook>(svc_hook, after_meter_draw);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterMidnaAlphaHook>(svc_hook, after_meter_midna_alpha);
