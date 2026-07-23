@@ -588,6 +588,9 @@ void draw_z_hud_item_meters(dMeter2Draw_c* meter) {
     {
         return;
     }
+    if (!meter->mpButtonParent->getPanePtr()->isVisible()) {
+        return;
+    }
 
     const u8 itemNo = dComIfGp_getSelectItem(kZItemSlot);
     if (itemNo == dItemNo_NONE_e || itemNo == 0 || !meter->mpItemR->isVisible()) {
