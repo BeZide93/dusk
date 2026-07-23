@@ -9,6 +9,7 @@
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/hook.h"
+#include "SSystem/SComponent/c_math.h"
 
 #include <cmath>
 
@@ -41,8 +42,33 @@ bool use_third_person_camera() {
     return aim_mode() == AimMode::ThirdPerson;
 }
 
+bool use_cinema_camera() {
+    return aim_mode() == AimMode::Cinema;
+}
+
 bool use_scope_suppress_camera() {
     return aim_mode() == AimMode::ThirdPerson || aim_mode() == AimMode::Cinema;
+}
+
+BOOL face_camera_view_yaw(daAlink_c* link) {
+    if (link == nullptr) {
+        return FALSE;
+    }
+
+    auto* camera = dComIfGp_getCamera(link->field_0x317c);
+    if (camera == nullptr) {
+        return FALSE;
+    }
+
+    const cXyz direction = *fopCamM_GetCenter_p(camera) - *fopCamM_GetEye_p(camera);
+    const f32 horizontal = JMAFastSqrt(SQUARE(direction.x) + SQUARE(direction.z));
+    if (horizontal <= 0.001f) {
+        return FALSE;
+    }
+
+    link->shape_angle.y = cM_atan2s(direction.x, direction.z);
+    link->field_0x310c = link->shape_angle.y;
+    return TRUE;
 }
 
 BOOL aim_with_c_stick(daAlink_c* link) {
@@ -132,6 +158,10 @@ bool update_subject_aim(daAlink_c* link, AimItem item) {
     }
     if (item == AimItem::Bow && link->mEquipItem == dItemNo_HAWK_ARROW_e) {
         return false;
+    }
+
+    if (use_cinema_camera()) {
+        face_camera_view_yaw(link);
     }
 
     const s16 shapeYaw = link->shape_angle.y;
