@@ -7,10 +7,12 @@ $ErrorActionPreference = 'Stop'
 
 $root = (Resolve-Path -LiteralPath $RepoRoot).Path
 $src = Join-Path $root 'build/android-arm64/libmain.so'
+$symdbSrc = Join-Path $root 'build/android-arm64/dusklight-arm64-v8a.symdb'
 $jniRoot = Join-Path $root 'platforms/android/app/src/main/jniLibs'
 $arm64Dir = Join-Path $jniRoot 'arm64-v8a'
 $dst = Join-Path $arm64Dir 'libmain.so'
 $tmp = Join-Path $arm64Dir 'libmain.so.tmp'
+$symbolsDir = Join-Path $root 'platforms/android/app/src/main/bundled_symbols'
 
 if (!(Test-Path -LiteralPath $src)) {
     throw "Missing native library: $src"
@@ -62,5 +64,19 @@ if ($stripTool) {
 }
 
 Move-Item -LiteralPath $tmp -Destination $dst -Force
+
+if (Test-Path -LiteralPath $symbolsDir) {
+    $symbolsResolved = (Resolve-Path -LiteralPath $symbolsDir).Path
+    $mainRoot = (Resolve-Path -LiteralPath (Join-Path $root 'platforms/android/app/src/main')).Path
+    if (!$symbolsResolved.StartsWith($mainRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove path outside Android main sources: $symbolsResolved"
+    }
+    Remove-Item -LiteralPath $symbolsResolved -Recurse -Force
+}
+New-Item -ItemType Directory -Path $symbolsDir -Force | Out-Null
+if (Test-Path -LiteralPath $symdbSrc) {
+    Copy-Item -LiteralPath $symdbSrc -Destination (Join-Path $symbolsDir 'dusklight-arm64-v8a.symdb') -Force
+    Write-Host "Staged symbol manifest $symdbSrc"
+}
 
 Get-ChildItem -LiteralPath $arm64Dir | Select-Object Name, Length, LastWriteTime | Format-Table -AutoSize
