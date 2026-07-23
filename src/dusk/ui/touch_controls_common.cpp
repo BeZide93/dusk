@@ -178,7 +178,7 @@ constexpr std::string_view kTouchControlsRmlFragment = R"RML(
     <button id="skip" class="control skip"><icon><glyph>&#xe044;</glyph></icon></button>
 
     <button id="trigger-r" class="control trigger trigger-r"><span>R</span></button>
-    <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><span>Z</span></button>
+    <button id="button-z" class="control trigger button-z midna"><img id="z-midna-icon" class="midna-icon" /><oil-meter id="button-z-oil" class="oil-meter"><oil-fill id="button-z-oil-fill" /></oil-meter><count id="button-z-count" class="item-count"></count><span>Z</span></button>
     <button id="dpad-down" class="control trigger button-z"><img id="dpad-down-icon" class="midna-icon" /><span>Down</span></button>
 
     <button id="button-y" class="control face y"><img id="button-y-icon" class="item-icon" /><oil-meter id="button-y-oil" class="oil-meter"><oil-fill id="button-y-oil-fill" /></oil-meter><count id="button-y-count" class="item-count"></count><span>Y</span></button>

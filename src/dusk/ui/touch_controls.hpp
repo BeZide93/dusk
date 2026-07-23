@@ -110,6 +110,7 @@ private:
     std::array<uint64_t, static_cast<std::size_t>(Control::COUNT)> mControlIconRevisions{};
     std::string mButtonXCountLabel;
     std::string mButtonYCountLabel;
+    std::string mButtonZCountLabel;
     StickTouch mMoveTouch;
     StickTouch mCameraTouch;
     SDL_FingerID mMenuPointerTouch = 0;

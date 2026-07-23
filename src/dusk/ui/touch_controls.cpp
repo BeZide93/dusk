@@ -93,6 +93,9 @@ constexpr std::array<ControlInfo, static_cast<std::size_t>(Control::COUNT)> kCon
     {
         .id = "button-z",
         .iconId = "z-midna-icon",
+        .oilId = "button-z-oil",
+        .oilFillId = "button-z-oil-fill",
+        .countId = "button-z-count",
         .padButton = PAD_TRIGGER_Z,
     },
     {
@@ -1218,6 +1221,7 @@ void TouchControls::sync_control_displays() noexcept {
 
     syncCount(x.count, mButtonXCountLabel, Control::X, xState);
     syncCount(y.count, mButtonYCountLabel, Control::Y, yState);
+    syncCount(z.count, mButtonZCountLabel, Control::Z, zState);
 
     const auto syncOil = [](Rml::Element* meter, Rml::Element* fill, Control control,
                              const FaceButtonState& state) {
@@ -1234,6 +1238,7 @@ void TouchControls::sync_control_displays() noexcept {
     syncOil(b.oil, b.oilFill, Control::B, bState);
     syncOil(x.oil, x.oilFill, Control::X, xState);
     syncOil(y.oil, y.oilFill, Control::Y, yState);
+    syncOil(z.oil, z.oilFill, Control::Z, zState);
 
     clear_equip_targets();
     if (!visible() || mWasSuppressed || !getSettings().game.enableTouchControls) {
