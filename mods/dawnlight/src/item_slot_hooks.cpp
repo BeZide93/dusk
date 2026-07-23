@@ -9,6 +9,8 @@
 #include "d/d_item.h"
 #include "d/d_meter2_info.h"
 #include "d/d_menu_item_explain.h"
+#include "d/d_pane_class.h"
+#include "JSystem/J2DGraph/J2DScreen.h"
 #define private public
 #include "d/d_menu_ring.h"
 #undef private
@@ -31,6 +33,9 @@ constexpr int kSelectItemNotFound = 3;
 
 DEFINE_HOOK(&dComIfGp_getSelectItem, GetSelectItemHook);
 DEFINE_HOOK(&dComIfGp_setSelectItem, SetSelectItemHook);
+DEFINE_HOOK(&dMenu_Ring_c::_create, RingCreateHook);
+DEFINE_HOOK(&dMenu_Ring_c::_delete, RingDeleteHook);
+DEFINE_HOOK(&dMenu_Ring_c::_draw, RingDrawHook);
 DEFINE_HOOK(&dMenu_Ring_c::setActiveCursor, RingSetActiveCursorHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemButtonChange, CheckItemButtonChangeHook);
@@ -48,6 +53,137 @@ struct PendingAssign {
 };
 
 PendingAssign s_pendingAssign;
+
+struct RingZButtonPrompt {
+    dMenu_Ring_c* ring = nullptr;
+    J2DScreen* screen = nullptr;
+    CPaneMgr* button = nullptr;
+};
+
+RingZButtonPrompt s_ringZPrompt;
+
+void hide_pane_tree(J2DPane* pane) {
+    if (pane == nullptr) {
+        return;
+    }
+
+    pane->hide();
+    for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
+         child = child->getNextChildPane())
+    {
+        hide_pane_tree(child);
+    }
+}
+
+void show_pane_tree(J2DPane* pane) {
+    if (pane == nullptr) {
+        return;
+    }
+
+    pane->show();
+    for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
+         child = child->getNextChildPane())
+    {
+        show_pane_tree(child);
+    }
+}
+
+void show_pane_parents(J2DPane* pane) {
+    for (J2DPane* parent = pane; parent != nullptr; parent = parent->getParentPane()) {
+        parent->show();
+    }
+}
+
+J2DPane* item_wheel_z_anchor(J2DScreen* screen) {
+    return screen != nullptr ? screen->search(MULTI_CHAR('r_btn_n')) : nullptr;
+}
+
+void apply_item_wheel_z_offset(Vec& pos) {
+    pos.x += 5.0f;
+    pos.y -= 5.0f;
+}
+
+void destroy_ring_z_prompt(dMenu_Ring_c* ring) {
+    if (s_ringZPrompt.ring != ring) {
+        return;
+    }
+
+    JKR_DELETE(s_ringZPrompt.button);
+    s_ringZPrompt.button = nullptr;
+    JKR_DELETE(s_ringZPrompt.screen);
+    s_ringZPrompt.screen = nullptr;
+    s_ringZPrompt.ring = nullptr;
+}
+
+void create_ring_z_prompt(dMenu_Ring_c* ring) {
+    destroy_ring_z_prompt(s_ringZPrompt.ring);
+    if (!z_item_slot_enabled() || ring == nullptr || ring->mPlayerIsWolf || ring->mpScreen == nullptr) {
+        return;
+    }
+
+    J2DPane* anchor = item_wheel_z_anchor(ring->mpScreen);
+    if (anchor != nullptr) {
+        anchor->translate(anchor->getTranslateX() + 64.0f, anchor->getTranslateY());
+        anchor->hide();
+    }
+
+    J2DScreen* screen = JKR_NEW J2DScreen();
+    if (screen == nullptr) {
+        return;
+    }
+    if (!screen->setPriority("zelda_game_image.blo", 0x20000, dComIfGp_getMain2DArchive())) {
+        JKR_DELETE(screen);
+        return;
+    }
+
+    dPaneClass_showNullPane(screen);
+    hide_pane_tree(screen->search('ROOT'));
+
+    J2DPane* zButtonPane = screen->search(MULTI_CHAR('zbtn_n'));
+    if (zButtonPane == nullptr) {
+        JKR_DELETE(screen);
+        return;
+    }
+
+    show_pane_parents(zButtonPane);
+    show_pane_tree(zButtonPane);
+
+    CPaneMgr* button = JKR_NEW CPaneMgr(screen, MULTI_CHAR('zbtn_n'), 2, nullptr);
+    if (button == nullptr) {
+        JKR_DELETE(screen);
+        return;
+    }
+
+    button->setAlphaRate(1.0f);
+    button->show();
+    s_ringZPrompt = {.ring = ring, .screen = screen, .button = button};
+}
+
+void draw_ring_z_prompt(dMenu_Ring_c* ring) {
+    if (!z_item_slot_enabled() || s_ringZPrompt.ring != ring ||
+        s_ringZPrompt.screen == nullptr || s_ringZPrompt.button == nullptr ||
+        ring == nullptr || ring->mpScreen == nullptr || ring->mPlayerIsWolf)
+    {
+        return;
+    }
+
+    J2DPane* anchor = item_wheel_z_anchor(ring->mpScreen);
+    if (anchor == nullptr) {
+        return;
+    }
+
+    CPaneMgr paneMgr;
+    Vec pos = paneMgr.getGlobalVtxCenter(anchor, true, 0);
+    pos.x += ring->mCenterPosX;
+    pos.y += ring->mCenterPosY;
+    apply_item_wheel_z_offset(pos);
+
+    s_ringZPrompt.button->scale(0.9f, 0.9f);
+    s_ringZPrompt.button->paneTrans(pos.x - s_ringZPrompt.button->getInitGlobalCenterPosX(),
+                                    pos.y - s_ringZPrompt.button->getInitGlobalCenterPosY());
+    s_ringZPrompt.button->setAlphaRate(ring->mAlphaRate);
+    s_ringZPrompt.screen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
+}
 
 u8 combine_select_item(u8 playItem, u8 mixSlot) {
     if (mixSlot == dItemNo_NONE_e) {
@@ -341,6 +477,18 @@ void after_set_select_item(ModContext*, void* args, void*, void*) {
     sync_play_select_item(mods::arg<int>(args, 0));
 }
 
+void after_ring_create(ModContext*, void* args, void*, void*) {
+    create_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+}
+
+void before_ring_delete(ModContext*, void* args, void*, void*) {
+    destroy_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+}
+
+void after_ring_draw(ModContext*, void* args, void*, void*) {
+    draw_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+}
+
 HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
     auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
     if (!z_item_slot_enabled() || ring == nullptr) {
@@ -537,6 +685,15 @@ ModResult install_item_slot_hooks(ModError* error) {
     ModResult result = mods::hook_add_pre<GetSelectItemHook>(svc_hook, before_get_select_item);
     if (result == MOD_OK) {
         result = mods::hook_add_post<SetSelectItemHook>(svc_hook, after_set_select_item);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<RingCreateHook>(svc_hook, after_ring_create);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<RingDeleteHook>(svc_hook, before_ring_delete);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<RingDrawHook>(svc_hook, after_ring_draw);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<RingSetActiveCursorHook>(svc_hook, before_ring_set_active_cursor);
