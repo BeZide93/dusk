@@ -38,6 +38,17 @@ DEFINE_HOOK(&daAlink_c::checkItemChangeFromButton, CheckItemChangeFromButtonHook
 DEFINE_HOOK(&daAlink_c::checkSetItemTrigger, CheckSetItemTriggerHook);
 DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
 
+struct PendingAssign {
+    dMenu_Ring_c* ring = nullptr;
+    u8 targetSlot = dItemNo_NONE_e;
+    u8 selectedSlot = dItemNo_NONE_e;
+    u8 oldTargetSlot = dItemNo_NONE_e;
+    u8 oldTargetMix = dItemNo_NONE_e;
+    bool active = false;
+};
+
+PendingAssign s_pendingAssign;
+
 u8 combine_select_item(u8 playItem, u8 mixSlot) {
     if (mixSlot == dItemNo_NONE_e) {
         return playItem;
@@ -202,6 +213,120 @@ void assign_current_item(dMenu_Ring_c* ring, u8 targetSlot) {
     ring->setJumpItem(true);
 }
 
+bool item_assign_allowed(dMenu_Ring_c* ring) {
+    if (ring == nullptr) {
+        return false;
+    }
+
+    const u8 item = dComIfGs_getItem(ring->mItemSlots[ring->mCurrentSlot], false);
+    return ring->mStatus == dMenu_Ring_c::STATUS_WAIT &&
+           ring->mOldStatus != dMenu_Ring_c::STATUS_EXPLAIN_FORCE &&
+           ring->mOldStatus != dMenu_Ring_c::STATUS_EXPLAIN &&
+           ring->mpItemExplain->getStatus() == 0 &&
+           !ring->mPlayerIsWolf &&
+           item != dItemNo_NONE_e;
+}
+
+u8 vanilla_assign_target() {
+    if (mDoCPd_c::getTrigX(PAD_1)) {
+        return SELECT_ITEM_X;
+    }
+    if (mDoCPd_c::getTrigY(PAD_1)) {
+        return SELECT_ITEM_Y;
+    }
+    return dItemNo_NONE_e;
+}
+
+void capture_vanilla_assign(dMenu_Ring_c* ring) {
+    s_pendingAssign = {};
+    const u8 targetSlot = vanilla_assign_target();
+    if (!item_assign_allowed(ring) || targetSlot == dItemNo_NONE_e) {
+        return;
+    }
+
+    s_pendingAssign = {
+        .ring = ring,
+        .targetSlot = targetSlot,
+        .selectedSlot = ring->mItemSlots[ring->mCurrentSlot],
+        .oldTargetSlot = dComIfGs_getSelectItemIndex(targetSlot),
+        .oldTargetMix = dComIfGs_getMixItemIndex(targetSlot),
+        .active = true,
+    };
+}
+
+void rotate_pending_duplicate(dMenu_Ring_c* ring) {
+    if (!s_pendingAssign.active || s_pendingAssign.ring != ring) {
+        s_pendingAssign = {};
+        return;
+    }
+
+    std::array<u8, kExtendedSelectItemCount> slots = {
+        ring->field_0x6b4[SELECT_ITEM_X],
+        ring->field_0x6b4[SELECT_ITEM_Y],
+        dComIfGs_getSelectItemIndex(kZItemSlot),
+    };
+    std::array<u8, kExtendedSelectItemCount> mixes = {
+        ring->field_0x6b8[SELECT_ITEM_X],
+        ring->field_0x6b8[SELECT_ITEM_Y],
+        dComIfGs_getMixItemIndex(kZItemSlot),
+    };
+
+    const u8 targetSlot = s_pendingAssign.targetSlot;
+    const u8 selectedSlot = s_pendingAssign.selectedSlot;
+    u8 sourceSlot = dItemNo_NONE_e;
+    bool selectedWasMixItem = false;
+    for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
+        if (i == targetSlot) {
+            continue;
+        }
+        if (slots[i] == selectedSlot) {
+            sourceSlot = i;
+            break;
+        }
+        if (mixes[i] == selectedSlot) {
+            sourceSlot = i;
+            selectedWasMixItem = true;
+            break;
+        }
+    }
+
+    if (sourceSlot != dItemNo_NONE_e) {
+        if (s_pendingAssign.oldTargetSlot == selectedSlot) {
+            if (selectedWasMixItem) {
+                mixes[sourceSlot] = dItemNo_NONE_e;
+            } else {
+                slots[sourceSlot] = dItemNo_NONE_e;
+                mixes[sourceSlot] = dItemNo_NONE_e;
+            }
+        } else {
+            slots[sourceSlot] = s_pendingAssign.oldTargetSlot;
+            mixes[sourceSlot] =
+                s_pendingAssign.oldTargetSlot == dItemNo_NONE_e ? dItemNo_NONE_e :
+                                                                  s_pendingAssign.oldTargetMix;
+        }
+    }
+
+    for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
+        if (i == targetSlot || i == sourceSlot) {
+            continue;
+        }
+        if (slots[i] == selectedSlot) {
+            slots[i] = dItemNo_NONE_e;
+            mixes[i] = dItemNo_NONE_e;
+        } else if (mixes[i] == selectedSlot) {
+            mixes[i] = dItemNo_NONE_e;
+        }
+    }
+
+    store_select_slots(slots, mixes);
+    sync_ring_fields(ring);
+    ring->field_0x674[targetSlot] = 1;
+    if (sourceSlot != dItemNo_NONE_e) {
+        ring->field_0x674[sourceSlot] = 1;
+    }
+    s_pendingAssign = {};
+}
+
 HookAction before_get_select_item(ModContext*, void* args, void* retval, void*) {
     const int index = mods::arg<int>(args, 0);
     if (!z_item_slot_enabled() || index != kZItemSlot) {
@@ -218,18 +343,18 @@ void after_set_select_item(ModContext*, void* args, void*, void*) {
 
 HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
     auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
-    if (!z_item_slot_enabled() || ring == nullptr || !mDoCPd_c::getTrigZ(PAD_1)) {
+    if (!z_item_slot_enabled() || ring == nullptr) {
+        s_pendingAssign = {};
         return HOOK_CONTINUE;
     }
 
-    const u8 item = dComIfGs_getItem(ring->mItemSlots[ring->mCurrentSlot], false);
-    if (ring->mStatus == dMenu_Ring_c::STATUS_WAIT &&
-        ring->mOldStatus != dMenu_Ring_c::STATUS_EXPLAIN_FORCE &&
-        ring->mOldStatus != dMenu_Ring_c::STATUS_EXPLAIN &&
-        ring->mpItemExplain->getStatus() == 0 &&
-        !ring->mPlayerIsWolf &&
-        item != dItemNo_NONE_e)
-    {
+    if (!mDoCPd_c::getTrigZ(PAD_1)) {
+        capture_vanilla_assign(ring);
+        return HOOK_CONTINUE;
+    }
+
+    s_pendingAssign = {};
+    if (item_assign_allowed(ring)) {
         assign_current_item(ring, kZItemSlot);
         if (ring->mpItemExplain->getStatus() == 0) {
             ring->setStatus(dMenu_Ring_c::STATUS_WAIT);
@@ -240,6 +365,10 @@ HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) 
     }
 
     return HOOK_SKIP_ORIGINAL;
+}
+
+void after_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
+    rotate_pending_duplicate(mods::arg<dMenu_Ring_c*>(args, 0));
 }
 
 HookAction before_midna_talk_trigger(ModContext*, void* args, void* retval, void*) {
@@ -411,6 +540,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<RingSetActiveCursorHook>(svc_hook, before_ring_set_active_cursor);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<RingSetActiveCursorHook>(svc_hook, after_ring_set_active_cursor);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<MidnaTalkTriggerHook>(svc_hook, before_midna_talk_trigger);
