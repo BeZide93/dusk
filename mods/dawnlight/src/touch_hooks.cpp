@@ -24,7 +24,6 @@ bool s_midnaTouchTriggered = false;
 
 std::array<char, 64> s_zItemSource{};
 std::array<char, 64> s_midnaSource{};
-uint64_t s_midnaRevision = 0;
 
 bool valid_icon_item(u8 itemNo) {
     return itemNo != 0 && itemNo != dItemNo_NONE_e;
@@ -56,9 +55,7 @@ const char* z_item_icon_source(u8 itemNo) {
 }
 
 const char* midna_meter_source() {
-    std::snprintf(s_midnaSource.data(), s_midnaSource.size(), "meter://midna?slot=%llu",
-        static_cast<unsigned long long>(s_midnaRevision % 8u));
-    ++s_midnaRevision;
+    std::snprintf(s_midnaSource.data(), s_midnaSource.size(), "meter://midna");
     return s_midnaSource.data();
 }
 
@@ -87,7 +84,7 @@ int display_override(
         *out = {
             .struct_size = sizeof(TouchControlsDisplayOverride),
             .icon_source = source,
-            .icon_revision = s_midnaRevision,
+            .icon_revision = 1,
             .visible = 1,
             .show_icon = 1,
         };
