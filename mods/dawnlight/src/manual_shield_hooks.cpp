@@ -41,7 +41,7 @@ bool manual_shield_attack_trigger(daAlink_c* link) {
     return manual_shield_button(link) && link->itemTriggerCheck(daAlink_c::BTN_B);
 }
 
-bool shield_action_context(daAlink_c* link) {
+bool shield_action_base_context(daAlink_c* link) {
     return link != nullptr &&
            (dComIfGs_isEventBit(dSv_event_flag_c::F_0338) ||
                link->checkNoResetFlg3(daPy_py_c::FLG3_TRANING_SHIELD_ATTACK)) &&
@@ -50,7 +50,11 @@ bool shield_action_context(daAlink_c* link) {
            !link->checkModeFlg(0x70C52) &&
            daPy_py_c::checkShieldGet() &&
            !daAlink_c::checkNotBattleStage() &&
-           (link->mLinkAcch.ChkGroundHit() || link->checkMagneBootsOn()) &&
+           (link->mLinkAcch.ChkGroundHit() || link->checkMagneBootsOn());
+}
+
+bool shield_action_context(daAlink_c* link) {
+    return shield_action_base_context(link) &&
            dComIfGp_getRStatus() == BUTTON_STATUS_NONE;
 }
 
@@ -72,6 +76,9 @@ void after_set_shield_guard(ModContext*, void* args, void*, void*) {
 
     if (manual_shield_button(link)) {
         link->onNoResetFlg2(daPy_py_c::FLG2_UNK_8000000);
+        if (shield_action_base_context(link)) {
+            link->setBStatus(BUTTON_STATUS_SHIELD_ATTACK);
+        }
     } else if (!link->checkSmallUpperGuardAnime()) {
         link->offNoResetFlg2(daPy_py_c::FLG2_UNK_8000000);
     }
@@ -92,11 +99,16 @@ HookAction before_check_item_action(ModContext*, void* args, void* retval, void*
     if (!manual_shielding_enabled() || link == nullptr || retval == nullptr) {
         return HOOK_CONTINUE;
     }
-    if (!shield_action_context(link) || !manual_shield_attack_trigger(link)) {
+    if (!manual_shield_button(link) || !shield_action_base_context(link)) {
         return HOOK_CONTINUE;
     }
 
     link->setBStatus(BUTTON_STATUS_SHIELD_ATTACK);
+    if (!manual_shield_attack_trigger(link)) {
+        *static_cast<BOOL*>(retval) = FALSE;
+        return HOOK_SKIP_ORIGINAL;
+    }
+
     s_manualGuardAttackOwner = link;
     *static_cast<BOOL*>(retval) = link->procGuardAttackInit();
     s_manualGuardAttackOwner = nullptr;
