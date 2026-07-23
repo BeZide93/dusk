@@ -116,6 +116,11 @@ void control_event(ModContext*, int32_t control, int pressed, void*) {
     s_midnaTouchHeld = isPressed;
 }
 
+int32_t aim_input_mode(ModContext*, void*) {
+    return aim_movement_enabled() ? DUSK_MOD_TOUCH_AIM_INPUT_SPLIT_STICKS :
+                                   DUSK_MOD_TOUCH_AIM_INPUT_DEFAULT;
+}
+
 }  // namespace
 
 bool consume_touch_midna_trigger() {
@@ -132,6 +137,7 @@ ModResult install_touch_hooks(ModError* error) {
     desc.display_override = display_override;
     desc.pad_button = pad_button;
     desc.control_event = control_event;
+    desc.aim_input_mode = aim_input_mode;
 
     const ModResult result =
         svc_touch_controls->register_provider(mod_ctx, &desc, &s_touch_controls_provider);

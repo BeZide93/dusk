@@ -2,6 +2,7 @@
 
 // TODO(mod-services): Replace direct touch-control service callsites with narrower upstream hooks if accepted.
 #include "dusk/mods/svc/touch_controls.hpp"
+#include "mods/svc/touch_controls.h"
 
 #include <aurora/rmlui.hpp>
 
@@ -257,6 +258,16 @@ std::uint16_t touch_control_pad_button(Control control, std::uint16_t fallback) 
 
 void touch_control_event(Control control, bool pressed) noexcept {
     mods::svc::touch_controls::control_event(control, pressed);
+}
+
+TouchAimInputMode touch_aim_input_mode() noexcept {
+    switch (mods::svc::touch_controls::aim_input_mode()) {
+    case DUSK_MOD_TOUCH_AIM_INPUT_SPLIT_STICKS:
+        return TouchAimInputMode::SplitSticks;
+    case DUSK_MOD_TOUCH_AIM_INPUT_DEFAULT:
+    default:
+        return TouchAimInputMode::Default;
+    }
 }
 
 SDL_FingerID touch_event_id(const Rml::Event& event) noexcept {

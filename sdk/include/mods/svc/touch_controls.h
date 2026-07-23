@@ -7,7 +7,7 @@
 
 #define TOUCH_CONTROLS_SERVICE_ID "dev.twilitrealm.dusklight.touch_controls"
 #define TOUCH_CONTROLS_SERVICE_MAJOR 1u
-#define TOUCH_CONTROLS_SERVICE_MINOR 0u
+#define TOUCH_CONTROLS_SERVICE_MINOR 1u
 
 typedef uint64_t TouchControlsProviderHandle;
 
@@ -41,6 +41,11 @@ typedef enum DuskModTouchControlAnchor {
     DUSK_MOD_TOUCH_ANCHOR_BOTTOM_LEFT = 7,
     DUSK_MOD_TOUCH_ANCHOR_BOTTOM_RIGHT = 8,
 } DuskModTouchControlAnchor;
+
+typedef enum DuskModTouchAimInputMode {
+    DUSK_MOD_TOUCH_AIM_INPUT_DEFAULT = 0,
+    DUSK_MOD_TOUCH_AIM_INPUT_SPLIT_STICKS = 1,
+} DuskModTouchAimInputMode;
 
 typedef struct TouchControlsControlDesc {
     uint32_t struct_size;
@@ -80,6 +85,7 @@ typedef uint16_t (*TouchControlsPadButtonFn)(
     ModContext* ctx, int32_t control, uint16_t fallback_button, void* user_data);
 typedef void (*TouchControlsControlEventFn)(
     ModContext* ctx, int32_t control, int pressed, void* user_data);
+typedef int32_t (*TouchControlsAimInputModeFn)(ModContext* ctx, void* user_data);
 
 typedef struct TouchControlsProviderDesc {
     uint32_t struct_size;
@@ -90,10 +96,11 @@ typedef struct TouchControlsProviderDesc {
     TouchControlsPadButtonFn pad_button;
     TouchControlsControlEventFn control_event;
     void* user_data;
+    TouchControlsAimInputModeFn aim_input_mode;
 } TouchControlsProviderDesc;
 
 #define TOUCH_CONTROLS_PROVIDER_DESC_INIT \
-    {sizeof(TouchControlsProviderDesc), NULL, NULL, NULL, NULL, NULL, NULL, NULL}
+    {sizeof(TouchControlsProviderDesc), NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL}
 
 typedef struct TouchControlsService {
     ServiceHeader header;

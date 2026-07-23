@@ -6,6 +6,8 @@
 #include "mods/svc/touch_controls.h"
 
 #include <algorithm>
+#include <cstddef>
+#include <cstring>
 #include <exception>
 #include <string>
 #include <unordered_map>
@@ -24,6 +26,8 @@ struct Provider {
 std::unordered_map<const LoadedMod*, std::vector<Provider>> s_providers;
 uint64_t s_nextHandle = 1;
 ui::TouchLayoutControlInfo s_controlScratch;
+constexpr std::size_t kProviderDescBaseSize =
+    offsetof(TouchControlsProviderDesc, user_data) + sizeof(void*);
 
 void remove_mod(LoadedMod& mod) {
     s_providers.erase(&mod);
@@ -36,12 +40,16 @@ ModResult register_provider(ModContext* context, const TouchControlsProviderDesc
     }
 
     auto* mod = mod_from_context(context);
-    if (mod == nullptr || desc == nullptr || desc->struct_size < sizeof(TouchControlsProviderDesc)) {
+    if (mod == nullptr || desc == nullptr || desc->struct_size < kProviderDescBaseSize) {
         return MOD_INVALID_ARGUMENT;
     }
 
     const auto handle = s_nextHandle++;
-    s_providers[mod].push_back({.handle = handle, .desc = *desc});
+    Provider provider{.handle = handle};
+    std::memcpy(&provider.desc, desc,
+        std::min<std::size_t>(desc->struct_size, sizeof(TouchControlsProviderDesc)));
+    provider.desc.struct_size = sizeof(TouchControlsProviderDesc);
+    s_providers[mod].push_back(provider);
     if (outHandle != nullptr) {
         *outHandle = handle;
     }
@@ -238,6 +246,11 @@ void control_event(ui::Control control, bool pressed) noexcept {
     } catch (...) {
         fail_mod(*selection.mod, MOD_ERROR, "Unknown exception in touch-controls provider");
     }
+}
+
+int aim_input_mode() noexcept {
+    return call(&TouchControlsProviderDesc::aim_input_mode,
+        static_cast<int>(DUSK_MOD_TOUCH_AIM_INPUT_DEFAULT));
 }
 
 }  // namespace touch_controls

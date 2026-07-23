@@ -188,6 +188,11 @@ bool hawkeye_active() noexcept {
     return dCamera_c::isAimActive() && dComIfGp_checkPlayerStatus0(0, 0x200000);
 }
 
+bool split_stick_aim_input_active() noexcept {
+    return dCamera_c::isAimActive() &&
+           touch_aim_input_mode() == TouchAimInputMode::SplitSticks;
+}
+
 bool item_wheel_active() noexcept {
     return dMeter2Info_getWindowStatus() == 2;
 }
@@ -206,6 +211,9 @@ enum class StickOutput {
 };
 
 StickOutput stick_output_mode() noexcept {
+    if (split_stick_aim_input_active()) {
+        return StickOutput::MainStick;
+    }
     if (fishing_controls_active() || hawkeye_active()) {
         return StickOutput::CStick;
     }
@@ -785,7 +793,7 @@ void TouchControls::sync_touch_state() noexcept {
 
     sync_l_lock_state();
     const bool aimActive = dCamera_c::isAimActive();
-    if (aimActive && !hawkeye_active() && mMoveTouch.active) {
+    if (aimActive && !hawkeye_active() && !split_stick_aim_input_active() && mMoveTouch.active) {
         if (!mCameraTouch.active) {
             mCameraTouch = mMoveTouch;
             mCameraTouch.start = mMoveTouch.current;
@@ -1373,7 +1381,7 @@ void TouchControls::handle_touch_down(Rml::Event& event) noexcept {
     const bool inAnalogZone = position.y >= top && position.y <= bottom;
     const bool inLeftZone = position.x < width * kLeftZoneWidth;
     if (dCamera_c::isAimActive()) {
-        if (hawkeye_active() && inAnalogZone && inLeftZone) {
+        if ((split_stick_aim_input_active() || hawkeye_active()) && inAnalogZone && inLeftZone) {
             if (!mMoveTouch.active) {
                 mMoveTouch = {
                     .id = id,

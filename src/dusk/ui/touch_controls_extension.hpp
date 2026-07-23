@@ -23,6 +23,11 @@ struct TouchControlDisplayOverride {
     bool showIcon = false;
 };
 
+enum class TouchAimInputMode {
+    Default,
+    SplitSticks,
+};
+
 // TODO(mod-services): Keep this host adapter aligned with any upstream touch-control extension registry.
 std::string_view touch_controls_extra_rml_fragment() noexcept;
 std::size_t touch_layout_extra_control_count() noexcept;
@@ -30,5 +35,6 @@ const TouchLayoutControlInfo* touch_layout_extra_control_at(std::size_t index) n
 bool touch_control_display_override(Control control, TouchControlDisplayOverride* out) noexcept;
 std::uint16_t touch_control_pad_button(Control control, std::uint16_t fallback) noexcept;
 void touch_control_event(Control control, bool pressed) noexcept;
+TouchAimInputMode touch_aim_input_mode() noexcept;
 
 }  // namespace dusk::ui

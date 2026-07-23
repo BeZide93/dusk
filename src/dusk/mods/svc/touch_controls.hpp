@@ -13,5 +13,6 @@ const ui::TouchLayoutControlInfo* extra_control_at(std::size_t index) noexcept;
 bool display_override(ui::Control control, ui::TouchControlDisplayOverride* out) noexcept;
 std::uint16_t pad_button(ui::Control control, std::uint16_t fallback) noexcept;
 void control_event(ui::Control control, bool pressed) noexcept;
+int aim_input_mode() noexcept;
 
 }  // namespace dusk::mods::svc::touch_controls
