@@ -80,9 +80,8 @@ u8 s_zHudLastItem = dItemNo_NONE_e;
 J2DPicture* s_zItemNumTex[3] = {};
 dKantera_icon_c* s_zOilMeter = nullptr;
 daAlink_c* s_zHeavyBootsGuardLink = nullptr;
-u8 s_zHeavyBootsPendingFrames = 0;
-u8 s_zHeavyBootsGuardFrames = 0;
 bool s_zHeavyBootsManualToggleOff = false;
+bool s_zHeavyBootsWaitRelease = false;
 
 ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
     return reinterpret_cast<ResTIMG*>(s_zHudItemTexBuf[page][layer]);
@@ -756,36 +755,63 @@ bool z_heavy_boots_selected(daAlink_c* link) {
            link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(kZItemSlot));
 }
 
-void arm_z_heavy_boots_pending(daAlink_c* link) {
-    s_zHeavyBootsGuardLink = link;
-    s_zHeavyBootsPendingFrames = 90;
-    s_zHeavyBootsGuardFrames = 0;
+bool z_heavy_boots_held(daAlink_c* link) {
+    return link != nullptr && (link->mItemButton & daAlink_c::BTN_Z) != 0;
+}
+
+bool z_heavy_boots_input_locked(daAlink_c* link) {
+    return s_zHeavyBootsGuardLink == link && s_zHeavyBootsWaitRelease;
+}
+
+bool z_heavy_boots_forced_off_context(daAlink_c* link) {
+    if (link == nullptr) {
+        return true;
+    }
+
+    if (link->checkWolf() || link->checkEventRun() || link->checkDeadHP() ||
+        link->checkCanoeRide() || link->checkHorseRide() || link->checkBoardRide() ||
+        link->checkSpinnerRide())
+    {
+        return true;
+    }
+
+    switch (link->mProcID) {
+    case daAlink_c::PROC_DIVE_JUMP:
+    case daAlink_c::PROC_SMALL_JUMP:
+    case daAlink_c::PROC_CANOE_RIDE:
+    case daAlink_c::PROC_CANOE_JUMP_RIDE:
+    case daAlink_c::PROC_CANOE_GETOFF:
+    case daAlink_c::PROC_HORSE_RIDE:
+    case daAlink_c::PROC_HORSE_GETOFF:
+    case daAlink_c::PROC_BOARD_RIDE:
+    case daAlink_c::PROC_SPINNER_READY:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void clear_z_heavy_boots_input_lock() {
+    s_zHeavyBootsGuardLink = nullptr;
     s_zHeavyBootsManualToggleOff = false;
+    s_zHeavyBootsWaitRelease = false;
+}
+
+void lock_z_heavy_boots_input(daAlink_c* link, bool manualToggleOff) {
+    s_zHeavyBootsGuardLink = link;
+    s_zHeavyBootsManualToggleOff = manualToggleOff;
+    s_zHeavyBootsWaitRelease = true;
 }
 
 void tick_z_heavy_boots_guard(daAlink_c* link) {
-    if (s_zHeavyBootsPendingFrames != 0 &&
-        (s_zHeavyBootsGuardLink == link || s_zHeavyBootsGuardLink == nullptr))
+    if (s_zHeavyBootsGuardLink == nullptr) {
+        s_zHeavyBootsWaitRelease = false;
+    }
+
+    if (s_zHeavyBootsGuardLink == link && s_zHeavyBootsWaitRelease &&
+        !z_heavy_boots_held(link))
     {
-        --s_zHeavyBootsPendingFrames;
-    }
-
-    if (s_zHeavyBootsGuardFrames == 0) {
-        if (s_zHeavyBootsPendingFrames == 0) {
-            s_zHeavyBootsGuardLink = nullptr;
-            s_zHeavyBootsManualToggleOff = false;
-        }
-        return;
-    }
-
-    if (s_zHeavyBootsGuardLink == link || s_zHeavyBootsGuardLink == nullptr) {
-        --s_zHeavyBootsGuardFrames;
-        if (s_zHeavyBootsGuardFrames == 0) {
-            if (s_zHeavyBootsPendingFrames == 0) {
-                s_zHeavyBootsGuardLink = nullptr;
-                s_zHeavyBootsManualToggleOff = false;
-            }
-        }
+        clear_z_heavy_boots_input_lock();
     }
 }
 
@@ -1146,6 +1172,14 @@ HookAction before_check_item_change_from_button(ModContext*, void* args, void* r
             for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
                 const int procType = link->checkNewItemChange(i);
                 if (procType != 0 && link->itemTriggerCheck(1 << i)) {
+                    if (i == kZItemSlot &&
+                        link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(i)))
+                    {
+                        if (z_heavy_boots_input_locked(link)) {
+                            continue;
+                        }
+                        lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots());
+                    }
                     result = link->changeItemTriggerKeepProc(i, procType);
                     *static_cast<BOOL*>(retval) = result;
                     return HOOK_SKIP_ORIGINAL;
@@ -1212,17 +1246,11 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
 
         if (itemNo == dItemNo_HVY_BOOTS_e) {
             if (i == kZItemSlot) {
-                link->mSelectItemId = i;
-                if (!link->checkEquipHeavyBoots()) {
-                    arm_z_heavy_boots_pending(link);
-                } else if (s_zHeavyBootsGuardLink != link ||
-                           (s_zHeavyBootsPendingFrames == 0 && s_zHeavyBootsGuardFrames == 0))
-                {
-                    s_zHeavyBootsGuardLink = link;
-                    s_zHeavyBootsPendingFrames = 0;
-                    s_zHeavyBootsGuardFrames = 0;
-                    s_zHeavyBootsManualToggleOff = true;
+                if (z_heavy_boots_input_locked(link)) {
+                    *static_cast<int*>(retval) = 0;
+                    return HOOK_SKIP_ORIGINAL;
                 }
+                lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots());
             }
         } else {
             link->mSelectItemId = i;
@@ -1261,34 +1289,22 @@ HookAction before_set_heavy_boots(ModContext*, void* args, void* retval, void*) 
     }
 
     if (enable != 0 && s_zHeavyBootsGuardLink == link && s_zHeavyBootsManualToggleOff) {
-        s_zHeavyBootsGuardLink = nullptr;
-        s_zHeavyBootsPendingFrames = 0;
-        s_zHeavyBootsGuardFrames = 0;
-        s_zHeavyBootsManualToggleOff = false;
+        clear_z_heavy_boots_input_lock();
         return HOOK_CONTINUE;
     }
 
-    if (s_zHeavyBootsGuardLink != link || s_zHeavyBootsGuardFrames == 0) {
+    if (enable != 0 && z_heavy_boots_input_locked(link)) {
+        *static_cast<int*>(retval) = 0;
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    if (enable == 0 && z_heavy_boots_forced_off_context(link)) {
+        clear_z_heavy_boots_input_lock();
         return HOOK_CONTINUE;
     }
 
     *static_cast<int*>(retval) = 0;
     return HOOK_SKIP_ORIGINAL;
-}
-
-void after_set_heavy_boots(ModContext*, void* args, void*, void*) {
-    auto* link = mods::arg<daAlink_c*>(args, 0);
-    const int enable = mods::arg<int>(args, 1);
-    if (!z_item_slot_enabled() || link == nullptr || enable == 0 ||
-        s_zHeavyBootsGuardLink != link || s_zHeavyBootsPendingFrames == 0 ||
-        !link->checkEquipHeavyBoots() || !z_heavy_boots_selected(link))
-    {
-        return;
-    }
-
-    s_zHeavyBootsPendingFrames = 0;
-    s_zHeavyBootsGuardFrames = 45;
-    s_zHeavyBootsManualToggleOff = false;
 }
 
 void after_player_execute(ModContext*, void* args, void*, void*) {
@@ -1360,9 +1376,6 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<SetHeavyBootsHook>(svc_hook, before_set_heavy_boots);
-    }
-    if (result == MOD_OK) {
-        result = mods::hook_add_post<SetHeavyBootsHook>(svc_hook, after_set_heavy_boots);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
