@@ -80,6 +80,7 @@ u8 s_zHudLastItem = dItemNo_NONE_e;
 J2DPicture* s_zItemNumTex[3] = {};
 dKantera_icon_c* s_zOilMeter = nullptr;
 daAlink_c* s_zHeavyBootsGuardLink = nullptr;
+u8 s_zHeavyBootsPendingFrames = 0;
 u8 s_zHeavyBootsGuardFrames = 0;
 
 ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
@@ -749,20 +750,37 @@ bool item_needs_z_valid_button(int itemNo) {
     return itemNo == dItemNo_HVY_BOOTS_e || itemNo == dItemNo_SPINNER_e;
 }
 
-void arm_z_heavy_boots_guard(daAlink_c* link) {
+bool z_heavy_boots_selected(daAlink_c* link) {
+    return link != nullptr &&
+           link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(kZItemSlot));
+}
+
+void arm_z_heavy_boots_pending(daAlink_c* link) {
     s_zHeavyBootsGuardLink = link;
-    s_zHeavyBootsGuardFrames = 4;
+    s_zHeavyBootsPendingFrames = 90;
+    s_zHeavyBootsGuardFrames = 0;
 }
 
 void tick_z_heavy_boots_guard(daAlink_c* link) {
+    if (s_zHeavyBootsPendingFrames != 0 &&
+        (s_zHeavyBootsGuardLink == link || s_zHeavyBootsGuardLink == nullptr))
+    {
+        --s_zHeavyBootsPendingFrames;
+    }
+
     if (s_zHeavyBootsGuardFrames == 0) {
+        if (s_zHeavyBootsPendingFrames == 0) {
+            s_zHeavyBootsGuardLink = nullptr;
+        }
         return;
     }
 
     if (s_zHeavyBootsGuardLink == link || s_zHeavyBootsGuardLink == nullptr) {
         --s_zHeavyBootsGuardFrames;
         if (s_zHeavyBootsGuardFrames == 0) {
-            s_zHeavyBootsGuardLink = nullptr;
+            if (s_zHeavyBootsPendingFrames == 0) {
+                s_zHeavyBootsGuardLink = nullptr;
+            }
         }
     }
 }
@@ -1189,8 +1207,11 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
         }
 
         if (itemNo == dItemNo_HVY_BOOTS_e) {
-            if (i == kZItemSlot && !link->checkEquipHeavyBoots()) {
-                arm_z_heavy_boots_guard(link);
+            if (i == kZItemSlot) {
+                link->mSelectItemId = i;
+                if (!link->checkEquipHeavyBoots()) {
+                    arm_z_heavy_boots_pending(link);
+                }
             }
         } else {
             link->mSelectItemId = i;
@@ -1224,13 +1245,27 @@ HookAction before_set_heavy_boots(ModContext*, void* args, void* retval, void*) 
     const int enable = mods::arg<int>(args, 1);
     if (!z_item_slot_enabled() || link == nullptr || enable != 0 || s_zHeavyBootsGuardFrames == 0 ||
         s_zHeavyBootsGuardLink != link || !link->checkEquipHeavyBoots() ||
-        !link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(kZItemSlot)))
+        link->checkNotHeavyBootsStage() || !z_heavy_boots_selected(link))
     {
         return HOOK_CONTINUE;
     }
 
     *static_cast<int*>(retval) = 0;
     return HOOK_SKIP_ORIGINAL;
+}
+
+void after_set_heavy_boots(ModContext*, void* args, void*, void*) {
+    auto* link = mods::arg<daAlink_c*>(args, 0);
+    const int enable = mods::arg<int>(args, 1);
+    if (!z_item_slot_enabled() || link == nullptr || enable == 0 ||
+        s_zHeavyBootsGuardLink != link || s_zHeavyBootsPendingFrames == 0 ||
+        !link->checkEquipHeavyBoots() || !z_heavy_boots_selected(link))
+    {
+        return;
+    }
+
+    s_zHeavyBootsPendingFrames = 0;
+    s_zHeavyBootsGuardFrames = 24;
 }
 
 void after_player_execute(ModContext*, void* args, void*, void*) {
@@ -1302,6 +1337,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<SetHeavyBootsHook>(svc_hook, before_set_heavy_boots);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<SetHeavyBootsHook>(svc_hook, after_set_heavy_boots);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
