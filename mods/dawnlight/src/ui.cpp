@@ -128,6 +128,25 @@ ModResult build_controls_tab(
     {
         return MOD_ERROR;
     }
+    if (add_section(ctx, left, "HUD") != MOD_OK) return MOD_ERROR;
+    if (add_toggle(ctx, left, "Wii-U HUD", wii_u_hud_config_var(),
+            "Applies Dawnlight's fixed Wii U-style HUD layout preset.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_toggle(ctx, left, "Round X/Y Buttons", round_xy_buttons_config_var(),
+            "Draws X and Y with Dawnlight's round HUD button style.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_toggle(ctx, left, "HUD Backing Texture", hud_backing_texture_config_var(),
+            "Shows or hides the decorative backing behind the A/B/X/Y HUD buttons.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
     if (add_text(ctx, left,
             "Wii U controller style remains outside this hook-only package. The Z item slot uses "
             "the existing Z input and can later be remapped to a dedicated Wii U layout button "
@@ -183,8 +202,8 @@ ModResult build_deferred_tab(
         return MOD_ERROR;
     }
     if (add_text(ctx, left,
-            "HUD layout import/export is not enabled here because upstream does not yet expose a "
-            "HUD layout or meter-pane service compatible with hud_layout_settings.json.")
+            "Full HUD layout import/export is not enabled here because upstream does not yet expose "
+            "a HUD layout or meter-pane service compatible with hud_layout_settings.json.")
         != MOD_OK)
     {
         return MOD_ERROR;

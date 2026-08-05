@@ -21,6 +21,7 @@
 #include "JSystem/J2DGraph/J2DPicture.h"
 #define private public
 #include "d/d_menu_ring.h"
+#include "d/d_meter_map.h"
 #include "d/d_meter2_draw.h"
 #undef private
 #include "m_Do/m_Do_controller_pad.h"
@@ -30,6 +31,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <cstddef>
 #include <cstring>
 
 namespace dawnlight {
@@ -49,7 +52,10 @@ DEFINE_HOOK(&dMenu_Ring_c::setActiveCursor, RingSetActiveCursorHook);
 DEFINE_HOOK(&dMenu_Ring_c::isMixItemOn, RingIsMixItemOnHook);
 DEFINE_HOOK(&dMenu_Ring_c::isMixItemOff, RingIsMixItemOffHook);
 DEFINE_HOOK(&dMeter2Draw_c::draw, MeterDrawHook);
+DEFINE_HOOK(&dMeter2Draw_c::drawKantera, MeterDrawKanteraHook);
+DEFINE_HOOK(&dMeter2Draw_c::drawOxygen, MeterDrawOxygenHook);
 DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
+DEFINE_HOOK(&dMeterMap_c::draw, MeterMapDrawHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&mDoCPd_c::read, PadReadHook);
 DEFINE_HOOK(&daAlink_c::checkItemButtonChange, CheckItemButtonChangeHook);
@@ -88,6 +94,72 @@ bool s_zHeavyBootsWaitRelease = false;
 u8 s_zHeavyBootsGuardFrames = 0;
 bool s_dpadLeftHeld = false;
 bool s_dpadLeftTrig = false;
+
+struct HudPaneTransformState {
+    J2DPane* pane = nullptr;
+    f32 offsetX = 0.0f;
+    f32 offsetY = 0.0f;
+    f32 scale = 1.0f;
+    f32 appliedX = 0.0f;
+    f32 appliedY = 0.0f;
+    f32 appliedScaleX = 1.0f;
+    f32 appliedScaleY = 1.0f;
+    bool active = false;
+};
+
+enum class HudPaneSlot : std::size_t {
+    ButtonA,
+    TextA,
+    ButtonB,
+    ItemB,
+    LightB,
+    TextB,
+    ButtonX,
+    ItemX,
+    LightX,
+    TextX,
+    ButtonY,
+    ItemY,
+    LightY,
+    TextY,
+    ButtonZ,
+    TextZ,
+    Backing,
+    DPad,
+    Hearts,
+    Rupee0,
+    Rupee1,
+    Rupee2,
+    Count,
+};
+
+std::array<HudPaneTransformState, static_cast<std::size_t>(HudPaneSlot::Count)>
+    s_wiiUHudPaneTransforms;
+
+struct MinimapTransformState {
+    dMeterMap_c* map = nullptr;
+    f32 drawPosX = 0.0f;
+    f32 drawPosY = 0.0f;
+    f32 sizeW = 0.0f;
+    f32 sizeH = 0.0f;
+    bool active = false;
+};
+
+MinimapTransformState s_wiiUMinimapTransform;
+
+struct RoundPictureState {
+    J2DPicture* picture = nullptr;
+    ResTIMG const* textures[2] = {};
+    u8 textureCount = 0;
+    f32 left = 0.0f;
+    f32 top = 0.0f;
+    f32 width = 0.0f;
+    f32 height = 0.0f;
+    bool active = false;
+};
+
+std::array<RoundPictureState, 32> s_roundPictureStates;
+dMeter2Draw_c* s_roundHudMeter = nullptr;
 
 bool consume_touch_midna_trigger() {
     return false;
@@ -180,6 +252,377 @@ void show_pane_parents(J2DPane* pane) {
     for (J2DPane* parent = pane; parent != nullptr; parent = parent->getParentPane()) {
         parent->show();
     }
+}
+
+J2DPicture* as_picture(J2DPane* pane) {
+    if (pane == nullptr || pane->getTypeID() != 18) {
+        return nullptr;
+    }
+
+    return static_cast<J2DPicture*>(pane);
+}
+
+J2DPicture* first_picture_pane(J2DPane* pane) {
+    if (J2DPicture* picture = as_picture(pane)) {
+        return picture;
+    }
+
+    if (pane == nullptr) {
+        return nullptr;
+    }
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
+         child = child->getNextChildPane())
+    {
+        if (J2DPicture* picture = first_picture_pane(child)) {
+            return picture;
+        }
+    }
+
+    return nullptr;
+}
+
+ResTIMG const* round_hud_button_texture(CPaneMgr* roundSource) {
+    auto* archive = dComIfGp_getMain2DArchive();
+    if (archive != nullptr) {
+        auto* texture = static_cast<ResTIMG const*>(
+            archive->getResource('TIMG', "tt_zelda_button_ab_maru.bti"));
+        if (texture != nullptr) {
+            return texture;
+        }
+    }
+
+    if (roundSource == nullptr) {
+        return nullptr;
+    }
+
+    J2DPicture* source = first_picture_pane(roundSource->getPanePtr());
+    if (source == nullptr || source->getTexture(0) == nullptr) {
+        return nullptr;
+    }
+
+    return source->getTexture(0)->getTexInfo();
+}
+
+void resize_pane_around_center(J2DPane* pane, const f32 width, const f32 height) {
+    JGeometry::TBox2<f32> bounds = pane->getBounds();
+    const f32 centerX = bounds.i.x + bounds.getWidth() * 0.5f;
+    const f32 centerY = bounds.i.y + bounds.getHeight() * 0.5f;
+
+    pane->resize(width, height);
+    pane->move(centerX - width * 0.5f, centerY - height * 0.5f);
+}
+
+void make_hud_button_picture_square(J2DPicture* picture) {
+    const f32 width = picture->getWidth();
+    const f32 height = picture->getHeight();
+    if (width <= 0.0f || height <= 0.0f || std::fabs(width - height) < 0.01f) {
+        return;
+    }
+
+    const f32 size = width < height ? width : height;
+    resize_pane_around_center(picture, size, size);
+}
+
+RoundPictureState* round_picture_state(J2DPicture* picture) {
+    for (auto& state : s_roundPictureStates) {
+        if (state.active && state.picture == picture) {
+            return &state;
+        }
+    }
+
+    for (auto& state : s_roundPictureStates) {
+        if (!state.active) {
+            return &state;
+        }
+    }
+
+    return nullptr;
+}
+
+void capture_round_picture_state(RoundPictureState& state, J2DPicture* picture) {
+    if (state.active) {
+        return;
+    }
+
+    const JGeometry::TBox2<f32> bounds = picture->getBounds();
+    state.picture = picture;
+    state.textureCount = std::min<u8>(picture->getTextureCount(), 2);
+    for (u8 i = 0; i < state.textureCount; ++i) {
+        auto* texture = picture->getTexture(i);
+        state.textures[i] = texture != nullptr ? texture->getTexInfo() : nullptr;
+    }
+    state.left = bounds.i.x;
+    state.top = bounds.i.y;
+    state.width = bounds.getWidth();
+    state.height = bounds.getHeight();
+    state.active = true;
+}
+
+void restore_round_picture_state(RoundPictureState& state) {
+    if (state.active && state.picture != nullptr) {
+        for (u8 i = 0; i < state.textureCount; ++i) {
+            if (state.textures[i] != nullptr) {
+                state.picture->changeTexture(state.textures[i], i);
+            }
+        }
+        if (state.picture->getTexture(0) != nullptr) {
+            state.picture->setTexCoord(state.picture->getTexture(0), BIND15, MIRROR0, false);
+        }
+        state.picture->resize(state.width, state.height);
+        state.picture->move(state.left, state.top);
+    }
+    state = {};
+}
+
+void restore_round_button_pictures() {
+    for (auto& state : s_roundPictureStates) {
+        restore_round_picture_state(state);
+    }
+}
+
+bool apply_round_hud_picture(J2DPicture* picture, ResTIMG const* texture) {
+    if (picture == nullptr || texture == nullptr) {
+        return false;
+    }
+
+    RoundPictureState* state = round_picture_state(picture);
+    if (state == nullptr) {
+        return false;
+    }
+    capture_round_picture_state(*state, picture);
+
+    const u8 textureCount = picture->getTextureCount();
+    for (u8 i = 0; i < textureCount; ++i) {
+        picture->changeTexture(texture, i);
+    }
+    if (picture->getTexture(0) != nullptr) {
+        picture->setTexCoord(picture->getTexture(0), BIND15, MIRROR0, false);
+    }
+    make_hud_button_picture_square(picture);
+    return true;
+}
+
+void apply_round_hud_button_base(CPaneMgr* button, ResTIMG const* texture) {
+    if (button == nullptr) {
+        return;
+    }
+
+    apply_round_hud_picture(first_picture_pane(button->getPanePtr()), texture);
+}
+
+void apply_round_hud_button_layers(J2DPane* pane, ResTIMG const* texture) {
+    if (pane == nullptr || texture == nullptr) {
+        return;
+    }
+
+    apply_round_hud_picture(as_picture(pane), texture);
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
+         child = child->getNextChildPane())
+    {
+        apply_round_hud_button_layers(child, texture);
+    }
+}
+
+void apply_round_xy_buttons(dMeter2Draw_c* meter) {
+    if (meter == nullptr) {
+        restore_round_button_pictures();
+        s_roundHudMeter = nullptr;
+        return;
+    }
+
+    if (s_roundHudMeter != meter) {
+        s_roundPictureStates = {};
+        s_roundHudMeter = meter;
+    }
+
+    if (!round_xy_buttons_enabled()) {
+        restore_round_button_pictures();
+        return;
+    }
+
+    ResTIMG const* texture = round_hud_button_texture(meter->mpButtonA);
+    if (texture == nullptr) {
+        return;
+    }
+
+    apply_round_hud_button_base(meter->mpButtonXY[0], texture);
+    apply_round_hud_button_base(meter->mpButtonXY[1], texture);
+    if (meter->mpLightXY[0] != nullptr) {
+        apply_round_hud_button_layers(meter->mpLightXY[0]->getPanePtr(), texture);
+    }
+    if (meter->mpLightXY[1] != nullptr) {
+        apply_round_hud_button_layers(meter->mpLightXY[1]->getPanePtr(), texture);
+    }
+}
+
+bool nearly_equal(const f32 lhs, const f32 rhs) {
+    return std::fabs(lhs - rhs) < 0.01f;
+}
+
+HudPaneTransformState& hud_pane_state(const HudPaneSlot slot) {
+    return s_wiiUHudPaneTransforms[static_cast<std::size_t>(slot)];
+}
+
+J2DPane* pane_ptr(CPaneMgrAlpha* pane) {
+    return pane != nullptr ? pane->getPanePtr() : nullptr;
+}
+
+void apply_hud_pane_transform(HudPaneTransformState& state, J2DPane* pane, const bool enabled,
+    const f32 offsetX, const f32 offsetY, const f32 scale) {
+    if (pane == nullptr || scale <= 0.0f) {
+        state = {};
+        return;
+    }
+
+    if (state.active && state.pane == pane &&
+        nearly_equal(pane->getTranslateX(), state.appliedX) &&
+        nearly_equal(pane->getTranslateY(), state.appliedY) &&
+        nearly_equal(pane->getScaleX(), state.appliedScaleX) &&
+        nearly_equal(pane->getScaleY(), state.appliedScaleY))
+    {
+        const f32 appliedScale = state.scale > 0.0f ? state.scale : 1.0f;
+        pane->translate(pane->getTranslateX() - state.offsetX,
+            pane->getTranslateY() - state.offsetY);
+        pane->scale(pane->getScaleX() / appliedScale, pane->getScaleY() / appliedScale);
+    }
+
+    if (!enabled) {
+        state = {};
+        return;
+    }
+
+    const f32 baseX = pane->getTranslateX();
+    const f32 baseY = pane->getTranslateY();
+    const f32 baseScaleX = pane->getScaleX();
+    const f32 baseScaleY = pane->getScaleY();
+    pane->translate(baseX + offsetX, baseY + offsetY);
+    pane->scale(baseScaleX * scale, baseScaleY * scale);
+
+    state = {
+        .pane = pane,
+        .offsetX = offsetX,
+        .offsetY = offsetY,
+        .scale = scale,
+        .appliedX = pane->getTranslateX(),
+        .appliedY = pane->getTranslateY(),
+        .appliedScaleX = pane->getScaleX(),
+        .appliedScaleY = pane->getScaleY(),
+        .active = true,
+    };
+}
+
+void apply_hud_pane_transform(const HudPaneSlot slot, CPaneMgr* pane, const bool enabled,
+    const f32 offsetX, const f32 offsetY, const f32 scale) {
+    apply_hud_pane_transform(hud_pane_state(slot), pane_ptr(pane), enabled, offsetX, offsetY,
+        scale);
+}
+
+void apply_hud_pane_transform(const HudPaneSlot slot, CPaneMgrAlpha* pane, const bool enabled,
+    const f32 offsetX, const f32 offsetY, const f32 scale) {
+    apply_hud_pane_transform(hud_pane_state(slot), pane_ptr(pane), enabled, offsetX, offsetY,
+        scale);
+}
+
+void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
+    if (meter == nullptr) {
+        return;
+    }
+
+    const bool enabled = wii_u_hud_enabled();
+
+    apply_hud_pane_transform(HudPaneSlot::ButtonA, meter->mpButtonA, enabled, -135.0f,
+        25.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::TextA, meter->mpTextA, enabled, -135.0f, 25.0f,
+        1.0f);
+
+    apply_hud_pane_transform(HudPaneSlot::ButtonB, meter->mpButtonB, enabled, -80.0f,
+        -27.0f, 1.5f);
+    apply_hud_pane_transform(HudPaneSlot::ItemB, meter->mpItemB, enabled, -50.0f,
+        -27.0f, 0.75f);
+    apply_hud_pane_transform(HudPaneSlot::LightB, meter->mpLightB, enabled, -50.0f,
+        -27.0f, 0.75f);
+    apply_hud_pane_transform(HudPaneSlot::TextB, meter->mpTextB, enabled, -70.0f, -27.0f,
+        0.75f);
+
+    apply_hud_pane_transform(HudPaneSlot::ButtonX, meter->mpButtonXY[0], enabled, -202.0f,
+        -1.0f, 1.7f);
+    apply_hud_pane_transform(HudPaneSlot::ItemX, meter->mpItemXY[0], enabled, -202.0f,
+        -1.0f, 0.85f);
+    apply_hud_pane_transform(HudPaneSlot::LightX, meter->mpLightXY[0], enabled, -202.0f,
+        -1.0f, 0.85f);
+    apply_hud_pane_transform(HudPaneSlot::TextX, meter->mpTextXY[0], enabled, -217.0f,
+        -16.0f, 0.85f);
+
+    apply_hud_pane_transform(HudPaneSlot::ButtonY, meter->mpButtonXY[1], enabled, -122.0f,
+        0.0f, 1.7f);
+    apply_hud_pane_transform(HudPaneSlot::ItemY, meter->mpItemXY[1], enabled, -122.0f,
+        0.0f, 0.85f);
+    apply_hud_pane_transform(HudPaneSlot::LightY, meter->mpLightXY[1], enabled, -122.0f,
+        0.0f, 0.85f);
+    apply_hud_pane_transform(HudPaneSlot::TextY, meter->mpTextXY[1], enabled, -107.0f,
+        0.0f, 0.85f);
+
+    apply_hud_pane_transform(HudPaneSlot::ButtonZ, meter->mpButtonXY[2], enabled, -100.0f,
+        0.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::TextZ, meter->mpTextXY[2], enabled, -100.0f,
+        0.0f, 1.0f);
+
+    apply_hud_pane_transform(HudPaneSlot::Backing, meter->mpUzu, enabled, -100.0f, 0.0f,
+        1.0f);
+    apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent, enabled, 0.0f,
+        -15.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::Hearts, meter->mpLifeParent, enabled, 100.0f,
+        0.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::Rupee0, meter->mpRupeeParent[0], enabled, 40.0f,
+        0.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::Rupee1, meter->mpRupeeParent[1], enabled, 40.0f,
+        0.0f, 1.0f);
+    apply_hud_pane_transform(HudPaneSlot::Rupee2, meter->mpRupeeParent[2], enabled, 40.0f,
+        0.0f, 1.0f);
+}
+
+void apply_hud_backing_visibility(dMeter2Draw_c* meter) {
+    if (meter == nullptr || meter->mpUzu == nullptr || hud_backing_texture_enabled()) {
+        return;
+    }
+
+    meter->mpUzu->setAlpha(0);
+    meter->mpUzu->setAlphaRate(0.0f);
+}
+
+void apply_wii_u_minimap_layout(dMeterMap_c* map) {
+    if (!wii_u_hud_enabled() || map == nullptr) {
+        return;
+    }
+
+    s_wiiUMinimapTransform = {
+        .map = map,
+        .drawPosX = map->mDrawPosX,
+        .drawPosY = map->mDrawPosY,
+        .sizeW = map->mSizeW,
+        .sizeH = map->mSizeH,
+        .active = true,
+    };
+
+    map->mDrawPosX += 730.0f;
+    map->mDrawPosY += -190.0f;
+    map->mSizeW *= 0.7f;
+    map->mSizeH *= 0.7f;
+}
+
+void restore_wii_u_minimap_layout(dMeterMap_c* map) {
+    if (!s_wiiUMinimapTransform.active || s_wiiUMinimapTransform.map != map) {
+        s_wiiUMinimapTransform = {};
+        return;
+    }
+
+    map->mDrawPosX = s_wiiUMinimapTransform.drawPosX;
+    map->mDrawPosY = s_wiiUMinimapTransform.drawPosY;
+    map->mSizeW = s_wiiUMinimapTransform.sizeW;
+    map->mSizeH = s_wiiUMinimapTransform.sizeH;
+    s_wiiUMinimapTransform = {};
 }
 
 J2DPane* item_wheel_z_anchor(J2DScreen* screen) {
@@ -1238,7 +1681,11 @@ void after_ring_draw(ModContext*, void* args, void*, void*) {
 }
 
 HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
-    update_z_hud_item(mods::arg<dMeter2Draw_c*>(args, 0));
+    auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
+    update_z_hud_item(meter);
+    apply_round_xy_buttons(meter);
+    apply_wii_u_hud_layout(meter);
+    apply_hud_backing_visibility(meter);
     return HOOK_CONTINUE;
 }
 
@@ -1246,8 +1693,31 @@ void after_meter_draw(ModContext*, void* args, void*, void*) {
     draw_z_hud_item_meters(mods::arg<dMeter2Draw_c*>(args, 0));
 }
 
+HookAction before_meter_draw_kantera(ModContext*, void* args, void*, void*) {
+    if (wii_u_hud_enabled()) {
+        mods::arg_ref<f32>(args, 3) += 100.0f;
+    }
+    return HOOK_CONTINUE;
+}
+
+HookAction before_meter_draw_oxygen(ModContext*, void* args, void*, void*) {
+    if (wii_u_hud_enabled()) {
+        mods::arg_ref<f32>(args, 3) += 100.0f;
+    }
+    return HOOK_CONTINUE;
+}
+
 void after_meter_midna_alpha(ModContext*, void* args, void*, void*) {
     move_midna_hud_to_dpad(mods::arg<dMeter2Draw_c*>(args, 0));
+}
+
+HookAction before_meter_map_draw(ModContext*, void* args, void*, void*) {
+    apply_wii_u_minimap_layout(mods::arg<dMeterMap_c*>(args, 0));
+    return HOOK_CONTINUE;
+}
+
+void after_meter_map_draw(ModContext*, void* args, void*, void*) {
+    restore_wii_u_minimap_layout(mods::arg<dMeterMap_c*>(args, 0));
 }
 
 HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
@@ -1567,7 +2037,19 @@ ModResult install_item_slot_hooks(ModError* error) {
         result = mods::hook_add_post<MeterDrawHook>(svc_hook, after_meter_draw);
     }
     if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterDrawKanteraHook>(svc_hook, before_meter_draw_kantera);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterDrawOxygenHook>(svc_hook, before_meter_draw_oxygen);
+    }
+    if (result == MOD_OK) {
         result = mods::hook_add_post<MeterMidnaAlphaHook>(svc_hook, after_meter_midna_alpha);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterMapDrawHook>(svc_hook, before_meter_map_draw);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterMapDrawHook>(svc_hook, after_meter_map_draw);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<RingSetActiveCursorHook>(svc_hook, before_ring_set_active_cursor);

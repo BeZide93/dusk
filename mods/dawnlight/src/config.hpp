@@ -21,6 +21,9 @@ bool aim_movement_enabled();
 bool manual_shielding_enabled();
 bool r_jump_enabled();
 bool z_item_slot_enabled();
+bool wii_u_hud_enabled();
+bool round_xy_buttons_enabled();
+bool hud_backing_texture_enabled();
 
 ConfigVarHandle health_scale_config_var();
 ConfigVarHandle automatic_health_scale_config_var();
@@ -31,5 +34,8 @@ ConfigVarHandle aim_movement_config_var();
 ConfigVarHandle manual_shielding_config_var();
 ConfigVarHandle r_jump_config_var();
 ConfigVarHandle z_item_slot_config_var();
+ConfigVarHandle wii_u_hud_config_var();
+ConfigVarHandle round_xy_buttons_config_var();
+ConfigVarHandle hud_backing_texture_config_var();
 
 }  // namespace dawnlight
