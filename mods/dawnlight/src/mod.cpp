@@ -6,14 +6,12 @@
 #include "mods/svc/config.h"
 #include "mods/svc/hook.h"
 #include "mods/svc/log.h"
-#include "mods/svc/save.h"
 #include "mods/svc/ui.h"
 
 DEFINE_MOD();
 IMPORT_SERVICE(ConfigService, svc_config);
 IMPORT_SERVICE(HookService, svc_hook);
 IMPORT_SERVICE(LogService, svc_log);
-IMPORT_SERVICE(SaveService, svc_save);
 IMPORT_SERVICE(UiService, svc_ui);
 
 namespace dawnlight {
