@@ -11,11 +11,18 @@ enum class AimMode : int {
     Cinema = 2,
 };
 
+enum class NewSaveMode : int {
+    Vanilla = 0,
+    IntroSkip = 1,
+    BossRush = 2,
+};
+
 ModResult register_config(ModError* error);
 int health_scale_percent();
 bool automatic_ngplus_health_scaling();
 bool save_compatibility_enabled();
 bool item_integrity_fixes_enabled();
+NewSaveMode new_save_mode();
 AimMode aim_mode();
 bool aim_movement_enabled();
 bool manual_shielding_enabled();
@@ -29,6 +36,7 @@ ConfigVarHandle health_scale_config_var();
 ConfigVarHandle automatic_health_scale_config_var();
 ConfigVarHandle save_compatibility_config_var();
 ConfigVarHandle item_integrity_config_var();
+ConfigVarHandle new_save_mode_config_var();
 ConfigVarHandle aim_mode_config_var();
 ConfigVarHandle aim_movement_config_var();
 ConfigVarHandle manual_shielding_config_var();

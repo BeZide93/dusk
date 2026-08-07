@@ -14,6 +14,7 @@ ConfigVarHandle s_healthScale = 0;
 ConfigVarHandle s_automaticHealthScale = 0;
 ConfigVarHandle s_saveCompatibility = 0;
 ConfigVarHandle s_itemIntegrity = 0;
+ConfigVarHandle s_newSaveMode = 0;
 ConfigVarHandle s_aimMode = 0;
 ConfigVarHandle s_aimMovement = 0;
 ConfigVarHandle s_manualShielding = 0;
@@ -55,6 +56,7 @@ ModResult register_config(ModError* error) {
         register_bool("ngplus-auto-hp-scaling", true, s_automaticHealthScale) != MOD_OK ||
         register_bool("save-compatibility", true, s_saveCompatibility) != MOD_OK ||
         register_bool("item-integrity-fixes", true, s_itemIntegrity) != MOD_OK ||
+        register_int("new-save-mode", 0, s_newSaveMode) != MOD_OK ||
         register_int("aim-mode", 2, s_aimMode) != MOD_OK ||
         register_bool("aim-movement", true, s_aimMovement) != MOD_OK ||
         register_bool("manual-shielding", true, s_manualShielding) != MOD_OK ||
@@ -98,6 +100,14 @@ bool save_compatibility_enabled() {
 
 bool item_integrity_fixes_enabled() {
     return get_bool(s_itemIntegrity, true);
+}
+
+NewSaveMode new_save_mode() {
+    int64_t value = static_cast<int64_t>(NewSaveMode::Vanilla);
+    if (s_newSaveMode != 0) {
+        svc_config->get_int(mod_ctx, s_newSaveMode, &value);
+    }
+    return static_cast<NewSaveMode>(std::clamp<int64_t>(value, 0, 2));
 }
 
 AimMode aim_mode() {
@@ -150,6 +160,10 @@ ConfigVarHandle save_compatibility_config_var() {
 
 ConfigVarHandle item_integrity_config_var() {
     return s_itemIntegrity;
+}
+
+ConfigVarHandle new_save_mode_config_var() {
+    return s_newSaveMode;
 }
 
 ConfigVarHandle aim_mode_config_var() {

@@ -6,12 +6,14 @@
 #include "mods/svc/config.h"
 #include "mods/svc/hook.h"
 #include "mods/svc/log.h"
+#include "mods/svc/save.h"
 #include "mods/svc/ui.h"
 
 DEFINE_MOD();
 IMPORT_SERVICE(ConfigService, svc_config);
 IMPORT_SERVICE(HookService, svc_hook);
 IMPORT_SERVICE(LogService, svc_log);
+IMPORT_SERVICE(SaveService, svc_save);
 IMPORT_SERVICE(UiService, svc_ui);
 
 namespace dawnlight {
@@ -21,6 +23,7 @@ ModResult install_item_integrity_hooks(ModError* error);
 ModResult install_item_slot_hooks(ModError* error);
 ModResult install_jump_hooks(ModError* error);
 ModResult install_manual_shield_hooks(ModError* error);
+ModResult install_new_save_mode_hooks(ModError* error);
 ModResult register_ui(ModError* error);
 }
 
@@ -46,6 +49,9 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
         return result;
     }
     if (const ModResult result = dawnlight::install_manual_shield_hooks(error); result != MOD_OK) {
+        return result;
+    }
+    if (const ModResult result = dawnlight::install_new_save_mode_hooks(error); result != MOD_OK) {
         return result;
     }
     if (const ModResult result = dawnlight::install_jump_hooks(error); result != MOD_OK) {

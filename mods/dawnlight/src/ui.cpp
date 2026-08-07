@@ -18,6 +18,12 @@ constexpr const char* kAimModeOptions[] = {
     "Cinema",
 };
 
+constexpr const char* kNewSaveModeOptions[] = {
+    "Vanilla",
+    "Intro Skip",
+    "Boss Rush",
+};
+
 ModResult add_section(ModContext* ctx, UiElementHandle pane, const char* title) {
     return svc_ui->pane_add_section(ctx, pane, title);
 }
@@ -160,6 +166,17 @@ ModResult build_controls_tab(
 
 ModResult build_gameplay_tab(
     ModContext* ctx, UiWindowHandle, UiElementHandle left, UiElementHandle, void*, ModError*) {
+    if (add_section(ctx, left, "New Saves") != MOD_OK) return MOD_ERROR;
+    if (add_select(ctx, left, "New Save Mode", new_save_mode_config_var(),
+            kNewSaveModeOptions, std::size(kNewSaveModeOptions),
+            "Changes how newly created empty save slots are initialized. Vanilla keeps upstream "
+            "behavior, Intro Skip starts after the Faron intro setup, and Boss Rush starts "
+            "Dawnlight's boss sequence.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+
     if (add_section(ctx, left, "Enemy Scaling") != MOD_OK) return MOD_ERROR;
     if (add_number(ctx, left, "HP Scaling", health_scale_config_var(), 1, 9999, 10, "%",
             "Scales enemy health when enemies spawn. New Game Plus can raise the effective value "
@@ -195,8 +212,9 @@ ModResult build_deferred_tab(
     ModContext* ctx, UiWindowHandle, UiElementHandle left, UiElementHandle, void*, ModError*) {
     if (add_section(ctx, left, "Waiting For Services") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, left,
-            "New Game+, Intro Skip, and Boss Rush are not enabled in this upstream-main package "
-            "because upstream does not yet expose file-select and scene-flow extension points.")
+            "New Game+ is not enabled in this upstream-main package because it needs a source-save "
+            "selection flow. Intro Skip and Boss Rush can be selected from Gameplay > New Save Mode "
+            "and apply to newly created empty slots.")
         != MOD_OK)
     {
         return MOD_ERROR;
