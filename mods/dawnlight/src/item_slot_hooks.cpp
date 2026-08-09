@@ -1368,6 +1368,45 @@ void store_select_slots(const std::array<u8, kExtendedSelectItemCount>& slots,
     }
 }
 
+u8 z_animation_slot(dMenu_Ring_c* ring) {
+    if (ring == nullptr) {
+        return dItemNo_NONE_e;
+    }
+    if (ring->field_0x6cd == kZItemSlot) {
+        return ring->field_0x6cb;
+    }
+    return ring->field_0x6b4[kZItemSlot];
+}
+
+u8 z_animation_item(dMenu_Ring_c* ring) {
+    const u8 slot = z_animation_slot(ring);
+    if (slot == dItemNo_NONE_e) {
+        return dItemNo_NONE_e;
+    }
+    return ring->getItem(slot, ring->field_0x6b8[kZItemSlot]);
+}
+
+void fix_z_select_item_animation(dMenu_Ring_c* ring) {
+    if (ring == nullptr || ring->field_0x674[kZItemSlot] == 0) {
+        return;
+    }
+
+    const u8 item = z_animation_item(ring);
+    if (item != dItemNo_NONE_e) {
+        ring->setSelectItem(kZItemSlot, item);
+    }
+
+    const u8 cursor = cursor_for_slot(ring, z_animation_slot(ring));
+    if (cursor != dItemNo_NONE_e) {
+        ring->field_0x518[kZItemSlot] = ring->mItemSlotPosX[cursor];
+        ring->field_0x528[kZItemSlot] = ring->mItemSlotPosY[cursor];
+    }
+    ring->field_0x538[kZItemSlot] = g_ringHIO.mSelectItemScale;
+#if TARGET_PC
+    ring->mSelectItemSlideElapsed[kZItemSlot] = 0.0f;
+#endif
+}
+
 bool z_mix_item_on(dMenu_Ring_c* ring) {
     if (!z_item_slot_enabled() || ring == nullptr || ring->mPlayerIsWolf ||
         dComIfGs_getItem(ring->mItemSlots[ring->mCurrentSlot], false) == dItemNo_NONE_e)
@@ -1442,6 +1481,7 @@ bool set_z_mix_item(dMenu_Ring_c* ring) {
     ring->field_0x6b3 = kZItemSlot;
     ring->field_0x674[kZItemSlot] = 1;
     ring->setJumpItem(false);
+    fix_z_select_item_animation(ring);
     return true;
 }
 
@@ -1513,6 +1553,9 @@ void assign_current_item(dMenu_Ring_c* ring, u8 targetSlot) {
     ring->field_0x6b3 = targetSlot;
     ring->field_0x674[targetSlot] = 1;
     ring->setJumpItem(true);
+    if (targetSlot == kZItemSlot) {
+        fix_z_select_item_animation(ring);
+    }
 }
 
 bool item_assign_allowed(dMenu_Ring_c* ring) {
@@ -1626,6 +1669,7 @@ void rotate_pending_duplicate(dMenu_Ring_c* ring) {
     if (sourceSlot != dItemNo_NONE_e) {
         ring->field_0x674[sourceSlot] = 1;
     }
+    fix_z_select_item_animation(ring);
     s_pendingAssign = {};
 }
 
