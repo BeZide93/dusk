@@ -25,6 +25,7 @@ class JPABaseEmitter;
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 namespace dawnlight {
@@ -82,6 +83,25 @@ constexpr BossRushEntry kBossRushEntries[] = {
 };
 
 constexpr size_t kBossRushEntryCount = std::size(kBossRushEntries);
+constexpr const char* kBossRushEntryNames[] = {
+    "Ook",
+    "Diababa",
+    "Dangoro",
+    "Fyrus",
+    "Death Sword",
+    "Stallord",
+    "Darkhammer",
+    "Blizzeta",
+    "Aeralfos",
+    "Argorok",
+    "Deku Toad",
+    "Morpheel",
+    "Phantom Zant",
+    "Zant",
+    "Puppet Zelda",
+};
+static_assert(std::size(kBossRushEntryNames) == kBossRushEntryCount);
+constexpr const char* kBossRushRunName = "Boss Rush";
 constexpr s8 kBossRushReturnRoom = 0;
 constexpr char kBossRushReturnStage[] = "D_MN09C";
 constexpr s16 kBossRushReturnPoint = 0;
@@ -115,6 +135,11 @@ fpc_ProcID sHubPortalIds[kBossRushHubPortalCount];
 bool sHubActorIdsInitialized = false;
 bool sHubActorsSpawned = false;
 bool sHubPortalsArmed = false;
+UiDialogHandle sHubConfirmDialog = 0;
+int sPendingHubPortal = -1;
+int sDismissedHubPortal = -1;
+char sHubConfirmTitle[64] = {};
+char sHubConfirmBody[128] = {};
 
 u8* reserve_bytes(dSv_save_c* save) {
     return save == nullptr ? nullptr : reinterpret_cast<u8*>(save) + kReserveOffset;
@@ -224,6 +249,9 @@ void reset_hub_actor_ids() {
     sHubActorIdsInitialized = true;
     sHubActorsSpawned = false;
     sHubPortalsArmed = false;
+    sHubConfirmDialog = 0;
+    sPendingHubPortal = -1;
+    sDismissedHubPortal = -1;
 }
 
 void ensure_hub_actor_ids_initialized() {
@@ -299,6 +327,9 @@ void reset_hub_runtime_when_away() {
     if (!is_boss_hub_stage_name()) {
         sHubActorsSpawned = false;
         sHubPortalsArmed = false;
+        sHubConfirmDialog = 0;
+        sPendingHubPortal = -1;
+        sDismissedHubPortal = -1;
     }
 }
 
@@ -767,6 +798,21 @@ bool can_open_save_prompt() {
            dMeter2Info_getGameOverType() == 0;
 }
 
+bool ui_document_visible() {
+    bool visible = false;
+    return svc_ui->is_any_document_visible(mod_ctx, &visible) == MOD_OK && visible;
+}
+
+const char* bossrush_portal_name(int portal) {
+    if (portal == kBossRushCenterPortalIndex) {
+        return kBossRushRunName;
+    }
+    if (portal >= 0 && portal < static_cast<int>(kBossRushEntryCount)) {
+        return kBossRushEntryNames[portal];
+    }
+    return "Boss";
+}
+
 void start_bossrush_entry(int portal) {
     if (portal == kBossRushCenterPortalIndex) {
         set_boss_rush_state(kBossRushStateRun);
@@ -788,6 +834,69 @@ void start_bossrush_entry(int portal) {
     }
 }
 
+void clear_hub_confirm_state() {
+    sHubConfirmDialog = 0;
+    sPendingHubPortal = -1;
+}
+
+void on_hub_confirm_yes(ModContext*, UiDialogHandle, void*) {
+    const int portal = sPendingHubPortal;
+    clear_hub_confirm_state();
+    sHubPortalsArmed = false;
+
+    if (portal >= 0 && is_boss_rush(dComIfGs_getSaveData()) &&
+        boss_rush_state() == kBossRushStateHub && is_boss_hub_stage_name())
+    {
+        start_bossrush_entry(portal);
+    }
+}
+
+void on_hub_confirm_no(ModContext*, UiDialogHandle, void*) {
+    if (sPendingHubPortal >= 0) {
+        sDismissedHubPortal = sPendingHubPortal;
+    }
+    clear_hub_confirm_state();
+    sHubPortalsArmed = false;
+}
+
+void on_hub_confirm_dismiss(ModContext*, UiDialogHandle, void*) {
+    if (sPendingHubPortal >= 0) {
+        sDismissedHubPortal = sPendingHubPortal;
+    }
+    clear_hub_confirm_state();
+    sHubPortalsArmed = false;
+}
+
+bool open_bossrush_confirm_dialog(int portal) {
+    static UiDialogAction actions[] = {
+        {"Yes", on_hub_confirm_yes, nullptr, false},
+        {"No", on_hub_confirm_no, nullptr, false},
+    };
+
+    std::snprintf(sHubConfirmTitle, sizeof(sHubConfirmTitle), "Fight %s?", bossrush_portal_name(portal));
+    std::snprintf(
+        sHubConfirmBody, sizeof(sHubConfirmBody), "<p>Start %s?</p>", bossrush_portal_name(portal));
+
+    UiDialogDesc desc = UI_DIALOG_DESC_INIT;
+    desc.title = sHubConfirmTitle;
+    desc.body_rml = sHubConfirmBody;
+    desc.variant = UI_DIALOG_NORMAL;
+    desc.icon = "question-mark";
+    desc.actions = actions;
+    desc.action_count = std::size(actions);
+    desc.on_dismiss = on_hub_confirm_dismiss;
+
+    sPendingHubPortal = portal;
+    const ModResult result = svc_ui->dialog_push(mod_ctx, &desc, &sHubConfirmDialog);
+    if (result != MOD_OK) {
+        sPendingHubPortal = -1;
+        svc_log->warn(mod_ctx, "Dawnlight Boss Rush: failed to open portal confirmation");
+        return false;
+    }
+
+    return true;
+}
+
 void update_bossrush_hub() {
     sAdvancePending = false;
     sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
@@ -806,15 +915,18 @@ void update_bossrush_hub() {
     int portal = touched_hub_portal();
     if (portal < 0) {
         sHubPortalsArmed = true;
+        sDismissedHubPortal = -1;
         return;
     }
 
-    if (!sHubPortalsArmed || !can_open_save_prompt()) {
+    if (sHubConfirmDialog != 0 || portal == sDismissedHubPortal ||
+        !sHubPortalsArmed || !can_open_save_prompt() || ui_document_visible())
+    {
         return;
     }
 
     sHubPortalsArmed = false;
-    start_bossrush_entry(portal);
+    open_bossrush_confirm_dialog(portal);
 }
 
 void finish_prompt_and_advance() {

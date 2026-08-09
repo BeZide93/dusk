@@ -127,6 +127,7 @@ bool s_inTouchActionBarSync = false;
 u8 s_touchActionBarHiddenCall = 0;
 Rml::Element* s_skipTouchElement = nullptr;
 bool s_skipTouchMidnaMode = false;
+bool s_skipTouchMidnaPressed = false;
 std::string s_skipTouchMidnaSource;
 
 struct HudPaneTransformState {
@@ -316,6 +317,7 @@ void restore_skip_touch_button(Rml::Element* element) {
 
     s_skipTouchElement = element;
     s_skipTouchMidnaMode = false;
+    s_skipTouchMidnaPressed = false;
     s_skipTouchMidnaSource.clear();
     set_skip_touch_rml(element, "<icon><glyph>&#xe044;</glyph></icon>");
 }
@@ -1886,6 +1888,8 @@ void after_pad_read(ModContext*, void*, void*, void*) {
     if (!z_item_slot_enabled()) {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
+        s_touchMidnaTrig = false;
+        s_skipTouchMidnaPressed = false;
         s_touchMidnaBlockStartFrames = 0;
         return;
     }
@@ -1900,6 +1904,7 @@ void after_pad_read(ModContext*, void*, void*, void*) {
     if (z_item_menu_or_pause_context()) {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
+        s_touchMidnaTrig = false;
         return;
     }
 
@@ -2253,6 +2258,12 @@ void after_player_execute(ModContext*, void* args, void*, void*) {
 }
 
 HookAction before_touch_sync_action_bar(ModContext*, void*, void*, void*) {
+    if (s_skipTouchMidnaPressed) {
+        s_inTouchActionBarSync = false;
+        s_touchActionBarHiddenCall = 0;
+        return HOOK_SKIP_ORIGINAL;
+    }
+
     s_inTouchActionBarSync = true;
     s_touchActionBarHiddenCall = 0;
     return HOOK_CONTINUE;
@@ -2268,6 +2279,8 @@ void after_touch_sync_action_bar(ModContext*, void*, void*, void*) {
     if (canShowMidna && skipElement != nullptr) {
         set_skip_touch_hidden(skipElement, false);
         sync_skip_touch_midna_button(skipElement);
+    } else if (s_skipTouchMidnaPressed && skipElement != nullptr) {
+        set_skip_touch_hidden(skipElement, false);
     } else if (s_skipTouchMidnaMode) {
         restore_skip_touch_button(skipElement);
     }
@@ -2301,13 +2314,30 @@ HookAction before_rml_set_pseudo_class(ModContext*, void* args, void*, void*) {
 HookAction before_touch_set_control_pressed(ModContext*, void* args, void*, void*) {
     const auto control = mods::arg<dusk::ui::Control>(args, 1);
     const bool pressed = mods::arg<bool>(args, 2);
-    if (control != dusk::ui::Control::SKIP || !pressed || !skip_touch_can_be_midna()) {
+    if (control != dusk::ui::Control::SKIP) {
         return HOOK_CONTINUE;
     }
 
-    s_touchMidnaTrig = true;
-    s_touchMidnaBlockStartFrames = 4;
-    return HOOK_SKIP_ORIGINAL;
+    const bool midnaTouch =
+        s_skipTouchMidnaMode || s_skipTouchMidnaPressed || s_touchMidnaBlockStartFrames != 0;
+    if (pressed) {
+        if (!skip_touch_can_be_midna()) {
+            return midnaTouch && !cutscene_skip_touch_visible() ? HOOK_SKIP_ORIGINAL :
+                HOOK_CONTINUE;
+        }
+
+        s_skipTouchMidnaPressed = true;
+        s_touchMidnaTrig = true;
+        s_touchMidnaBlockStartFrames = 4;
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    if (!midnaTouch) {
+        return HOOK_CONTINUE;
+    }
+
+    s_skipTouchMidnaPressed = false;
+    return cutscene_skip_touch_visible() ? HOOK_CONTINUE : HOOK_SKIP_ORIGINAL;
 }
 
 void after_midna_icon_source(ModContext*, void*, void* retval, void*) {
