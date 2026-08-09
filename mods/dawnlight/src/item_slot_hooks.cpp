@@ -10,6 +10,7 @@
 #include "d/d_kantera_icon_meter.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
+#include "d/d_meter_button.h"
 #include "d/d_meter_HIO.h"
 #include "d/d_meter2_info.h"
 #include "d/d_menu_window.h"
@@ -70,6 +71,8 @@ DEFINE_HOOK(&dMeter2Draw_c::draw, MeterDrawHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawKantera, MeterDrawKanteraHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawOxygen, MeterDrawOxygenHook);
 DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
+DEFINE_HOOK(&dMeterButton_c::setString, MeterButtonSetStringHook);
+DEFINE_HOOK(&dMeterButton_c::_execute, MeterButtonExecuteHook);
 DEFINE_HOOK(&dMeterMap_c::draw, MeterMapDrawHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&mDoCPd_c::read, PadReadHook);
@@ -129,6 +132,11 @@ Rml::Element* s_skipTouchElement = nullptr;
 bool s_skipTouchMidnaMode = false;
 bool s_skipTouchMidnaPressed = false;
 std::string s_skipTouchMidnaSource;
+bool s_zPromptAsDpadLeftThisFrame = false;
+bool s_restore3DPromptState = false;
+u8 s_restore3DStatus = BUTTON_STATUS_NONE;
+u8 s_restore3DDirection = 0;
+u8 s_restore3DSetFlag = 0;
 
 struct HudPaneTransformState {
     J2DPane* pane = nullptr;
@@ -200,6 +208,17 @@ bool consume_touch_midna_trigger() {
     const bool triggered = s_touchMidnaTrig;
     s_touchMidnaTrig = false;
     return triggered;
+}
+
+u8 current_3d_set_flag() {
+    u8 flag = 0;
+    constexpr u8 bits[] = {1, BUTTON_STATUS_FLAG_EMPHASIS, BUTTON_STATUS_FLAG_CONTINUATION, 8};
+    for (u8 bit : bits) {
+        if (dComIfGp_is3DSetFlag(bit)) {
+            flag |= bit;
+        }
+    }
+    return flag;
 }
 
 bool z_item_menu_or_pause_context();
@@ -2257,6 +2276,54 @@ void after_player_execute(ModContext*, void* args, void*, void*) {
     }
 }
 
+HookAction before_meter_button_set_string(ModContext*, void* args, void*, void*) {
+    if (!z_item_slot_enabled()) {
+        return HOOK_CONTINUE;
+    }
+
+    u8& button = mods::arg_ref<u8>(args, 2);
+    if (button != dMeterButton_c::BUTTON_Z_e) {
+        return HOOK_CONTINUE;
+    }
+
+    button = dMeterButton_c::BUTTON_3D_e;
+    s_zPromptAsDpadLeftThisFrame = true;
+    return HOOK_CONTINUE;
+}
+
+HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
+    const bool replacePrompt = s_zPromptAsDpadLeftThisFrame && z_item_slot_enabled();
+    s_zPromptAsDpadLeftThisFrame = false;
+
+    if (!replacePrompt) {
+        return HOOK_CONTINUE;
+    }
+
+    bool& drawZ = mods::arg_ref<bool>(args, 5);
+    if (!drawZ) {
+        return HOOK_CONTINUE;
+    }
+
+    s_restore3DStatus = dComIfGp_get3DStatus();
+    s_restore3DDirection = dComIfGp_get3DDirection();
+    s_restore3DSetFlag = current_3d_set_flag();
+    s_restore3DPromptState = true;
+
+    drawZ = false;
+    mods::arg_ref<bool>(args, 6) = true;
+    dComIfGp_set3DStatus(s_restore3DStatus, dMeterButton_c::DIR_LEFT_e, s_restore3DSetFlag);
+    return HOOK_CONTINUE;
+}
+
+void after_meter_button_execute(ModContext*, void*, void*, void*) {
+    if (!s_restore3DPromptState) {
+        return;
+    }
+
+    dComIfGp_set3DStatus(s_restore3DStatus, s_restore3DDirection, s_restore3DSetFlag);
+    s_restore3DPromptState = false;
+}
+
 HookAction before_touch_sync_action_bar(ModContext*, void*, void*, void*) {
     if (s_skipTouchMidnaPressed) {
         s_inTouchActionBarSync = false;
@@ -2430,6 +2497,15 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterButtonSetStringHook>(svc_hook, before_meter_button_set_string);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<MeterButtonExecuteHook>(svc_hook, before_meter_button_execute);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterButtonExecuteHook>(svc_hook, after_meter_button_execute);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MidnaIconSourceHook>(svc_hook, after_midna_icon_source);
