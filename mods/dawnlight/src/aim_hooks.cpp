@@ -12,7 +12,17 @@
 #include "mods/svc/hook.h"
 #include "SSystem/SComponent/c_math.h"
 
+#include <RmlUi/Core.h>
+#include <SDL3/SDL_touch.h>
+
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
+
+#define private public
+#include "dusk/ui/touch_controls.hpp"
+#undef private
 
 namespace dawnlight {
 namespace {
@@ -24,6 +34,46 @@ DEFINE_HOOK(&daAlink_c::procIronBallSubject, IronBallSubjectHook);
 DEFINE_HOOK(&daAlink_c::procCopyRodSubject, CopyRodSubjectHook);
 DEFINE_HOOK(&dCamera_c::nextMode, CameraNextModeHook);
 DEFINE_HOOK(&dCamera_c::nextType, CameraNextTypeHook);
+#if defined(__ANDROID__)
+#define DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL "_ZN4dusk2ui13TouchControls16sync_touch_stateEv"
+#define DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL "_ZN4dusk2ui13TouchControls17handle_touch_downERN3Rml5EventE"
+#else
+#define DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL "dusk::ui::TouchControls::sync_touch_state"
+#define DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL "dusk::ui::TouchControls::handle_touch_down"
+#endif
+
+DEFINE_HOOK_SYMBOL(DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL,
+    void(dusk::ui::TouchControls*), TouchSyncStateHook);
+DEFINE_HOOK_SYMBOL(DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL,
+    void(dusk::ui::TouchControls*, Rml::Event*), TouchHandleDownHook);
+
+constexpr float kTouchStickRadiusDp = 62.0f;
+constexpr float kTouchStickKnobRadiusDp = 24.0f;
+constexpr float kTouchAnalogZoneTopDp = 92.0f;
+constexpr float kTouchAnalogZoneBottomDp = 30.0f;
+constexpr float kTouchLeftZoneWidth = 0.46f;
+constexpr float kTouchRightZoneStart = 0.52f;
+
+#if defined(__ANDROID__)
+constexpr const char* kTouchEventIdSymbol = "_ZN4dusk2ui14touch_event_idERKN3Rml5EventE";
+constexpr const char* kTouchEventPositionSymbol =
+    "_ZN4dusk2ui20touch_event_positionERKN3Rml5EventE";
+constexpr const char* kTouchDpScaleSymbol = "_ZN4dusk2ui14touch_dp_scaleEPN3Rml7ContextE";
+constexpr const char* kRmlContextSymbol = "_ZN6aurora5rmlui11get_contextEv";
+constexpr const char* kRmlContextDimensionsSymbol = "_ZNK3Rml7Context13GetDimensionsEv";
+constexpr const char* kRmlSetClassSymbol =
+    "_ZN3Rml7Element8SetClassERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEEb";
+constexpr const char* kRmlSetPropertySymbol =
+    "_ZN3Rml7Element11SetPropertyERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEES9_";
+#else
+constexpr const char* kTouchEventIdSymbol = "dusk::ui::touch_event_id";
+constexpr const char* kTouchEventPositionSymbol = "dusk::ui::touch_event_position";
+constexpr const char* kTouchDpScaleSymbol = "dusk::ui::touch_dp_scale";
+constexpr const char* kRmlContextSymbol = "aurora::rmlui::get_context";
+constexpr const char* kRmlContextDimensionsSymbol = "Rml::Context::GetDimensions";
+constexpr const char* kRmlSetClassSymbol = "Rml::Element::SetClass";
+constexpr const char* kRmlSetPropertySymbol = "Rml::Element::SetProperty";
+#endif
 
 enum class AimItem {
     Bow,
@@ -32,6 +82,34 @@ enum class AimItem {
     IronBall,
     CopyRod,
 };
+
+using TouchControls = dusk::ui::TouchControls;
+using TouchEventIdFn = SDL_FingerID (*)(const Rml::Event&) noexcept;
+using TouchEventPositionFn = Rml::Vector2f (*)(const Rml::Event&) noexcept;
+using TouchDpScaleFn = float (*)(Rml::Context*) noexcept;
+using RmlContextFn = Rml::Context* (*)();
+using RmlContextDimensionsFn = Rml::Vector2i (*)(const Rml::Context*);
+using RmlElementSetClassFn = void (*)(Rml::Element*, const Rml::String&, bool);
+using RmlElementSetPropertyFn =
+    bool (*)(Rml::Element*, const Rml::String&, const Rml::String&);
+
+TouchEventIdFn s_touchEventId = nullptr;
+TouchEventPositionFn s_touchEventPosition = nullptr;
+TouchDpScaleFn s_touchDpScale = nullptr;
+RmlContextFn s_rmlContext = nullptr;
+RmlContextDimensionsFn s_rmlContextDimensions = nullptr;
+RmlElementSetClassFn s_rmlSetClass = nullptr;
+RmlElementSetPropertyFn s_rmlSetProperty = nullptr;
+
+struct SavedTouchMove {
+    TouchControls* controls = nullptr;
+    TouchControls::StickTouch move;
+    SDL_FingerID cameraId = 0;
+    bool active = false;
+    bool cameraWasActive = false;
+};
+
+SavedTouchMove s_savedTouchMove;
 
 bool use_custom_aim_movement() {
     return aim_mode() != AimMode::Vanilla || aim_movement_enabled();
@@ -51,6 +129,131 @@ bool use_scope_suppress_camera() {
 
 bool is_hawkeye_bow(daAlink_c* link) {
     return link != nullptr && link->mEquipItem == dItemNo_HAWK_ARROW_e;
+}
+
+bool hawkeye_active() noexcept {
+    return dCamera_c::isAimActive() && dComIfGp_checkPlayerStatus0(0, 0x200000);
+}
+
+bool touch_aim_movement_enabled() {
+    return aim_movement_enabled() && dCamera_c::isAimActive() && !hawkeye_active();
+}
+
+template <typename Fn>
+ModResult resolve_required_symbol(const char* symbol, Fn& out) {
+    void* resolved = nullptr;
+    const ModResult result = svc_hook->resolve(mod_ctx, symbol, &resolved, nullptr);
+    if (result == MOD_OK) {
+        out = reinterpret_cast<Fn>(resolved);
+    }
+    return result;
+}
+
+template <typename Fn>
+void resolve_optional_symbol(const char* symbol, Fn& out) {
+    void* resolved = nullptr;
+    if (svc_hook->resolve(mod_ctx, symbol, &resolved, nullptr) == MOD_OK) {
+        out = reinterpret_cast<Fn>(resolved);
+    }
+}
+
+ModResult resolve_touch_aim_symbols() {
+    if (s_touchEventId != nullptr) {
+        return MOD_OK;
+    }
+
+    ModResult result = resolve_required_symbol(kTouchEventIdSymbol, s_touchEventId);
+    if (result == MOD_OK) {
+        result = resolve_required_symbol(kTouchEventPositionSymbol, s_touchEventPosition);
+    }
+    if (result == MOD_OK) {
+        result = resolve_required_symbol(kTouchDpScaleSymbol, s_touchDpScale);
+    }
+    if (result == MOD_OK) {
+        result = resolve_required_symbol(kRmlContextSymbol, s_rmlContext);
+    }
+    if (result == MOD_OK) {
+        result = resolve_required_symbol(kRmlContextDimensionsSymbol, s_rmlContextDimensions);
+    }
+    if (result == MOD_OK) {
+        result = resolve_required_symbol(kRmlSetClassSymbol, s_rmlSetClass);
+    }
+
+    resolve_optional_symbol(kRmlSetPropertySymbol, s_rmlSetProperty);
+    return result;
+}
+
+float touch_dp_scale(Rml::Context* context) {
+    return s_touchDpScale != nullptr ? std::max(s_touchDpScale(context), 1.0f) : 1.0f;
+}
+
+void set_touch_element_class(Rml::Element* element, const char* className, bool active) {
+    if (element == nullptr || s_rmlSetClass == nullptr) {
+        return;
+    }
+
+    const std::string classNameString = className;
+    s_rmlSetClass(element, classNameString, active);
+}
+
+void set_touch_element_px(Rml::Element* element, const char* property, float value) {
+    if (element == nullptr || s_rmlSetProperty == nullptr) {
+        return;
+    }
+
+    char valueString[32] = {};
+    std::snprintf(valueString, sizeof(valueString), "%.3fpx", value);
+    const std::string propertyString = property;
+    const std::string propertyValue = valueString;
+    s_rmlSetProperty(element, propertyString, propertyValue);
+}
+
+Rml::Vector2f clamped_touch_stick_delta(
+    const Rml::Vector2f start, const Rml::Vector2f current, const float radius) {
+    Rml::Vector2f delta = current - start;
+    const float length = std::sqrt(delta.x * delta.x + delta.y * delta.y);
+    if (length > radius && radius > 0.0f) {
+        delta *= radius / length;
+    }
+    return delta;
+}
+
+void sync_touch_move_stick_visual(TouchControls* controls) {
+    if (controls == nullptr || !controls->mMoveTouch.active || controls->mControlStick == nullptr) {
+        return;
+    }
+
+    Rml::Context* context = s_rmlContext != nullptr ? s_rmlContext() : nullptr;
+    const float scale = touch_dp_scale(context);
+    const float stickRadius = kTouchStickRadiusDp * scale;
+    if (stickRadius <= 0.0f) {
+        return;
+    }
+
+    const Rml::Vector2f delta = clamped_touch_stick_delta(
+        controls->mMoveTouch.start, controls->mMoveTouch.current, stickRadius);
+    const float knobRadius = kTouchStickKnobRadiusDp * scale;
+
+    set_touch_element_class(controls->mControlStick, "active", true);
+    set_touch_element_px(
+        controls->mControlStick, "left", controls->mMoveTouch.start.x - stickRadius);
+    set_touch_element_px(
+        controls->mControlStick, "top", controls->mMoveTouch.start.y - stickRadius);
+    set_touch_element_px(
+        controls->mControlKnob, "left", stickRadius + delta.x - knobRadius);
+    set_touch_element_px(
+        controls->mControlKnob, "top", stickRadius + delta.y - knobRadius);
+}
+
+bool touch_context_bounds(Rml::Vector2i& dimensions, float& scale) {
+    Rml::Context* context = s_rmlContext != nullptr ? s_rmlContext() : nullptr;
+    if (context == nullptr || s_rmlContextDimensions == nullptr) {
+        return false;
+    }
+
+    dimensions = s_rmlContextDimensions(context);
+    scale = touch_dp_scale(context);
+    return dimensions.x > 0 && dimensions.y > 0;
 }
 
 BOOL face_camera_view_yaw(daAlink_c* link) {
@@ -213,6 +416,90 @@ bool update_subject_aim(daAlink_c* link, AimItem item) {
         break;
     }
     return true;
+}
+
+HookAction before_touch_sync_state(ModContext*, void* args, void*, void*) {
+    s_savedTouchMove = {};
+    auto* controls = mods::arg<TouchControls*>(args, 0);
+    if (!touch_aim_movement_enabled() || controls == nullptr || !controls->mMoveTouch.active) {
+        return HOOK_CONTINUE;
+    }
+
+    s_savedTouchMove = {
+        .controls = controls,
+        .move = controls->mMoveTouch,
+        .cameraId = controls->mCameraTouch.id,
+        .active = true,
+        .cameraWasActive = controls->mCameraTouch.active,
+    };
+    return HOOK_CONTINUE;
+}
+
+void after_touch_sync_state(ModContext*, void* args, void*, void*) {
+    auto* controls = mods::arg<TouchControls*>(args, 0);
+    const bool restore =
+        s_savedTouchMove.active && s_savedTouchMove.controls == controls &&
+        touch_aim_movement_enabled();
+    if (!restore) {
+        s_savedTouchMove = {};
+        return;
+    }
+
+    if (!controls->mMoveTouch.active) {
+        controls->mMoveTouch = s_savedTouchMove.move;
+    }
+    if (!s_savedTouchMove.cameraWasActive && controls->mCameraTouch.active &&
+        controls->mCameraTouch.id == s_savedTouchMove.move.id)
+    {
+        controls->mCameraTouch = {};
+    }
+
+    sync_touch_move_stick_visual(controls);
+    s_savedTouchMove = {};
+}
+
+HookAction before_touch_handle_down(ModContext*, void* args, void*, void*) {
+    auto* controls = mods::arg<TouchControls*>(args, 0);
+    auto* event = mods::arg<Rml::Event*>(args, 1);
+    if (!touch_aim_movement_enabled() || controls == nullptr || event == nullptr ||
+        controls->mWasSuppressed || s_touchEventId == nullptr || s_touchEventPosition == nullptr)
+    {
+        return HOOK_CONTINUE;
+    }
+
+    Rml::Vector2i dimensions;
+    float scale = 1.0f;
+    if (!touch_context_bounds(dimensions, scale)) {
+        return HOOK_CONTINUE;
+    }
+
+    const Rml::Vector2f position = s_touchEventPosition(*event);
+    const float width = static_cast<float>(dimensions.x);
+    const bool inLeftZone = position.x < width * kTouchLeftZoneWidth;
+    const bool inCameraZone = position.x > width * kTouchRightZoneStart;
+    if (inCameraZone) {
+        return HOOK_CONTINUE;
+    }
+
+    const float top = controls->mSafeInsets.top + kTouchAnalogZoneTopDp * scale;
+    const float bottom =
+        static_cast<float>(dimensions.y) - controls->mSafeInsets.bottom -
+        kTouchAnalogZoneBottomDp * scale;
+    const bool inAnalogZone = position.y >= top && position.y <= bottom;
+    if (!inLeftZone || !inAnalogZone) {
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    if (!controls->mMoveTouch.active) {
+        controls->mMoveTouch = {
+            .id = s_touchEventId(*event),
+            .start = position,
+            .current = position,
+            .active = true,
+        };
+        sync_touch_move_stick_visual(controls);
+    }
+    return HOOK_SKIP_ORIGINAL;
 }
 
 HookAction replace_bow_subject(ModContext*, void* args, void* retval, void*) {
@@ -383,6 +670,18 @@ ModResult add_aim_hooks(ModError* error, ModResult result) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<CameraNextTypeHook>(svc_hook, after_camera_next_type);
+    }
+    if (result == MOD_OK) {
+        result = resolve_touch_aim_symbols();
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<TouchSyncStateHook>(svc_hook, before_touch_sync_state);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<TouchSyncStateHook>(svc_hook, after_touch_sync_state);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<TouchHandleDownHook>(svc_hook, before_touch_handle_down);
     }
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight aim hooks");

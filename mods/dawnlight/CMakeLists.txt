@@ -37,4 +37,21 @@ add_mod(dawnlight_mod
 )
 
 target_include_directories(dawnlight_mod PRIVATE src "${DUSK_DIR}/src")
+set(DAWNLIGHT_RMLUI_INCLUDE "" CACHE PATH "Optional RmlUi include directory for Dawnlight mod builds")
+set(DAWNLIGHT_SDL3_INCLUDE "" CACHE PATH "Optional SDL3 include directory for Dawnlight mod builds")
+foreach (_dawnlight_rmlui_include
+        "${DAWNLIGHT_RMLUI_INCLUDE}"
+        "${CMAKE_BINARY_DIR}/_deps/rmlui-src/Include")
+    if (EXISTS "${_dawnlight_rmlui_include}/RmlUi/Core.h")
+        target_include_directories(dawnlight_mod PRIVATE "${_dawnlight_rmlui_include}")
+    endif ()
+endforeach ()
+foreach (_dawnlight_sdl_include
+        "${DAWNLIGHT_SDL3_INCLUDE}"
+        "${CMAKE_BINARY_DIR}/_deps/sdl3_prebuilt-src/include"
+        "${CMAKE_BINARY_DIR}/_deps/sdl-src/include")
+    if (EXISTS "${_dawnlight_sdl_include}/SDL3/SDL_touch.h")
+        target_include_directories(dawnlight_mod PRIVATE "${_dawnlight_sdl_include}")
+    endif ()
+endforeach ()
 target_link_libraries(dawnlight_mod PRIVATE dusklight_game_headers)
