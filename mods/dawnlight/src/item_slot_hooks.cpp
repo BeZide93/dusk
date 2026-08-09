@@ -25,6 +25,7 @@
 #include "d/d_meter2_draw.h"
 #undef private
 #include "m_Do/m_Do_controller_pad.h"
+#include "dusk/ui/controls.hpp"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
 #include "mods/svc/hook.h"
@@ -33,7 +34,18 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <cstring>
+#include <string>
+
+namespace Rml {
+using String = std::string;
+class Element;
+}  // namespace Rml
+
+namespace dusk::ui {
+class TouchControls;
+}  // namespace dusk::ui
 
 namespace dawnlight {
 namespace {
@@ -42,6 +54,9 @@ constexpr u8 kZItemSlot = SELECT_ITEM_DOWN;
 constexpr int kExtendedSelectItemCount = 3;
 constexpr int kSelectItemNotFound = 3;
 constexpr int kItemProcBootsEquip = 1;
+constexpr size_t kDawnlightReserveOffset = 0x8F0;
+constexpr size_t kBossRushMarkerOffset = 32;
+constexpr char kBossRushMarker[] = "DUSKBR1";
 
 DEFINE_HOOK(&dComIfGp_getSelectItem, GetSelectItemHook);
 DEFINE_HOOK(&dComIfGp_setSelectItem, SetSelectItemHook);
@@ -64,6 +79,18 @@ DEFINE_HOOK(&daAlink_c::checkSetItemTrigger, CheckSetItemTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemSetButton, CheckItemSetButtonHook);
 DEFINE_HOOK(&daAlink_c::setHeavyBoots, SetHeavyBootsHook);
 DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
+DEFINE_HOOK_SYMBOL("_ZN4dusk2ui13TouchControls21sync_action_bar_stateEv",
+    void(dusk::ui::TouchControls*), TouchSyncActionBarHook);
+DEFINE_HOOK_SYMBOL("_ZN4dusk2ui13TouchControls19set_control_pressedENS0_7ControlEb",
+    void(dusk::ui::TouchControls*, dusk::ui::Control, bool), TouchSetControlPressedHook);
+DEFINE_HOOK_SYMBOL("_ZN3Rml7Element14SetPseudoClassERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEEb",
+    void(Rml::Element*, const Rml::String*, bool), RmlSetPseudoClassHook);
+DEFINE_HOOK_SYMBOL("_ZN3Rml7Element11SetInnerRMLERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEE",
+    void(Rml::Element*, const Rml::String*), RmlSetInnerRMLHook);
+DEFINE_HOOK_SYMBOL("_ZN4dusk2ui17midna_icon_sourceEv", std::string(), MidnaIconSourceHook);
+DEFINE_HOOK_SYMBOL("_ZN4dusk2ui19midna_icon_revisionEv", uint64_t(), MidnaIconRevisionHook);
+DEFINE_HOOK_SYMBOL("_ZN4dusk2ui25update_midna_icon_textureEP7J2DPane",
+    void(J2DPane*), UpdateMidnaIconTextureHook);
 
 struct PendingAssign {
     dMenu_Ring_c* ring = nullptr;
@@ -94,6 +121,13 @@ bool s_zHeavyBootsWaitRelease = false;
 u8 s_zHeavyBootsGuardFrames = 0;
 bool s_dpadLeftHeld = false;
 bool s_dpadLeftTrig = false;
+bool s_touchMidnaTrig = false;
+u8 s_touchMidnaBlockStartFrames = 0;
+bool s_inTouchActionBarSync = false;
+u8 s_touchActionBarHiddenCall = 0;
+Rml::Element* s_skipTouchElement = nullptr;
+bool s_skipTouchMidnaMode = false;
+std::string s_skipTouchMidnaSource;
 
 struct HudPaneTransformState {
     J2DPane* pane = nullptr;
@@ -162,11 +196,20 @@ std::array<RoundPictureState, 32> s_roundPictureStates;
 dMeter2Draw_c* s_roundHudMeter = nullptr;
 
 bool consume_touch_midna_trigger() {
-    return false;
+    const bool triggered = s_touchMidnaTrig;
+    s_touchMidnaTrig = false;
+    return triggered;
 }
 
 bool z_item_menu_or_pause_context();
 bool midna_unlocked();
+u8 resolved_select_item(int index);
+
+struct PaneRenderState {
+    J2DPane* pane = nullptr;
+    u8 alpha = 0;
+    bool visible = false;
+};
 
 ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
     return reinterpret_cast<ResTIMG*>(s_zHudItemTexBuf[page][layer]);
@@ -174,6 +217,156 @@ ResTIMG* z_hud_item_tex(const u8 page, const u8 layer) {
 
 u8 hud_texture_item(u8 itemNo) {
     return itemNo == dItemNo_LIGHT_ARROW_e ? dItemNo_BOW_e : itemNo;
+}
+
+std::string z_touch_item_source() {
+    const u8 itemNo = resolved_select_item(kZItemSlot);
+    if (itemNo == dItemNo_NONE_e || itemNo == 0 || daPy_py_c::checkNowWolf()) {
+        return {};
+    }
+
+    char source[48] = {};
+    const u8 textureItem = hud_texture_item(itemNo);
+    std::snprintf(source, sizeof(source), "item://item/%02x?dawnlight_z=%02x", textureItem, itemNo);
+    return source;
+}
+
+uint64_t z_touch_item_revision() {
+    const u8 itemNo = resolved_select_item(kZItemSlot);
+    return itemNo == dItemNo_NONE_e ? 0 : (0xDA000000ull | static_cast<uint64_t>(itemNo));
+}
+
+bool cutscene_skip_touch_visible() {
+    auto* event = dComIfGp_getEvent();
+    return event != nullptr && event->mEventStatus == 1 && event->mSkipFunc != nullptr &&
+           !event->chkFlag2(2);
+}
+
+bool touch_midna_controls_suppressed() {
+    return dComIfGp_event_runCheck() ||
+           (dComIfGp_getMsgObjectClass() != nullptr && dMsgObject_isTalkNowCheck()) ||
+           z_item_menu_or_pause_context();
+}
+
+bool boss_rush_save_active() {
+    dSv_save_c* save = dComIfGs_getSaveData();
+    const u8* reserve = save == nullptr ? nullptr :
+        reinterpret_cast<const u8*>(save) + kDawnlightReserveOffset;
+    return reserve != nullptr &&
+           std::memcmp(
+               reserve + kBossRushMarkerOffset, kBossRushMarker, sizeof(kBossRushMarker) - 1) == 0;
+}
+
+bool midna_touch_available() {
+    return midna_unlocked() || boss_rush_save_active();
+}
+
+bool skip_touch_can_be_midna() {
+    return z_item_slot_enabled() && !cutscene_skip_touch_visible() &&
+           !touch_midna_controls_suppressed() && midna_touch_available() &&
+           dComIfGp_getLinkPlayer() != nullptr;
+}
+
+std::string true_midna_icon_source() {
+    if (MidnaIconSourceHook::g_orig == nullptr) {
+        return {};
+    }
+    return MidnaIconSourceHook::g_orig();
+}
+
+void set_skip_touch_rml(Rml::Element* element, const std::string& rml) {
+    if (element == nullptr || RmlSetInnerRMLHook::g_orig == nullptr) {
+        return;
+    }
+    RmlSetInnerRMLHook::g_orig(element, &rml);
+}
+
+void set_skip_touch_hidden(Rml::Element* element, const bool hidden) {
+    if (element == nullptr || RmlSetPseudoClassHook::g_orig == nullptr) {
+        return;
+    }
+
+    const std::string hiddenClass = "hidden";
+    RmlSetPseudoClassHook::g_orig(element, &hiddenClass, hidden);
+}
+
+void sync_skip_touch_midna_button(Rml::Element* element) {
+    const std::string source = true_midna_icon_source();
+    if (element == s_skipTouchElement && s_skipTouchMidnaMode && source == s_skipTouchMidnaSource) {
+        return;
+    }
+
+    s_skipTouchElement = element;
+    s_skipTouchMidnaMode = true;
+    s_skipTouchMidnaSource = source;
+
+    if (source.empty()) {
+        set_skip_touch_rml(element, "<span>Midna</span>");
+        return;
+    }
+
+    set_skip_touch_rml(element,
+        "<img class=\"midna-icon visible\" src=\"" + source + "\" /><span></span>");
+}
+
+void restore_skip_touch_button(Rml::Element* element) {
+    if (element == s_skipTouchElement && !s_skipTouchMidnaMode) {
+        return;
+    }
+
+    s_skipTouchElement = element;
+    s_skipTouchMidnaMode = false;
+    s_skipTouchMidnaSource.clear();
+    set_skip_touch_rml(element, "<icon><glyph>&#xe044;</glyph></icon>");
+}
+
+void collect_pane_render_state(
+    J2DPane* pane, std::array<PaneRenderState, 64>& states, size_t& count) {
+    if (pane == nullptr || count >= states.size()) {
+        return;
+    }
+
+    states[count++] = {
+        .pane = pane,
+        .alpha = pane->getAlpha(),
+        .visible = pane->isVisible(),
+    };
+    pane->show();
+    pane->setAlpha(255);
+
+    for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
+         child = child->getNextChildPane())
+    {
+        collect_pane_render_state(child, states, count);
+    }
+}
+
+void restore_pane_render_state(const std::array<PaneRenderState, 64>& states, size_t count) {
+    while (count > 0) {
+        const PaneRenderState& state = states[--count];
+        if (state.pane == nullptr) {
+            continue;
+        }
+
+        state.pane->setAlpha(state.alpha);
+        if (state.visible) {
+            state.pane->show();
+        } else {
+            state.pane->hide();
+        }
+    }
+}
+
+void refresh_midna_touch_icon_texture(J2DPane* midnaPane) {
+    if (midnaPane == nullptr || UpdateMidnaIconTextureHook::g_orig == nullptr) {
+        return;
+    }
+
+    std::array<PaneRenderState, 64> states{};
+    size_t count = 0;
+    collect_pane_render_state(midnaPane, states, count);
+    UpdateMidnaIconTextureHook::g_orig(midnaPane);
+    restore_pane_render_state(states, count);
 }
 
 u8 hud_layout_item(u8 itemNo) {
@@ -1140,6 +1333,8 @@ void move_midna_hud_to_dpad(dMeter2Draw_c* meter) {
         return;
     }
 
+    refresh_midna_touch_icon_texture(midnaPane);
+
     if (z_item_menu_or_pause_context() || !midna_unlocked()) {
         set_pane_tree_alpha_visible(midnaPane, false, 0);
         return;
@@ -1691,10 +1886,17 @@ void after_pad_read(ModContext*, void*, void*, void*) {
     if (!z_item_slot_enabled()) {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
+        s_touchMidnaBlockStartFrames = 0;
         return;
     }
 
     interface_of_controller_pad& pad = mDoCPd_c::getCpadInfo(PAD_1);
+    if (s_touchMidnaBlockStartFrames != 0) {
+        pad.mButtonFlags &= ~PAD_BUTTON_START;
+        pad.mPressedButtonFlags &= ~PAD_BUTTON_START;
+        --s_touchMidnaBlockStartFrames;
+    }
+
     if (z_item_menu_or_pause_context()) {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
@@ -2050,6 +2252,77 @@ void after_player_execute(ModContext*, void* args, void*, void*) {
     }
 }
 
+HookAction before_touch_sync_action_bar(ModContext*, void*, void*, void*) {
+    s_inTouchActionBarSync = true;
+    s_touchActionBarHiddenCall = 0;
+    return HOOK_CONTINUE;
+}
+
+void after_touch_sync_action_bar(ModContext*, void*, void*, void*) {
+    Rml::Element* skipElement = s_skipTouchElement;
+    const bool canShowMidna = skip_touch_can_be_midna();
+
+    s_inTouchActionBarSync = false;
+    s_touchActionBarHiddenCall = 0;
+
+    if (canShowMidna && skipElement != nullptr) {
+        set_skip_touch_hidden(skipElement, false);
+        sync_skip_touch_midna_button(skipElement);
+    } else if (s_skipTouchMidnaMode) {
+        restore_skip_touch_button(skipElement);
+    }
+}
+
+HookAction before_rml_set_pseudo_class(ModContext*, void* args, void*, void*) {
+    if (!s_inTouchActionBarSync) {
+        return HOOK_CONTINUE;
+    }
+
+    auto* element = mods::arg<Rml::Element*>(args, 0);
+    const auto* pseudoClass = mods::arg<const Rml::String*>(args, 1);
+    const bool active = mods::arg<bool>(args, 2);
+    if (pseudoClass == nullptr || *pseudoClass != "hidden") {
+        return HOOK_CONTINUE;
+    }
+
+    ++s_touchActionBarHiddenCall;
+    if (s_touchActionBarHiddenCall != 2 || element == nullptr) {
+        return HOOK_CONTINUE;
+    }
+
+    if (!skip_touch_can_be_midna()) {
+        return HOOK_CONTINUE;
+    }
+
+    s_skipTouchElement = element;
+    return active ? HOOK_SKIP_ORIGINAL : HOOK_CONTINUE;
+}
+
+HookAction before_touch_set_control_pressed(ModContext*, void* args, void*, void*) {
+    const auto control = mods::arg<dusk::ui::Control>(args, 1);
+    const bool pressed = mods::arg<bool>(args, 2);
+    if (control != dusk::ui::Control::SKIP || !pressed || !skip_touch_can_be_midna()) {
+        return HOOK_CONTINUE;
+    }
+
+    s_touchMidnaTrig = true;
+    s_touchMidnaBlockStartFrames = 4;
+    return HOOK_SKIP_ORIGINAL;
+}
+
+void after_midna_icon_source(ModContext*, void*, void* retval, void*) {
+    const std::string source = z_touch_item_source();
+    if (!source.empty()) {
+        *static_cast<std::string*>(retval) = source;
+    }
+}
+
+void after_midna_icon_revision(ModContext*, void*, void* retval, void*) {
+    if (!z_touch_item_source().empty()) {
+        *static_cast<uint64_t*>(retval) = z_touch_item_revision();
+    }
+}
+
 ModResult add_hook(ModResult result, ModError* error) {
     return result == MOD_OK ? MOD_OK :
         mods::set_error(error, result, "failed to install Dawnlight Z item slot hooks");
@@ -2127,6 +2400,31 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MidnaIconSourceHook>(svc_hook, after_midna_icon_source);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MidnaIconRevisionHook>(svc_hook, after_midna_icon_revision);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook::install<RmlSetInnerRMLHook>(svc_hook);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook::install<UpdateMidnaIconTextureHook>(svc_hook);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<TouchSyncActionBarHook>(svc_hook, before_touch_sync_action_bar);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<TouchSyncActionBarHook>(svc_hook, after_touch_sync_action_bar);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<RmlSetPseudoClassHook>(svc_hook, before_rml_set_pseudo_class);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<TouchSetControlPressedHook>(
+            svc_hook, before_touch_set_control_pressed);
     }
     return add_hook(result, error);
 }
