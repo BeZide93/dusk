@@ -4,9 +4,12 @@
 
 #include "global.h"
 #include "SSystem/SComponent/c_math.h"
+#include "Z2AudioLib/Z2SeqMgr.h"
 #include "m_Do/m_Do_ext.h"
 class JPABaseEmitter;
+#include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_b_gnd.h"
+#include "d/actor/d_a_midna.h"
 #include "d/d_drawlist.h"
 #include "d/actor/d_a_mant.h"
 #include "d/actor/d_a_obj_gb.h"
@@ -18,6 +21,10 @@ class JPABaseEmitter;
 #include "d/d_item.h"
 #include "d/d_item_data.h"
 #include "d/d_meter2_info.h"
+#include "d/d_msg_class.h"
+#include "d/d_msg_flow.h"
+#include "d/d_msg_object.h"
+#include "d/d_msg_scrn_talk.h"
 #include "d/d_s_name.h"
 #include "d/d_save.h"
 #include "d/d_stage.h"
@@ -44,6 +51,8 @@ DEFINE_HOOK(
     SetNextStageHook);
 DEFINE_HOOK(&dStage_changeScene, StageChangeSceneHook);
 DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
+DEFINE_HOOK(&dMsgObject_c::selectProc, MsgObjectSelectProcHook);
+DEFINE_HOOK(&dMsgScrnTalk_c::setSelectString, MsgScrnTalkSetSelectStringHook);
 DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
 DEFINE_HOOK_SYMBOL("daB_GND_Execute", int(b_gnd_class*), GanondorfExecuteHook);
 DEFINE_HOOK_SYMBOL("daObj_Gb_Execute", int(obj_gb_class*), GanondorfBarrierExecuteHook);
@@ -154,6 +163,8 @@ int sPendingHubPortal = -1;
 int sDismissedHubPortal = -1;
 char sHubConfirmTitle[64] = {};
 char sHubConfirmBody[128] = {};
+char const sMidnaHubWarpOptionText[] = "Garden of Twilight";
+bool sMidnaHubWarpMenuOffered = false;
 
 u8* reserve_bytes(dSv_save_c* save) {
     return save == nullptr ? nullptr : reinterpret_cast<u8*>(save) + kReserveOffset;
@@ -1115,6 +1126,76 @@ bool ui_document_visible() {
     return svc_ui->is_any_document_visible(mod_ctx, &visible) == MOD_OK && visible;
 }
 
+bool can_offer_midna_hub_warp() {
+    return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() != kBossRushStateHub &&
+           !is_boss_hub_stage_name() && !fopOvlpM_IsPeek() && !dComIfGp_isEnableNextStage() &&
+           dMeter2Info_getGameOverType() == 0 && dComIfGp_getGameoverStatus() == 0;
+}
+
+bool is_midna_menu_message() {
+    dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
+    if (msg == NULL || msg->mpRenProc == NULL || msg->getFukiKind() != 13) {
+        return false;
+    }
+
+    auto* ref = const_cast<jmessage_tReference*>(
+        static_cast<const jmessage_tReference*>(msg->mpRenProc->getReference()));
+    if (ref == NULL || ref->getSelectNum() < 2) {
+        return false;
+    }
+
+    const u16 msgId = ref->getMsgID();
+    return msgId == 0x7d3 || msgId == 0x7f6;
+}
+
+bool is_midna_actor(fopAc_ac_c* actor) {
+    return actor != NULL && fopAcM_GetName(actor) == fpcNm_MIDNA_e;
+}
+
+void reset_bossrush_warp_audio() {
+    Z2SeqMgr* seqMgr = Z2GetSeqMgr();
+    if (seqMgr == NULL) {
+        return;
+    }
+
+    seqMgr->mFanfareID.setAnonymous();
+    seqMgr->mFanfareCount = 0;
+    seqMgr->setBattleBgmOff(true);
+    seqMgr->resetBattleBgmParams();
+    seqMgr->bgmAllUnMute(0);
+}
+
+void prepare_midna_hub_warp_item() {
+    set_boss_rush_state(kBossRushStateHub);
+    set_boss_rush_index(0);
+    set_bossrush_return_place();
+    reset_bossrush_warp_audio();
+    dComIfGs_setWarpItemData(kBossRushReturnStage, hub_center(), 0, kBossRushReturnRoom, 0, 1);
+    dComIfGs_setItem(SLOT_18, dItemNo_DUNGEON_BACK_e);
+}
+
+void warp_to_bossrush_hub_from_midna(daMidna_c* midna) {
+    reset_direct_final_boss_state();
+    delete_hub_actors();
+    prepare_midna_hub_warp_item();
+    dMsgObject_onKillMessageFlag();
+
+    if (midna != NULL) {
+        dComIfGp_getEvent()->reset(midna);
+        midna->offStateFlg0(daMidna_c::FLG0_UNK_8000);
+    } else {
+        dComIfGp_event_reset();
+    }
+
+    daAlink_c* player = daAlink_getAlinkActorClass();
+    if (player != NULL && player->procDungeonWarpReadyInit()) {
+        return;
+    }
+
+    dComIfGp_setNextStage(kBossRushReturnStage, kBossRushReturnPoint, kBossRushReturnRoom,
+        kBossRushReturnLayer);
+}
+
 const char* bossrush_portal_name(int portal) {
     if (portal == kBossRushCenterPortalIndex) {
         return kBossRushRunName;
@@ -1376,6 +1457,40 @@ void prepare_bossrush_start() {
     save->getPlayer().getPlayerReturnPlace().set(kBossRushReturnStage, kBossRushReturnRoom, 0);
 }
 
+HookAction before_midna_select_string(ModContext*, void* args, void*, void*) {
+    if (!can_offer_midna_hub_warp() || !is_midna_menu_message()) {
+        return HOOK_CONTINUE;
+    }
+
+    sMidnaHubWarpMenuOffered = true;
+    mods::arg_ref<char DUSK_CONST*>(args, 3) = sMidnaHubWarpOptionText;
+    return HOOK_CONTINUE;
+}
+
+void after_midna_select_proc(ModContext*, void* args, void*, void*) {
+    auto* msg = mods::arg<dMsgObject_c*>(args, 0);
+    if (msg == nullptr || !sMidnaHubWarpMenuOffered || !can_offer_midna_hub_warp() ||
+        !is_midna_menu_message())
+    {
+        return;
+    }
+
+    if (msg->getSelectPushFlag() != 1) {
+        if (msg->getSelectPushFlag() == 2) {
+            sMidnaHubWarpMenuOffered = false;
+        }
+        return;
+    }
+
+    if (msg->getSelectCursorPosLocal() != 1) {
+        sMidnaHubWarpMenuOffered = false;
+        return;
+    }
+
+    sMidnaHubWarpMenuOffered = false;
+    warp_to_bossrush_hub_from_midna(daPy_py_c::getMidnaActor());
+}
+
 HookAction on_name_scene_change_pre(ModContext*, void* args, void*, void*) {
     dSv_save_c* save = dComIfGs_getSaveData();
     if (!is_boss_rush(save) && !is_intro_skipped(save)) {
@@ -1634,6 +1749,16 @@ ModResult install_new_save_mode_hooks(ModError* error) {
     result = mods::hook_add_pre<BossWarpExecuteHook>(svc_hook, on_bosswarp_execute_pre);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight bossrush portal hook");
+    }
+
+    result = mods::hook_add_pre<MsgScrnTalkSetSelectStringHook>(svc_hook, before_midna_select_string);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub option talk hook");
+    }
+
+    result = mods::hook_add_post<MsgObjectSelectProcHook>(svc_hook, after_midna_select_proc);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub warp hook");
     }
 
     result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, on_play_scene_update_post);
