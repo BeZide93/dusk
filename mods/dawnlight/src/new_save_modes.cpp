@@ -20,6 +20,7 @@ class JPABaseEmitter;
 #include "d/d_gameover.h"
 #include "d/d_item.h"
 #include "d/d_item_data.h"
+#include "d/d_meter2.h"
 #include "d/d_meter2_info.h"
 #include "d/d_msg_class.h"
 #include "d/d_msg_flow.h"
@@ -52,7 +53,9 @@ DEFINE_HOOK(
 DEFINE_HOOK(&dStage_changeScene, StageChangeSceneHook);
 DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
 DEFINE_HOOK(&dMsgObject_c::selectProc, MsgObjectSelectProcHook);
+DEFINE_HOOK(&dMsgScrnBase_c::setString, MsgScrnBaseSetStringHook);
 DEFINE_HOOK(&dMsgScrnTalk_c::setSelectString, MsgScrnTalkSetSelectStringHook);
+DEFINE_HOOK(&dMeter2_c::_execute, MeterExecuteHook);
 DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
 DEFINE_HOOK_SYMBOL("daB_GND_Execute", int(b_gnd_class*), GanondorfExecuteHook);
 DEFINE_HOOK_SYMBOL("daObj_Gb_Execute", int(obj_gb_class*), GanondorfBarrierExecuteHook);
@@ -163,8 +166,13 @@ int sPendingHubPortal = -1;
 int sDismissedHubPortal = -1;
 char sHubConfirmTitle[64] = {};
 char sHubConfirmBody[128] = {};
+char sHubMidnaPromptText[64] = {};
 char const sMidnaHubWarpOptionText[] = "Garden of Twilight";
+char const sMidnaYesText[] = "Yes";
+char const sMidnaNoText[] = "No";
+char const sMidnaEmptyText[] = "";
 bool sMidnaHubWarpMenuOffered = false;
+bool sHubPortalMidnaPromptOffered = false;
 
 u8* reserve_bytes(dSv_save_c* save) {
     return save == nullptr ? nullptr : reinterpret_cast<u8*>(save) + kReserveOffset;
@@ -1132,6 +1140,21 @@ bool can_offer_midna_hub_warp() {
            dMeter2Info_getGameOverType() == 0 && dComIfGp_getGameoverStatus() == 0;
 }
 
+bool has_hub_portal_midna_prompt() {
+    return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() == kBossRushStateHub &&
+           is_boss_hub_stage_name() && sPendingHubPortal >= 0 &&
+           sPendingHubPortal < static_cast<int>(kBossRushHubPortalCount);
+}
+
+void set_hub_portal_midna_meter_prompt() {
+    if (!has_hub_portal_midna_prompt()) {
+        return;
+    }
+
+    dComIfGp_setZStatus(BUTTON_STATUS_CHECK, BUTTON_STATUS_FLAG_EMPHASIS);
+    dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
+}
+
 bool is_midna_menu_message() {
     dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
     if (msg == NULL || msg->mpRenProc == NULL || msg->getFukiKind() != 13) {
@@ -1174,10 +1197,7 @@ void prepare_midna_hub_warp_item() {
     dComIfGs_setItem(SLOT_18, dItemNo_DUNGEON_BACK_e);
 }
 
-void warp_to_bossrush_hub_from_midna(daMidna_c* midna) {
-    reset_direct_final_boss_state();
-    delete_hub_actors();
-    prepare_midna_hub_warp_item();
+void close_midna_custom_dialog(daMidna_c* midna) {
     dMsgObject_onKillMessageFlag();
 
     if (midna != NULL) {
@@ -1186,6 +1206,13 @@ void warp_to_bossrush_hub_from_midna(daMidna_c* midna) {
     } else {
         dComIfGp_event_reset();
     }
+}
+
+void warp_to_bossrush_hub_from_midna(daMidna_c* midna) {
+    reset_direct_final_boss_state();
+    delete_hub_actors();
+    prepare_midna_hub_warp_item();
+    close_midna_custom_dialog(midna);
 
     daAlink_c* player = daAlink_getAlinkActorClass();
     if (player != NULL && player->procDungeonWarpReadyInit()) {
@@ -1233,6 +1260,7 @@ void start_bossrush_entry(int portal) {
 void clear_hub_confirm_state() {
     sHubConfirmDialog = 0;
     sPendingHubPortal = -1;
+    sHubPortalMidnaPromptOffered = false;
 }
 
 void on_hub_confirm_yes(ModContext*, UiDialogHandle, void*) {
@@ -1293,6 +1321,35 @@ bool open_bossrush_confirm_dialog(int portal) {
     return true;
 }
 
+void set_hub_midna_prompt_portal(int portal) {
+    if (portal < 0 || portal >= static_cast<int>(kBossRushHubPortalCount)) {
+        clear_hub_confirm_state();
+        return;
+    }
+
+    sPendingHubPortal = portal;
+    std::snprintf(sHubMidnaPromptText, sizeof(sHubMidnaPromptText), "Fight %s?",
+        bossrush_portal_name(portal));
+}
+
+void resolve_hub_midna_prompt(bool accepted) {
+    const int portal = sPendingHubPortal;
+    clear_hub_confirm_state();
+    sHubPortalsArmed = false;
+    close_midna_custom_dialog(daPy_py_c::getMidnaActor());
+
+    if (!accepted) {
+        sDismissedHubPortal = portal;
+        return;
+    }
+
+    if (portal >= 0 && is_boss_rush(dComIfGs_getSaveData()) &&
+        boss_rush_state() == kBossRushStateHub && is_boss_hub_stage_name())
+    {
+        start_bossrush_entry(portal);
+    }
+}
+
 void update_bossrush_hub() {
     sAdvancePending = false;
     sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
@@ -1313,17 +1370,18 @@ void update_bossrush_hub() {
     if (portal < 0) {
         sHubPortalsArmed = true;
         sDismissedHubPortal = -1;
+        clear_hub_confirm_state();
         return;
     }
 
-    if (sHubConfirmDialog != 0 || portal == sDismissedHubPortal ||
-        !sHubPortalsArmed || !can_open_save_prompt() || ui_document_visible())
+    if (portal == sDismissedHubPortal || !sHubPortalsArmed || !can_open_save_prompt() ||
+        ui_document_visible())
     {
         return;
     }
 
     sHubPortalsArmed = false;
-    open_bossrush_confirm_dialog(portal);
+    set_hub_midna_prompt_portal(portal);
 }
 
 void finish_prompt_and_advance() {
@@ -1458,7 +1516,19 @@ void prepare_bossrush_start() {
 }
 
 HookAction before_midna_select_string(ModContext*, void* args, void*, void*) {
-    if (!can_offer_midna_hub_warp() || !is_midna_menu_message()) {
+    if (!is_midna_menu_message()) {
+        return HOOK_CONTINUE;
+    }
+
+    if (has_hub_portal_midna_prompt()) {
+        sHubPortalMidnaPromptOffered = true;
+        mods::arg_ref<char DUSK_CONST*>(args, 1) = sMidnaEmptyText;
+        mods::arg_ref<char DUSK_CONST*>(args, 2) = sMidnaYesText;
+        mods::arg_ref<char DUSK_CONST*>(args, 3) = sMidnaNoText;
+        return HOOK_CONTINUE;
+    }
+
+    if (!can_offer_midna_hub_warp()) {
         return HOOK_CONTINUE;
     }
 
@@ -1467,8 +1537,38 @@ HookAction before_midna_select_string(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
+HookAction before_midna_text_string(ModContext*, void* args, void*, void*) {
+    if (!has_hub_portal_midna_prompt() || !is_midna_menu_message()) {
+        return HOOK_CONTINUE;
+    }
+
+    sHubPortalMidnaPromptOffered = true;
+    mods::arg_ref<char DUSK_CONST*>(args, 1) = sHubMidnaPromptText;
+    mods::arg_ref<char DUSK_CONST*>(args, 2) = sHubMidnaPromptText;
+    return HOOK_CONTINUE;
+}
+
+HookAction before_meter_execute(ModContext*, void*, void*, void*) {
+    set_hub_portal_midna_meter_prompt();
+    return HOOK_CONTINUE;
+}
+
 void after_midna_select_proc(ModContext*, void* args, void*, void*) {
     auto* msg = mods::arg<dMsgObject_c*>(args, 0);
+    if (msg != nullptr && sHubPortalMidnaPromptOffered && has_hub_portal_midna_prompt() &&
+        is_midna_menu_message())
+    {
+        if (msg->getSelectPushFlag() != 1) {
+            if (msg->getSelectPushFlag() == 2) {
+                resolve_hub_midna_prompt(false);
+            }
+            return;
+        }
+
+        resolve_hub_midna_prompt(msg->getSelectCursorPosLocal() == 0);
+        return;
+    }
+
     if (msg == nullptr || !sMidnaHubWarpMenuOffered || !can_offer_midna_hub_warp() ||
         !is_midna_menu_message())
     {
@@ -1756,9 +1856,19 @@ ModResult install_new_save_mode_hooks(ModError* error) {
         return mods::set_error(error, result, "failed to install Dawnlight Midna hub option talk hook");
     }
 
+    result = mods::hook_add_pre<MsgScrnBaseSetStringHook>(svc_hook, before_midna_text_string);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub prompt text hook");
+    }
+
     result = mods::hook_add_post<MsgObjectSelectProcHook>(svc_hook, after_midna_select_proc);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight Midna hub warp hook");
+    }
+
+    result = mods::hook_add_pre<MeterExecuteHook>(svc_hook, before_meter_execute);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub prompt meter hook");
     }
 
     result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, on_play_scene_update_post);
