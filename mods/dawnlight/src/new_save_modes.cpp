@@ -250,6 +250,11 @@ bool is_boss_hub_stage_name() {
            dComIfGp_getStartStageRoomNo() == kBossRushReturnRoom;
 }
 
+bool is_bossrush_hub_active() {
+    return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() == kBossRushStateHub &&
+           is_boss_hub_stage_name();
+}
+
 bool is_current_stage_name(const char* stage) {
     return std::strcmp(dComIfGp_getStartStageName(), stage) == 0;
 }
@@ -273,6 +278,7 @@ void reset_hub_actor_ids() {
 }
 
 void ensure_hub_actor_ids_initialized();
+void arm_ganondorf_barrier(obj_gb_class* barrier);
 
 void delete_hub_actor(fpc_ProcID id) {
     if (id != fpcM_ERROR_PROCESS_ID_e && fopAcM_SearchByID(id) != NULL) {
@@ -304,6 +310,13 @@ void ensure_hub_actor_ids_initialized() {
     }
 }
 
+obj_gb_class* hub_barrier_actor() {
+    if (sHubBarrierId == fpcM_ERROR_PROCESS_ID_e) {
+        return NULL;
+    }
+    return static_cast<obj_gb_class*>(fopAcM_SearchByID(sHubBarrierId));
+}
+
 void spawn_hub_actors() {
     ensure_hub_actor_ids_initialized();
     if (sHubActorsSpawned) {
@@ -315,6 +328,7 @@ void spawn_hub_actors() {
         }
 
         if (actorsAlive) {
+            arm_ganondorf_barrier(hub_barrier_actor());
             return;
         }
 
@@ -322,8 +336,11 @@ void spawn_hub_actors() {
     }
 
     cXyz center = hub_center();
+    csXyz barrierAngle(kDirectFinalBarrierAngleX, 0, 0);
+    dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, kBossRushReturnRoom);
+    dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, kBossRushReturnRoom);
     sHubBarrierId =
-        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, NULL, NULL, -1);
+        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, &barrierAngle, NULL, -1);
 
     for (u8 i = 0; i < kBossRushCenterPortalIndex; i++) {
         s16 angle = static_cast<s16>((0x10000 * i) / kBossRushCenterPortalIndex);
@@ -339,6 +356,7 @@ void spawn_hub_actors() {
     sHubPortalIds[kBossRushCenterPortalIndex] = fopAcM_createWarpHole(
         &center, &centerRot, kBossRushReturnRoom, kBossRushCenterPortalIndex, 0, 0xff);
 
+    arm_ganondorf_barrier(hub_barrier_actor());
     sHubActorsSpawned = true;
 }
 
@@ -889,8 +907,12 @@ bool direct_final_barrier_active() {
     return false;
 }
 
-void arm_direct_final_barrier(obj_gb_class* barrier) {
-    if (barrier == NULL || !is_direct_final_ganondorf_active()) {
+bool should_force_ganondorf_barrier_visible() {
+    return is_bossrush_hub_active() || is_direct_final_ganondorf_active();
+}
+
+void arm_ganondorf_barrier(obj_gb_class* barrier) {
+    if (barrier == NULL || !should_force_ganondorf_barrier_visible()) {
         return;
     }
 
@@ -900,6 +922,10 @@ void arm_direct_final_barrier(obj_gb_class* barrier) {
     barrier->mSw1 = kDirectFinalBarrierOnSwitch;
     barrier->mSw2 = kDirectFinalBarrierOffSwitch;
     barrier->mIsFinalBattle = 0;
+    barrier->mBrkFrame = 29.0f;
+    barrier->mColorAlpha = 0xF0;
+    barrier->scale.x = 1.5f;
+    barrier->scale.y = 1.0f;
 }
 
 void create_direct_final_barrier_if_needed(b_gnd_class* ganondorf) {
@@ -1200,6 +1226,7 @@ void update_bossrush_hub() {
     }
 
     spawn_hub_actors();
+    arm_ganondorf_barrier(hub_barrier_actor());
 
     int portal = touched_hub_portal();
     if (portal < 0) {
@@ -1571,7 +1598,7 @@ HookAction on_ganondorf_barrier_execute_pre(ModContext*, void* args, void*, void
         return HOOK_CONTINUE;
     }
 
-    arm_direct_final_barrier(mods::arg<obj_gb_class*>(args, 0));
+    arm_ganondorf_barrier(mods::arg<obj_gb_class*>(args, 0));
     return HOOK_CONTINUE;
 }
 
