@@ -133,6 +133,8 @@ bool s_skipTouchMidnaMode = false;
 bool s_skipTouchMidnaPressed = false;
 std::string s_skipTouchMidnaSource;
 bool s_zPromptAsDpadLeftThisFrame = false;
+bool s_zPromptCustomVisualsActive = false;
+u8 s_zPromptAsDpadLeftSlot = 0;
 bool s_restore3DPromptState = false;
 u8 s_restore3DStatus = BUTTON_STATUS_NONE;
 u8 s_restore3DDirection = 0;
@@ -219,6 +221,69 @@ u8 current_3d_set_flag() {
         }
     }
     return flag;
+}
+
+J2DPane* prompt_pane(dMeterButton_c* meter, u64 tag) {
+    return meter != nullptr && meter->mpButtonScreen != nullptr ? meter->mpButtonScreen->search(tag) :
+                                                                  nullptr;
+}
+
+void set_prompt_pane_visible(dMeterButton_c* meter, u64 tag, bool visible) {
+    J2DPane* pane = prompt_pane(meter, tag);
+    if (pane == nullptr) {
+        return;
+    }
+
+    if (visible) {
+        pane->show();
+    } else {
+        pane->hide();
+    }
+}
+
+void restore_z_prompt_visuals(dMeterButton_c* meter) {
+    if (!s_zPromptCustomVisualsActive || meter == nullptr) {
+        return;
+    }
+
+    set_prompt_pane_visible(meter, MULTI_CHAR('as_btn1'), true);
+    set_prompt_pane_visible(meter, 'zbtn', true);
+    set_prompt_pane_visible(meter, MULTI_CHAR('z_btnl'), true);
+
+    if (meter->mpMidona != nullptr) {
+        meter->paneTrans(meter->mpMidona, g_drawHIO.mEmpButton.mMidnaIconPosX,
+            g_drawHIO.mEmpButton.mMidnaIconPosY, 0xFF);
+    }
+
+    s_zPromptCustomVisualsActive = false;
+}
+
+void apply_z_prompt_visuals(dMeterButton_c* meter) {
+    if (meter == nullptr || meter->mpButtonScreen == nullptr) {
+        return;
+    }
+
+    set_prompt_pane_visible(meter, MULTI_CHAR('as_btn1'), false);
+    set_prompt_pane_visible(meter, MULTI_CHAR('yaji_l_n'), true);
+    set_prompt_pane_visible(meter, MULTI_CHAR('yaji_u_n'), false);
+    set_prompt_pane_visible(meter, MULTI_CHAR('yaji_d_n'), false);
+    set_prompt_pane_visible(meter, MULTI_CHAR('yaji_r_n'), false);
+    set_prompt_pane_visible(meter, 'zbtn', false);
+    set_prompt_pane_visible(meter, MULTI_CHAR('z_btnl'), false);
+
+    if (meter->mpMidona != nullptr) {
+        const u8 slot = s_zPromptAsDpadLeftSlot > 1 ? 0 : s_zPromptAsDpadLeftSlot;
+        const f32 baseX = meter->field_0x304[dMeterButton_c::BUTTON_3D_e] +
+                          (meter->field_0x2fc[slot] + meter->mButton3DPosX +
+                              meter->field_0x18c[dMeterButton_c::BUTTON_3D_e]);
+        const f32 alphaRate = meter->mpButton3D != nullptr ? meter->mpButton3D->getAlphaRate() : 1.0f;
+
+        meter->mpMidona->show();
+        meter->mpMidona->setAlphaRate(alphaRate);
+        meter->paneTrans(meter->mpMidona, baseX + 34.0f, meter->mButton3DPosY, 0xFF);
+    }
+
+    s_zPromptCustomVisualsActive = true;
 }
 
 bool z_item_menu_or_pause_context();
@@ -2287,6 +2352,7 @@ HookAction before_meter_button_set_string(ModContext*, void* args, void*, void*)
     }
 
     button = dMeterButton_c::BUTTON_3D_e;
+    s_zPromptAsDpadLeftSlot = mods::arg<u8>(args, 3);
     s_zPromptAsDpadLeftThisFrame = true;
     return HOOK_CONTINUE;
 }
@@ -2294,8 +2360,10 @@ HookAction before_meter_button_set_string(ModContext*, void* args, void*, void*)
 HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
     const bool replacePrompt = s_zPromptAsDpadLeftThisFrame && z_item_slot_enabled();
     s_zPromptAsDpadLeftThisFrame = false;
+    auto* meter = mods::arg<dMeterButton_c*>(args, 0);
 
     if (!replacePrompt) {
+        restore_z_prompt_visuals(meter);
         return HOOK_CONTINUE;
     }
 
@@ -2315,11 +2383,12 @@ HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
     return HOOK_CONTINUE;
 }
 
-void after_meter_button_execute(ModContext*, void*, void*, void*) {
+void after_meter_button_execute(ModContext*, void* args, void*, void*) {
     if (!s_restore3DPromptState) {
         return;
     }
 
+    apply_z_prompt_visuals(mods::arg<dMeterButton_c*>(args, 0));
     dComIfGp_set3DStatus(s_restore3DStatus, s_restore3DDirection, s_restore3DSetFlag);
     s_restore3DPromptState = false;
 }
