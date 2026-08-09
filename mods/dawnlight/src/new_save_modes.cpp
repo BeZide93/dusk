@@ -3,8 +3,13 @@
 #include "service_imports.hpp"
 
 #include "global.h"
+#include "SSystem/SComponent/c_math.h"
 #include "m_Do/m_Do_ext.h"
 class JPABaseEmitter;
+#include "d/actor/d_a_b_gnd.h"
+#include "d/d_drawlist.h"
+#include "d/actor/d_a_mant.h"
+#include "d/actor/d_a_obj_gb.h"
 #include "d/actor/d_a_obj_bosswarp.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
@@ -37,8 +42,11 @@ DEFINE_HOOK(
     static_cast<void (*)(const char*, s16, s8, s8, f32, u32, int, s8, s16, int, int)>(
         &dComIfGp_setNextStage),
     SetNextStageHook);
+DEFINE_HOOK(&dStage_changeScene, StageChangeSceneHook);
 DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
 DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
+DEFINE_HOOK_SYMBOL("daB_GND_Execute", int(b_gnd_class*), GanondorfExecuteHook);
+DEFINE_HOOK_SYMBOL("daObj_Gb_Execute", int(obj_gb_class*), GanondorfBarrierExecuteHook);
 
 constexpr size_t kReserveOffset = 0x8F0;
 constexpr size_t kIntroSkipOffset = 16;
@@ -61,46 +69,36 @@ struct BossRushEntry {
     enum ClearMode {
         Boss,
         MiddleBoss,
+        FinalSequence,
+        BeastGanon,
+        FinalGanondorf,
     } clearMode;
+    const char* displayName;
+    bool runSequence;
 };
 
 constexpr BossRushEntry kBossRushEntries[] = {
-    {"D_MN05B", 0, 51, 0, dStage_SaveTbl_LV1, BossRushEntry::MiddleBoss},
-    {"D_MN05A", 0, 50, 0, dStage_SaveTbl_LV1, BossRushEntry::Boss},
-    {"D_MN04B", 0, 51, 0, dStage_SaveTbl_LV2, BossRushEntry::MiddleBoss},
-    {"D_MN04A", 0, 50, 0, dStage_SaveTbl_LV2, BossRushEntry::Boss},
-    {"D_MN01B", 0, 51, 0, dStage_SaveTbl_LV3, BossRushEntry::MiddleBoss},
-    {"D_MN01A", 0, 50, 0, dStage_SaveTbl_LV3, BossRushEntry::Boss},
-    {"D_MN10B", 0, 51, 0, dStage_SaveTbl_LV4, BossRushEntry::MiddleBoss},
-    {"D_MN10A", 0, 50, 0, dStage_SaveTbl_LV4, BossRushEntry::Boss},
-    {"D_MN11B", 0, 51, 0, dStage_SaveTbl_LV5, BossRushEntry::MiddleBoss},
-    {"D_MN11A", 0, 50, 0, dStage_SaveTbl_LV5, BossRushEntry::Boss},
-    {"D_MN06B", 0, 51, 0, dStage_SaveTbl_LV6, BossRushEntry::MiddleBoss},
-    {"D_MN06A", 0, 50, 0, dStage_SaveTbl_LV6, BossRushEntry::Boss},
-    {"D_MN07B", 0, 51, 0, dStage_SaveTbl_LV7, BossRushEntry::MiddleBoss},
-    {"D_MN07A", 0, 50, 0, dStage_SaveTbl_LV7, BossRushEntry::Boss},
-    {"D_MN08D", 0, 50, 0, dStage_SaveTbl_LV8, BossRushEntry::Boss},
+    {"D_MN05B", 0, 51, 0, dStage_SaveTbl_LV1, BossRushEntry::MiddleBoss, "Ook", true},
+    {"D_MN05A", 0, 50, 0, dStage_SaveTbl_LV1, BossRushEntry::Boss, "Diababa", true},
+    {"D_MN04B", 0, 51, 0, dStage_SaveTbl_LV2, BossRushEntry::MiddleBoss, "Dangoro", true},
+    {"D_MN04A", 0, 50, 0, dStage_SaveTbl_LV2, BossRushEntry::Boss, "Fyrus", true},
+    {"D_MN01B", 0, 51, 0, dStage_SaveTbl_LV3, BossRushEntry::MiddleBoss, "Deku Toad", true},
+    {"D_MN01A", 0, 50, 0, dStage_SaveTbl_LV3, BossRushEntry::Boss, "Morpheel", true},
+    {"D_MN10B", 0, 51, 0, dStage_SaveTbl_LV4, BossRushEntry::MiddleBoss, "Death Sword", true},
+    {"D_MN10A", 0, 50, 0, dStage_SaveTbl_LV4, BossRushEntry::Boss, "Stallord", true},
+    {"D_MN11B", 0, 51, 0, dStage_SaveTbl_LV5, BossRushEntry::MiddleBoss, "Darkhammer", true},
+    {"D_MN11A", 0, 50, 0, dStage_SaveTbl_LV5, BossRushEntry::Boss, "Blizzeta", true},
+    {"D_MN06B", 0, 51, 0, dStage_SaveTbl_LV6, BossRushEntry::MiddleBoss, "Darknut", true},
+    {"D_MN06A", 0, 50, 0, dStage_SaveTbl_LV6, BossRushEntry::Boss, "Armogohma", true},
+    {"D_MN07B", 0, 51, 0, dStage_SaveTbl_LV7, BossRushEntry::MiddleBoss, "Aeralfos", true},
+    {"D_MN07A", 0, 50, 0, dStage_SaveTbl_LV7, BossRushEntry::Boss, "Argorok", true},
+    {"D_MN08D", 0, 50, 0, dStage_SaveTbl_LV8, BossRushEntry::Boss, "Zant", true},
+    {"D_MN09A", 0, 50, 0, dStage_SaveTbl_LV9, BossRushEntry::FinalSequence, "Puppet Zelda", true},
+    {"D_MN09A", 20, 51, 0, dStage_SaveTbl_LV9, BossRushEntry::BeastGanon, "Beast Ganon", false},
+    {"D_MN09C", 0, 0, 0, dStage_SaveTbl_LV9, BossRushEntry::FinalGanondorf, "Ganondorf", false},
 };
 
 constexpr size_t kBossRushEntryCount = std::size(kBossRushEntries);
-constexpr const char* kBossRushEntryNames[] = {
-    "Ook",
-    "Diababa",
-    "Dangoro",
-    "Fyrus",
-    "Death Sword",
-    "Stallord",
-    "Darkhammer",
-    "Blizzeta",
-    "Aeralfos",
-    "Argorok",
-    "Deku Toad",
-    "Morpheel",
-    "Phantom Zant",
-    "Zant",
-    "Puppet Zelda",
-};
-static_assert(std::size(kBossRushEntryNames) == kBossRushEntryCount);
 constexpr const char* kBossRushRunName = "Boss Rush";
 constexpr s8 kBossRushReturnRoom = 0;
 constexpr char kBossRushReturnStage[] = "D_MN09C";
@@ -112,8 +110,19 @@ constexpr u8 kBossRushStateReplay = 2;
 constexpr u8 kBossRushCenterPortalIndex = static_cast<u8>(kBossRushEntryCount);
 constexpr u8 kBossRushHubPortalCount = kBossRushCenterPortalIndex + 1;
 constexpr f32 kBossRushHubY = 1100.0f;
-constexpr f32 kBossRushHubPortalRadius = 1200.0f;
+constexpr f32 kBossRushHubPortalRadius = 1450.0f;
 constexpr f32 kBossRushHubTriggerRadius = 150.0f;
+constexpr s16 kGanondorfFacingAngle = 0x37FE;
+constexpr s16 kGanondorfActionWait = 10;
+constexpr s16 kGanondorfActionDown = 21;
+constexpr s16 kGanondorfActionEnd = 22;
+constexpr int kGanondorfIntroCam = 92;
+constexpr int kGanondorfIntroCamAfterBarrierSpawn = 2;
+constexpr int kGanondorfEndDemoStart = 60;
+constexpr int kDirectFinalBarrierOnSwitch = 15;
+constexpr int kDirectFinalBarrierOffSwitch = 31;
+constexpr s16 kDirectFinalBarrierAngleX =
+    static_cast<s16>((kDirectFinalBarrierOffSwitch << 8) | kDirectFinalBarrierOnSwitch);
 
 #if VERSION == VERSION_GCN_PAL
 constexpr size_t kNameSceneFileSelectOffset = 0x43C;
@@ -132,6 +141,11 @@ bool sAdvancePending = false;
 DataNewRestore sDataNewRestore;
 fpc_ProcID sHubBarrierId = fpcM_ERROR_PROCESS_ID_e;
 fpc_ProcID sHubPortalIds[kBossRushHubPortalCount];
+fpc_ProcID sDirectFinalBossId = fpcM_ERROR_PROCESS_ID_e;
+fpc_ProcID sDirectFinalBarrierId = fpcM_ERROR_PROCESS_ID_e;
+int sDirectFinalBossIndex = -1;
+bool sDirectFinalGanondorfStarted = false;
+int sDirectFinalGanondorfReadyFrames = 0;
 bool sHubActorIdsInitialized = false;
 bool sHubActorsSpawned = false;
 bool sHubPortalsArmed = false;
@@ -236,6 +250,10 @@ bool is_boss_hub_stage_name() {
            dComIfGp_getStartStageRoomNo() == kBossRushReturnRoom;
 }
 
+bool is_current_stage_name(const char* stage) {
+    return std::strcmp(dComIfGp_getStartStageName(), stage) == 0;
+}
+
 void set_bossrush_return_place() {
     dComIfGs_getSaveData()->getPlayer().getPlayerReturnPlace().set(
         kBossRushReturnStage, kBossRushReturnRoom, 0);
@@ -252,6 +270,32 @@ void reset_hub_actor_ids() {
     sHubConfirmDialog = 0;
     sPendingHubPortal = -1;
     sDismissedHubPortal = -1;
+}
+
+void ensure_hub_actor_ids_initialized();
+
+void delete_hub_actor(fpc_ProcID id) {
+    if (id != fpcM_ERROR_PROCESS_ID_e && fopAcM_SearchByID(id) != NULL) {
+        fopAcM_delete(id);
+    }
+}
+
+void delete_hub_actors() {
+    ensure_hub_actor_ids_initialized();
+    delete_hub_actor(sHubBarrierId);
+    for (u8 i = 0; i < kBossRushHubPortalCount; i++) {
+        delete_hub_actor(sHubPortalIds[i]);
+    }
+    reset_hub_actor_ids();
+}
+
+void reset_direct_final_boss_state() {
+    delete_hub_actor(sDirectFinalBarrierId);
+    sDirectFinalBossId = fpcM_ERROR_PROCESS_ID_e;
+    sDirectFinalBarrierId = fpcM_ERROR_PROCESS_ID_e;
+    sDirectFinalBossIndex = -1;
+    sDirectFinalGanondorfStarted = false;
+    sDirectFinalGanondorfReadyFrames = 0;
 }
 
 void ensure_hub_actor_ids_initialized() {
@@ -610,6 +654,15 @@ void clear_all_boss_flags() {
     }
 }
 
+void set_saved_dungeon_switch(int saveTable, int sw, bool enabled) {
+    dSv_memBit_c& bit = dComIfGs_getSaveData()->getSave(saveTable).getBit();
+    if (enabled) {
+        bit.onSwitch(sw);
+    } else {
+        bit.offSwitch(sw);
+    }
+}
+
 void ensure_bossrush_story_state() {
     dComIfGs_onEventBit(dSv_event_flag_c::F_0250);
 }
@@ -737,12 +790,26 @@ bool is_current_stage(const BossRushEntry& entry) {
            dComIfGp_getStartStageRoomNo() == entry.room;
 }
 
+bool is_current_direct_boss_stage(const BossRushEntry& entry) {
+    if (entry.clearMode == BossRushEntry::FinalGanondorf) {
+        return is_current_stage_name(entry.stage);
+    }
+    return is_current_stage(entry);
+}
+
 bool is_current_save_table(int saveTable) {
     stage_stag_info_class* stagInfo = dComIfGp_getStageStagInfo();
     return stagInfo != nullptr && saveTable == dStage_stagInfo_GetSaveTbl(stagInfo);
 }
 
 bool boss_is_cleared(const BossRushEntry& entry) {
+    if (entry.clearMode == BossRushEntry::FinalSequence ||
+        entry.clearMode == BossRushEntry::BeastGanon ||
+        entry.clearMode == BossRushEntry::FinalGanondorf)
+    {
+        return false;
+    }
+
     if (is_current_save_table(entry.saveTable)) {
         return entry.clearMode == BossRushEntry::MiddleBoss ? dComIfGs_isStageMiddleBoss() :
                                                               dComIfGs_isStageBossEnemy();
@@ -751,6 +818,223 @@ bool boss_is_cleared(const BossRushEntry& entry) {
     dSv_memBit_c& bit = dComIfGs_getSaveData()->getSave(entry.saveTable).getBit();
     return entry.clearMode == BossRushEntry::MiddleBoss ? bit.isStageBossEnemy2() :
                                                           bit.isStageBossEnemy();
+}
+
+void prepare_final_battle_state(const BossRushEntry& entry) {
+    if (entry.clearMode == BossRushEntry::BeastGanon) {
+        dComIfGs_setTransformStatus(TF_STATUS_WOLF);
+    } else if (entry.clearMode == BossRushEntry::FinalSequence ||
+               entry.clearMode == BossRushEntry::FinalGanondorf)
+    {
+        dComIfGs_setTransformStatus(TF_STATUS_HUMAN);
+    }
+
+    const bool finalGanondorf = false;
+    set_saved_dungeon_switch(dStage_SaveTbl_LV9, 1, finalGanondorf);
+    set_saved_dungeon_switch(dStage_SaveTbl_LV9, 2, finalGanondorf);
+}
+
+void prepare_bossrush_entry(const BossRushEntry& entry) {
+    ensure_bossrush_story_state();
+    clear_boss_flags(entry);
+
+    if (entry.saveTable == dStage_SaveTbl_LV9) {
+        prepare_final_battle_state(entry);
+    }
+}
+
+bool direct_final_boss_request_active() {
+    return sDirectFinalBossId != fpcM_ERROR_PROCESS_ID_e &&
+           (fpcM_IsCreating(sDirectFinalBossId) || fopAcM_IsExecuting(sDirectFinalBossId));
+}
+
+bool is_direct_final_ganondorf_active();
+
+void create_beast_ganon_if_needed(const BossRushEntry& entry) {
+    if (fopAcM_SearchByName(fpcNm_B_MGN_e) != NULL || direct_final_boss_request_active()) {
+        return;
+    }
+
+    cXyz bossPos(-7.0f, 0.0f, -1045.0f);
+    csXyz bossAngle(0, -0x8000, 0);
+    sDirectFinalBossId =
+        fopAcM_create(fpcNm_B_MGN_e, 0xFF, &bossPos, entry.room, &bossAngle, NULL, -1);
+}
+
+void create_final_ganondorf_if_needed(const BossRushEntry& entry) {
+    if (fopAcM_SearchByName(fpcNm_B_GND_e) != NULL || direct_final_boss_request_active()) {
+        return;
+    }
+
+    cXyz bossPos(-600.0f, kBossRushHubY, 0.0f);
+    csXyz bossAngle(0, kGanondorfFacingAngle, 0);
+    sDirectFinalBossId =
+        fopAcM_create(fpcNm_B_GND_e, 0, &bossPos, entry.room, &bossAngle, NULL, -1);
+}
+
+bool direct_final_barrier_active() {
+    if (sDirectFinalBarrierId != fpcM_ERROR_PROCESS_ID_e &&
+        (fpcM_IsCreating(sDirectFinalBarrierId) || fopAcM_IsExecuting(sDirectFinalBarrierId)))
+    {
+        return true;
+    }
+
+    obj_gb_class* barrier = static_cast<obj_gb_class*>(fopAcM_SearchByName(fpcNm_OBJ_GB_e));
+    if (barrier != NULL) {
+        sDirectFinalBarrierId = fopAcM_GetID(static_cast<fopAc_ac_c*>(barrier));
+        return true;
+    }
+
+    sDirectFinalBarrierId = fpcM_ERROR_PROCESS_ID_e;
+    return false;
+}
+
+void arm_direct_final_barrier(obj_gb_class* barrier) {
+    if (barrier == NULL || !is_direct_final_ganondorf_active()) {
+        return;
+    }
+
+    const int roomNo = fopAcM_GetRoomNo(static_cast<fopAc_ac_c*>(barrier));
+    dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, roomNo);
+    dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, roomNo);
+    barrier->mSw1 = kDirectFinalBarrierOnSwitch;
+    barrier->mSw2 = kDirectFinalBarrierOffSwitch;
+    barrier->mIsFinalBattle = 0;
+}
+
+void create_direct_final_barrier_if_needed(b_gnd_class* ganondorf) {
+    if (ganondorf == NULL || direct_final_barrier_active()) {
+        return;
+    }
+
+    fopAc_ac_c* actor = static_cast<fopAc_ac_c*>(ganondorf);
+    cXyz barrierPos(0.0f, kBossRushHubY, 0.0f);
+    csXyz barrierAngle(kDirectFinalBarrierAngleX, 0, 0);
+    sDirectFinalBarrierId =
+        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &barrierPos, fopAcM_GetRoomNo(actor), &barrierAngle, NULL, -1);
+    dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, fopAcM_GetRoomNo(actor));
+    dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, fopAcM_GetRoomNo(actor));
+}
+
+bool is_direct_final_ganondorf_active() {
+    if (!is_boss_rush(dComIfGs_getSaveData()) || boss_rush_state() != kBossRushStateReplay) {
+        return false;
+    }
+
+    const u8 index = boss_rush_index();
+    if (index >= kBossRushEntryCount) {
+        return false;
+    }
+
+    const BossRushEntry& entry = kBossRushEntries[index];
+    return entry.clearMode == BossRushEntry::FinalGanondorf &&
+           is_current_direct_boss_stage(entry);
+}
+
+bool force_final_ganondorf_ground_start(b_gnd_class* ganondorf) {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (ganondorf == NULL || player == NULL) {
+        sDirectFinalGanondorfReadyFrames = 0;
+        return false;
+    }
+
+    fopAc_ac_c* actor = static_cast<fopAc_ac_c*>(ganondorf);
+    if (!fopAcM_IsExecuting(fopAcM_GetID(actor))) {
+        sDirectFinalGanondorfReadyFrames = 0;
+        return false;
+    }
+
+    mant_class* mant = static_cast<mant_class*>(fopAcM_SearchByID(ganondorf->mMantChildID));
+    if (mant == NULL) {
+        sDirectFinalGanondorfReadyFrames = 0;
+        return false;
+    }
+
+    if (sDirectFinalGanondorfReadyFrames < 2) {
+        sDirectFinalGanondorfReadyFrames++;
+        return false;
+    }
+
+    player->onForceHorseGetOff();
+
+    actor->current.pos.set(-600.0f, kBossRushHubY, 0.0f);
+    actor->old.pos = actor->current.pos;
+    actor->speed.zero();
+    actor->speedF = 0.0f;
+    actor->shape_angle.x = actor->current.angle.x = 0;
+    actor->shape_angle.y = actor->current.angle.y = kGanondorfFacingAngle;
+    actor->shape_angle.z = actor->current.angle.z = 0;
+    actor->health = 100;
+
+    ganondorf->mNoDrawTimer = 0;
+    ganondorf->mActionMode = kGanondorfActionWait;
+    ganondorf->mMoveMode = 0;
+    ganondorf->mDrawHorse = FALSE;
+    ganondorf->mDemoCamMode = kGanondorfIntroCam;
+    ganondorf->mDemoCamTimer = kGanondorfIntroCamAfterBarrierSpawn;
+    ganondorf->mDamageInvulnerabilityTimer = 0;
+    ganondorf->field_0x1e08 = 0;
+    ganondorf->field_0x1e0a = 0;
+    ganondorf->field_0xc44[0] = 30;
+    ganondorf->field_0xc44[8] = 100;
+    ganondorf->mGakeChkType = 0;
+    ganondorf->field_0xc7d = 1;
+    ganondorf->field_0x2740 = 0;
+    ganondorf->field_0x2710.x = 55.0f;
+    mant->field_0x3969 = 1;
+    create_direct_final_barrier_if_needed(ganondorf);
+
+    sDirectFinalGanondorfStarted = true;
+    return true;
+}
+
+void start_final_ganondorf_if_ready() {
+    b_gnd_class* ganondorf = static_cast<b_gnd_class*>(fopAcM_SearchByName(fpcNm_B_GND_e));
+    if (ganondorf == NULL) {
+        sDirectFinalGanondorfReadyFrames = 0;
+        return;
+    }
+
+    if (!sDirectFinalGanondorfStarted || ganondorf->mDrawHorse ||
+        ganondorf->mActionMode < kGanondorfActionWait)
+    {
+        force_final_ganondorf_ground_start(ganondorf);
+    }
+}
+
+void ensure_direct_final_boss_started() {
+    if (boss_rush_state() != kBossRushStateReplay) {
+        reset_direct_final_boss_state();
+        return;
+    }
+
+    const u8 index = boss_rush_index();
+    if (index >= kBossRushEntryCount) {
+        reset_direct_final_boss_state();
+        return;
+    }
+
+    const BossRushEntry& entry = kBossRushEntries[index];
+    if ((entry.clearMode != BossRushEntry::BeastGanon &&
+         entry.clearMode != BossRushEntry::FinalGanondorf) ||
+        !is_current_direct_boss_stage(entry))
+    {
+        return;
+    }
+
+    if (sDirectFinalBossIndex != index) {
+        sDirectFinalBossIndex = index;
+        sDirectFinalBossId = fpcM_ERROR_PROCESS_ID_e;
+        sDirectFinalGanondorfStarted = false;
+        prepare_final_battle_state(entry);
+    }
+
+    if (entry.clearMode == BossRushEntry::BeastGanon) {
+        create_beast_ganon_if_needed(entry);
+    } else {
+        create_final_ganondorf_if_needed(entry);
+        start_final_ganondorf_if_ready();
+    }
 }
 
 void set_bossrush_next_stage() {
@@ -767,8 +1051,7 @@ void set_bossrush_next_stage() {
     }
 
     const BossRushEntry& entry = kBossRushEntries[boss_rush_index()];
-    ensure_bossrush_story_state();
-    clear_boss_flags(entry);
+    prepare_bossrush_entry(entry);
     dComIfGp_setNextStage(entry.stage, entry.point, entry.room, entry.layer);
 }
 
@@ -782,7 +1065,10 @@ void grant_victory_heart() {
 
 void advance_bossrush() {
     u8 index = boss_rush_index();
-    index++;
+    do {
+        index++;
+    } while (index < kBossRushEntryCount && !kBossRushEntries[index].runSequence);
+
     if (index >= kBossRushEntryCount) {
         index = 0;
         increment_boss_rush_loop();
@@ -808,12 +1094,15 @@ const char* bossrush_portal_name(int portal) {
         return kBossRushRunName;
     }
     if (portal >= 0 && portal < static_cast<int>(kBossRushEntryCount)) {
-        return kBossRushEntryNames[portal];
+        return kBossRushEntries[portal].displayName;
     }
     return "Boss";
 }
 
 void start_bossrush_entry(int portal) {
+    reset_direct_final_boss_state();
+    delete_hub_actors();
+
     if (portal == kBossRushCenterPortalIndex) {
         set_boss_rush_state(kBossRushStateRun);
         set_boss_rush_index(0);
@@ -943,20 +1232,24 @@ void update_bossrush() {
         sAdvancePending = false;
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
+        reset_direct_final_boss_state();
         return;
     }
 
     if (boss_rush_state() == kBossRushStateHub) {
+        reset_direct_final_boss_state();
         update_bossrush_hub();
         return;
     }
 
     reset_hub_runtime_when_away();
+    ensure_direct_final_boss_started();
 
     if (dComIfGs_getLife() == 0 && !dComIfGp_isEnableNextStage()) {
         set_boss_rush_state(kBossRushStateHub);
         set_boss_rush_index(0);
         set_bossrush_return_place();
+        reset_direct_final_boss_state();
         return;
     }
 
@@ -1133,8 +1426,153 @@ HookAction on_bosswarp_execute_pre(ModContext*, void* args, void* retval, void*)
     return HOOK_SKIP_ORIGINAL;
 }
 
+bool redirect_replay_to_hub(const BossRushEntry& entry) {
+    if (boss_rush_state() != kBossRushStateReplay) {
+        return false;
+    }
+
+    clear_boss_flags(entry);
+    set_boss_rush_state(kBossRushStateHub);
+    set_boss_rush_index(0);
+    dComIfGp_event_reset();
+    set_bossrush_next_stage();
+    return true;
+}
+
+bool complete_direct_final_ganondorf() {
+    const u8 index = boss_rush_index();
+    if (index >= kBossRushEntryCount) {
+        return false;
+    }
+
+    const BossRushEntry& entry = kBossRushEntries[index];
+    if (entry.clearMode != BossRushEntry::FinalGanondorf) {
+        return false;
+    }
+
+    return redirect_replay_to_hub(entry);
+}
+
+bool should_complete_direct_final_ganondorf(b_gnd_class* ganondorf) {
+    if (ganondorf == NULL || !is_direct_final_ganondorf_active()) {
+        return false;
+    }
+
+    if ((ganondorf->mDemoCamMode >= kGanondorfEndDemoStart &&
+         ganondorf->mDemoCamMode < kGanondorfIntroCam) ||
+        ganondorf->mActionMode == kGanondorfActionEnd)
+    {
+        return true;
+    }
+
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    return player != NULL && ganondorf->mActionMode == kGanondorfActionDown &&
+           ganondorf->mMoveMode == 2 &&
+           player->getCutType() == daPy_py_c::CUT_TYPE_DOWN;
+}
+
+bool complete_bossrush_final_sequence() {
+    if (boss_rush_state() == kBossRushStateReplay) {
+        return redirect_replay_to_hub(kBossRushEntries[boss_rush_index()]);
+    }
+
+    if (sAdvancePending) {
+        return true;
+    }
+
+    grant_victory_heart();
+    advance_bossrush();
+    dComIfGp_event_reset();
+    sAdvancePending = true;
+    return true;
+}
+
+bool should_handle_final_scene_change(int exitId, s8 roomNo) {
+    if (!is_boss_rush(dComIfGs_getSaveData()) || boss_rush_state() == kBossRushStateHub) {
+        return false;
+    }
+
+    const BossRushEntry& entry = kBossRushEntries[boss_rush_index()];
+    const s8 activeRoom = roomNo == -1 ? dComIfGp_getStartStageRoomNo() : roomNo;
+
+    if (entry.clearMode == BossRushEntry::FinalSequence) {
+        if (boss_rush_state() == kBossRushStateReplay && is_current_stage_name("D_MN09A") &&
+            activeRoom == 50 && exitId == 1)
+        {
+            return redirect_replay_to_hub(entry);
+        }
+
+        if (boss_rush_state() == kBossRushStateRun && exitId == 0 &&
+            (is_current_stage_name("D_MN09B") || is_current_stage_name("D_MN09C")))
+        {
+            return complete_bossrush_final_sequence();
+        }
+    } else if (entry.clearMode == BossRushEntry::BeastGanon) {
+        if (is_current_stage_name("D_MN09A") && activeRoom == 51 && exitId == 2) {
+            return redirect_replay_to_hub(entry);
+        }
+    } else if (entry.clearMode == BossRushEntry::FinalGanondorf) {
+        if (is_current_stage_name("D_MN09C") && exitId == 0) {
+            return redirect_replay_to_hub(entry);
+        }
+    }
+
+    return false;
+}
+
+HookAction on_stage_change_pre(ModContext*, void* args, void* retval, void*) {
+    const int exitId = mods::arg<int>(args, 0);
+    const s8 roomNo = mods::arg<s8>(args, 3);
+
+    if (!should_handle_final_scene_change(exitId, roomNo)) {
+        return HOOK_CONTINUE;
+    }
+
+    if (retval != nullptr) {
+        *static_cast<int*>(retval) = 1;
+    }
+    return HOOK_SKIP_ORIGINAL;
+}
+
 void on_play_scene_update_post(ModContext*, void*, void*, void*) {
     update_bossrush();
+}
+
+HookAction on_ganondorf_execute_pre(ModContext*, void* args, void* retval, void*) {
+    if (!is_direct_final_ganondorf_active()) {
+        return HOOK_CONTINUE;
+    }
+
+    auto* ganondorf = mods::arg<b_gnd_class*>(args, 0);
+    if (ganondorf == NULL) {
+        return HOOK_CONTINUE;
+    }
+
+    if (should_complete_direct_final_ganondorf(ganondorf) && complete_direct_final_ganondorf()) {
+        if (retval != nullptr) {
+            *static_cast<int*>(retval) = 1;
+        }
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    create_direct_final_barrier_if_needed(ganondorf);
+
+    if (!sDirectFinalGanondorfStarted || ganondorf->mDrawHorse ||
+        ganondorf->mActionMode < kGanondorfActionWait)
+    {
+        force_final_ganondorf_ground_start(ganondorf);
+    }
+
+    return HOOK_CONTINUE;
+}
+
+HookAction on_ganondorf_barrier_execute_pre(ModContext*, void* args, void*, void*) {
+    if (!is_direct_final_ganondorf_active()) {
+        return HOOK_CONTINUE;
+    }
+
+    arm_direct_final_barrier(mods::arg<obj_gb_class*>(args, 0));
+    return HOOK_CONTINUE;
 }
 
 }  // namespace
@@ -1161,6 +1599,11 @@ ModResult install_new_save_mode_hooks(ModError* error) {
         return mods::set_error(error, result, "failed to install Dawnlight new-save stage hook");
     }
 
+    result = mods::hook_add_pre<StageChangeSceneHook>(svc_hook, on_stage_change_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Boss Rush scene hook");
+    }
+
     result = mods::hook_add_pre<BossWarpExecuteHook>(svc_hook, on_bosswarp_execute_pre);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight bossrush portal hook");
@@ -1169,6 +1612,17 @@ ModResult install_new_save_mode_hooks(ModError* error) {
     result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, on_play_scene_update_post);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight Boss Rush update hook");
+    }
+
+    result = mods::hook_add_pre<GanondorfExecuteHook>(svc_hook, on_ganondorf_execute_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Ganondorf direct-start hook");
+    }
+
+    result =
+        mods::hook_add_pre<GanondorfBarrierExecuteHook>(svc_hook, on_ganondorf_barrier_execute_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Ganondorf barrier hook");
     }
 
     return MOD_OK;
