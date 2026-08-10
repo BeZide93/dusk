@@ -1,50 +1,83 @@
-<div align="center">
-  <img src="res/logo.png" alt="Logo" width="640">
+# Dawnlight
 
-  <p align="center">
-    <a href="https://twilitrealm.dev">Official Website</a>
-    •
-    <a href="https://discord.gg/6NpMhefCK9">Discord</a>
-  </p>
-</div>
-
-# Overview
-
-Dusklight is a reverse-engineered reimplementation of Twilight Princess.
-
-It aims to be as accurate as possible to the original while also providing new options, enhancements, and tools to customize your experience.
-
-# Setup
+Dawnlight is a Dusklight mod package that adds optional gameplay, controller,
+aiming, boss, and HUD features for Twilight Princess.
 
 > [!IMPORTANT]
-> Dusklight does *not* provide any copyrighted assets. You must provide your own copy of the original game.
+> Dawnlight does not include or provide copyrighted game assets. You need a
+> legal Dusklight installation and your own dumped copy of Twilight Princess.
 
-> [!IMPORTANT]
-> At a minimum, Dusklight requires a GPU with support for D3D12, Vulkan 1.1+, or Metal. For older devices, best-effort support is provided for D3D11 and OpenGL ES (Android), but will not achieve full accuracy or performance. Your experience with specific hardware, operating systems, and drivers may vary.
+## Features
 
-### 1. Dump your game
+- Z item slot: bind a third item to Z, move Midna to the D-Pad prompt, and use
+  the Z slot from the item wheel.
+- Improved item HUD support for Z, including item icons, ammo, oil, and combine
+  prompts.
+- Aim Movement and Aim Mode settings with Vanilla, 3rd Person, and Cinema
+  options.
+- Touch and gyro aiming support for the modded aiming modes.
+- Manual Shielding and R Jump quality-of-life options.
+- Bullet Time while aiming with the bow during a jump.
+- Intro Skip and Boss Rush new-save modes. New Game+ is still deferred until
+  upstream exposes the remaining mod services needed for a clean implementation.
+- Boss Rush hub, individual boss portals, Boss Rush run portal, Midna prompts,
+  and return-to-hub support.
+- Hardcoded HUD presets for GameCube, Wii-U, and Dawnlight layouts.
+- Custom HUD editing for supported HUD elements, item/text/ammo offsets, round
+  X/Y buttons, and HUD import/export/reset.
 
-You must dump your own copy of the game. Please see [this article](https://wiki.dolphin-emu.org/index.php?title=Ripping_Games) for instructions. After dumping, you can use a program like [Dolphin](https://dolphin-emu.org/) or [nodtool](https://github.com/encounter/nod/releases) to convert the `.iso` to `.rvz` to save space.
+## Installation
 
-Currently, only the GameCube releases are supported. Support for other versions of the game is planned in the future.
+1. Download `dawnlight_mod.dusk` from the Releases page.
+2. Move the file into your Dusklight mods directory:
 
-### 2. Install Dusklight
+| OS | Path |
+| --- | --- |
+| Windows | `%APPDATA%\TwilitRealm\Dusklight\mods` |
+| Linux | `~/.local/share/TwilitRealm/Dusklight/mods` |
+| macOS | `~/Library/Application Support/TwilitRealm/Dusklight/mods` |
+| Android | `<active Dusklight data folder>/mods` |
 
-Visit the [official installation guide](https://twilitrealm.dev/install/) for full instructions.
+3. Enable Dawnlight in the in-game Mod Manager menu.
 
-# Building
+On Android, the active data folder is the folder currently selected by
+Dusklight. If you changed it with `Change Data Folder`, create or use the
+`mods` folder inside that selected location.
 
-If you'd like to build Dusklight from source, please read the [build instructions](docs/building.md).
+## HUD Editing
 
-Pull requests are welcomed! Note that we do not accept contributions that are primarily AI-generated and will close your PR if we suspect as much. Please also see the [code conventions](docs/code-conventions.md).
+Open `Mod Manager -> Dawnlight -> Open Dawnlight Settings -> HUD`.
 
-# Credits
+The HUD layout setting has four modes:
 
-Special thanks to the [TP decompilation](https://github.com/zeldaret/tp) team, the GC/Wii decompilation community, the [Aurora](https://github.com/encounter/aurora) developers, the [TP speedrunning community](https://zsrtp.link), and all [contributors](https://github.com/TwilitRealm/dusklight/graphs/contributors).
+- GameCube: vanilla-style HUD placement and backing.
+- Wii-U: Wii-U inspired HUD placement with hidden button backing.
+- Dawnlight: Dawnlight's compact custom layout with hidden button backing.
+- Custom: editable layout, initialized from the Wii-U preset.
 
-<br/>
-<div align="center">
-    <a href="https://github.com/encounter/aurora">
-        <img src="assets/aurora-powered.png" alt="Powered by Aurora" width="800">
-    </a>
-</div>
+The Custom layout can move and scale supported HUD elements and can adjust item,
+text, and ammo offsets on the HUD buttons. `EXPORT HUD` writes
+`hud_layout_settings.json` into the `mods` folder, `IMPORT HUD` reads the same
+file from that folder, and `RESET HUD` restores the Custom layout to the Wii-U
+preset.
+
+The `hud_layout_settings.json` format is compatible with the Dawnlight fork's
+HUD layout export where the same fields are available.
+
+## Building
+
+The `Dawnlight Mod` GitHub Actions workflow builds `dawnlight_mod.dusk` for all
+supported native platforms and combines them into one cross-platform mod bundle
+when a `v*` tag is pushed.
+
+For local development, build Dusklight once for the target platform so the SDK
+headers and dependencies are available, then configure `mods/dawnlight` with
+`DUSK_DIR` pointing at this repository.
+
+## Credits
+
+Dawnlight is maintained by BeZide93 and builds on the Dusklight mod API.
+
+Special thanks to the [Dusklight](https://github.com/TwilitRealm/dusklight)
+project, the TP decompilation team, the GC/Wii decompilation community, the
+Aurora developers, the TP speedrunning community, and all contributors.

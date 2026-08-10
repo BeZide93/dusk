@@ -2,6 +2,12 @@ name: Dawnlight Mod
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-linux:
@@ -143,3 +149,176 @@ jobs:
         with:
           name: dawnlight-mod-${{ matrix.platform }}
           path: build/dawnlight-mod/mods/dawnlight_mod.dusk
+
+  build-windows:
+    name: Build Windows (${{ matrix.platform }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-amd64
+            preset: x-windows-ci-msvc
+            msvc_arch: amd64
+            vcpkg_arch: x64
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Enable Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.msvc_arch }}
+
+      - name: Override VCPKG_ROOT
+        shell: pwsh
+        run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          vcpkg install freetype:${{ matrix.vcpkg_arch }}-windows zstd:${{ matrix.vcpkg_arch }}-windows
+
+      - name: Configure host dependencies
+        shell: pwsh
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build Dawnlight mod
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $rmluiCore = Get-ChildItem -Path build -Recurse -Filter Core.h | Where-Object { $_.FullName -like "*RmlUi*" } | Select-Object -First 1
+          $sdlTouch = Get-ChildItem -Path build -Recurse -Filter SDL_touch.h | Where-Object { $_.FullName -like "*SDL3*" } | Select-Object -First 1
+          $rmluiInclude = Split-Path (Split-Path $rmluiCore.FullName -Parent) -Parent
+          $sdlInclude = Split-Path (Split-Path $sdlTouch.FullName -Parent) -Parent
+          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja `
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
+            -DDUSK_DIR="$PWD" `
+            -DDAWNLIGHT_RMLUI_INCLUDE="$rmluiInclude" `
+            -DDAWNLIGHT_SDL3_INCLUDE="$sdlInclude"
+          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
+
+      - name: Upload mod package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-mod-${{ matrix.platform }}
+          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
+
+  build-android:
+    name: Build Android (${{ matrix.platform }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: android-aarch64
+            preset: x-android-ci-arm64
+            abi: arm64-v8a
+            rust_target: aarch64-linux-android
+
+    env:
+      ANDROID_NDK_VERSION: "29.0.14206865"
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.1.0" "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Install Rust Android target
+        run: |
+          rustup toolchain install stable
+          rustup target add ${{ matrix.rust_target }}
+
+      - name: Configure host dependencies
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build Dawnlight mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
+          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
+          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
+          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
+          ndk="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
+          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DDUSK_DIR="$PWD" \
+            -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=${{ matrix.abi }} \
+            -DANDROID_PLATFORM=android-29 \
+            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include" \
+            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
+          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
+
+      - name: Upload mod package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-mod-${{ matrix.platform }}
+          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
+
+  package:
+    name: Package Combined Mod
+    runs-on: ubuntu-latest
+    needs:
+      - build-linux
+      - build-apple
+      - build-windows
+      - build-android
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download platform packages
+        uses: actions/download-artifact@v6
+        with:
+          path: artifacts
+          pattern: dawnlight-mod-*
+
+      - name: Combine mod packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p combined
+          while IFS= read -r -d '' dusk; do
+            echo "Merging $dusk"
+            tmp="$(mktemp -d)"
+            unzip -q "$dusk" -d "$tmp"
+            cp -a "$tmp"/. combined/
+          done < <(find artifacts -name '*.dusk' -print0)
+          (cd combined && zip -qr ../dawnlight_mod.dusk mod.json lib res)
+
+      - name: Upload combined mod package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-mod-combined
+          path: dawnlight_mod.dusk
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dawnlight_mod.dusk
+          body_path: README.md
