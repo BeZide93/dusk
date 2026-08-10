@@ -28,6 +28,24 @@ constexpr const char* kHudLayoutOptions[] = {
     "GameCube",
     "Wii-U",
     "Dawnlight",
+    "Custom",
+};
+
+constexpr const char* kHudItemAnchorOptions[] = {
+    "Left",
+    "Right",
+    "Top",
+    "Bottom",
+};
+
+constexpr const char* kHudTextAnchorOptions[] = {
+    "Left",
+    "Right",
+};
+
+constexpr const char* kMinimapSlideOptions[] = {
+    "Left -> Right",
+    "Right -> Left",
 };
 
 ModResult add_section(ModContext* ctx, UiElementHandle pane, const char* title) {
@@ -48,19 +66,20 @@ ModResult add_button(ModContext* ctx, UiElementHandle pane, const char* label,
 }
 
 ModResult add_toggle(ModContext* ctx, UiElementHandle pane, const char* label,
-    ConfigVarHandle var, const char* help = nullptr) {
+    ConfigVarHandle var, const char* help = nullptr, UiPredicateFn isDisabled = nullptr) {
     UiControlDesc desc = UI_CONTROL_DESC_INIT;
     desc.kind = UI_CONTROL_TOGGLE;
     desc.label = label;
     desc.help_rml = help;
     desc.binding = UI_BINDING_CONFIG_VAR;
     desc.config_var = var;
+    desc.is_disabled = isDisabled;
     return svc_ui->pane_add_control(ctx, pane, &desc, nullptr);
 }
 
 ModResult add_number(ModContext* ctx, UiElementHandle pane, const char* label,
     ConfigVarHandle var, int min, int max, int step, const char* suffix,
-    const char* help = nullptr) {
+    const char* help = nullptr, UiPredicateFn isDisabled = nullptr) {
     UiControlDesc desc = UI_CONTROL_DESC_INIT;
     desc.kind = UI_CONTROL_NUMBER;
     desc.label = label;
@@ -71,12 +90,13 @@ ModResult add_number(ModContext* ctx, UiElementHandle pane, const char* label,
     desc.max = max;
     desc.step = step;
     desc.suffix = suffix;
+    desc.is_disabled = isDisabled;
     return svc_ui->pane_add_control(ctx, pane, &desc, nullptr);
 }
 
 ModResult add_select(ModContext* ctx, UiElementHandle pane, const char* label,
     ConfigVarHandle var, const char* const* options, size_t optionCount,
-    const char* help = nullptr) {
+    const char* help = nullptr, UiPredicateFn isDisabled = nullptr) {
     UiControlDesc desc = UI_CONTROL_DESC_INIT;
     desc.kind = UI_CONTROL_SELECT;
     desc.label = label;
@@ -85,7 +105,117 @@ ModResult add_select(ModContext* ctx, UiElementHandle pane, const char* label,
     desc.config_var = var;
     desc.options = options;
     desc.option_count = optionCount;
+    desc.is_disabled = isDisabled;
     return svc_ui->pane_add_control(ctx, pane, &desc, nullptr);
+}
+
+bool custom_hud_controls_disabled(ModContext*, void*) {
+    return !custom_hud_layout_enabled();
+}
+
+ModResult add_custom_transform_controls(
+    ModContext* ctx, UiElementHandle pane, const char* section, HudElement element) {
+    if (add_section(ctx, pane, section) != MOD_OK) return MOD_ERROR;
+    if (add_number(ctx, pane, "X Position", hud_custom_element_x_config_var(element), -9999,
+            9999, 1, " px", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, pane, "Y Position", hud_custom_element_y_config_var(element), -9999,
+            9999, 1, " px", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, pane, "Scale", hud_custom_element_scale_config_var(element), 1, 9999,
+            1, "%", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    return MOD_OK;
+}
+
+ModResult add_custom_button_controls(ModContext* ctx, UiElementHandle pane, const char* section,
+    HudButton button, bool hasItem, bool hasAmmo, bool hasText) {
+    if (add_section(ctx, pane, section) != MOD_OK) return MOD_ERROR;
+
+    if (hasItem) {
+        if (add_select(ctx, pane, "Item Anchor",
+                hud_custom_button_item_anchor_config_var(button), kHudItemAnchorOptions,
+                std::size(kHudItemAnchorOptions), nullptr, custom_hud_controls_disabled) !=
+            MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Item Offset X",
+                hud_custom_button_item_offset_x_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Item Offset Y",
+                hud_custom_button_item_offset_y_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Item Scale",
+                hud_custom_button_item_scale_config_var(button), 1, 9999, 1, "%", nullptr,
+                custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+    }
+
+    if (hasAmmo) {
+        if (add_number(ctx, pane, "Ammo Offset X",
+                hud_custom_button_ammo_offset_x_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Ammo Offset Y",
+                hud_custom_button_ammo_offset_y_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Ammo Scale",
+                hud_custom_button_ammo_scale_config_var(button), 1, 9999, 1, "%", nullptr,
+                custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+    }
+
+    if (hasText) {
+        if (add_select(ctx, pane, "Text Anchor",
+                hud_custom_button_text_anchor_config_var(button), kHudTextAnchorOptions,
+                std::size(kHudTextAnchorOptions), nullptr, custom_hud_controls_disabled) !=
+            MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Text Offset X",
+                hud_custom_button_text_offset_x_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Text Offset Y",
+                hud_custom_button_text_offset_y_config_var(button), -9999, 9999, 1, " px",
+                nullptr, custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+        if (add_number(ctx, pane, "Text Scale",
+                hud_custom_button_text_scale_config_var(button), 1, 9999, 1, "%", nullptr,
+                custom_hud_controls_disabled) != MOD_OK)
+        {
+            return MOD_ERROR;
+        }
+    }
+
+    return MOD_OK;
 }
 
 ModResult build_aiming_tab(
@@ -140,7 +270,8 @@ ModResult build_hud_tab(
     if (add_section(ctx, left, "HUD") != MOD_OK) return MOD_ERROR;
     if (add_select(ctx, left, "HUD Layout", hud_layout_config_var(), kHudLayoutOptions,
             std::size(kHudLayoutOptions),
-            "GameCube keeps the original HUD. Wii-U and Dawnlight apply fixed HUD layout presets.")
+            "GameCube keeps the original HUD. Wii-U and Dawnlight apply fixed HUD layout presets. "
+            "Custom exposes the same layout fields as editable settings.")
         != MOD_OK)
     {
         return MOD_ERROR;
@@ -149,6 +280,102 @@ ModResult build_hud_tab(
             "Draws X and Y with Dawnlight's round HUD button style.")
         != MOD_OK)
     {
+        return MOD_ERROR;
+    }
+    if (add_section(ctx, left, "Custom Minimap") != MOD_OK) return MOD_ERROR;
+    if (add_toggle(ctx, left, "D-Pad Follows Minimap",
+            hud_custom_dpad_follows_minimap_config_var(),
+            "When disabled, the D-Pad no longer rides along with the minimap slide animation.",
+            custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_select(ctx, left, "Minimap Slide Direction",
+            hud_custom_minimap_slide_direction_config_var(), kMinimapSlideOptions,
+            std::size(kMinimapSlideOptions), nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, left, "X Position", hud_custom_element_x_config_var(HudElement::Minimap),
+            -9999, 9999, 1, " px", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, left, "Y Position", hud_custom_element_y_config_var(HudElement::Minimap),
+            -9999, 9999, 1, " px", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, left, "Scale", hud_custom_element_scale_config_var(HudElement::Minimap),
+            1, 9999, 1, "%", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+
+    if (add_custom_transform_controls(ctx, left, "Custom A", HudElement::A) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_button_controls(ctx, left, "Custom A Text", HudButton::A, false, false, true) !=
+        MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom B", HudElement::B) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_button_controls(ctx, left, "Custom B Content", HudButton::B, true, false, true) !=
+        MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom X", HudElement::X) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_button_controls(ctx, left, "Custom X Content", HudButton::X, true, true, true) !=
+        MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Y", HudElement::Y) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_button_controls(ctx, left, "Custom Y Content", HudButton::Y, true, true, true) !=
+        MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Z", HudElement::Z) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_button_controls(ctx, left, "Custom Z Content", HudButton::Z, true, true, true) !=
+        MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(
+            ctx, left, "Custom Button Backing", HudElement::ButtonBacking) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom D-Pad", HudElement::DPad) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Midna", HudElement::Midna) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Hearts", HudElement::Hearts) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Rupees", HudElement::Rupees) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Keys", HudElement::Keys) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Oil", HudElement::Oil) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_custom_transform_controls(ctx, left, "Custom Oxygen", HudElement::Oxygen) != MOD_OK) {
         return MOD_ERROR;
     }
     return MOD_OK;

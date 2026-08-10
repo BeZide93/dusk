@@ -228,6 +228,7 @@ enum class HudPaneSlot : std::size_t {
     Rupee0,
     Rupee1,
     Rupee2,
+    Keys,
     Count,
 };
 
@@ -1355,6 +1356,9 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         rupeesTransform.offset_x, rupeesTransform.offset_y, rupeesTransform.scale);
     apply_hud_pane_transform(HudPaneSlot::Rupee2, meter->mpRupeeParent[2], enabled,
         rupeesTransform.offset_x, rupeesTransform.offset_y, rupeesTransform.scale);
+    const DuskModHudTransform keysTransform = hud_layout_keys_transform();
+    apply_hud_pane_transform(HudPaneSlot::Keys, meter->mpKeyParent, enabled,
+        keysTransform.offset_x, keysTransform.offset_y, keysTransform.scale);
 }
 
 void apply_hud_backing_visibility(dMeter2Draw_c* meter) {
@@ -2552,16 +2556,42 @@ void after_meter_draw(ModContext*, void* args, void*, void*) {
 
 HookAction before_meter_draw_kantera(ModContext*, void* args, void*, void*) {
     if (hardcoded_hud_layout_enabled()) {
-        mods::arg_ref<f32>(args, 3) += hud_layout_oil_transform().offset_x;
+        const DuskModHudTransform transform = hud_layout_oil_transform();
+        mods::arg_ref<f32>(args, 3) += transform.offset_x;
+        mods::arg_ref<f32>(args, 4) += transform.offset_y;
     }
     return HOOK_CONTINUE;
 }
 
+void after_meter_draw_kantera(ModContext*, void* args, void*, void*) {
+    if (hardcoded_hud_layout_enabled()) {
+        auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
+        if (meter != nullptr) {
+            const DuskModHudTransform transform = hud_layout_oil_transform();
+            meter->field_0x5cc[1] *= transform.scale;
+            meter->field_0x5d8[1] *= transform.scale;
+        }
+    }
+}
+
 HookAction before_meter_draw_oxygen(ModContext*, void* args, void*, void*) {
     if (hardcoded_hud_layout_enabled()) {
-        mods::arg_ref<f32>(args, 3) += hud_layout_oxygen_transform().offset_x;
+        const DuskModHudTransform transform = hud_layout_oxygen_transform();
+        mods::arg_ref<f32>(args, 3) += transform.offset_x;
+        mods::arg_ref<f32>(args, 4) += transform.offset_y;
     }
     return HOOK_CONTINUE;
+}
+
+void after_meter_draw_oxygen(ModContext*, void* args, void*, void*) {
+    if (hardcoded_hud_layout_enabled()) {
+        auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
+        if (meter != nullptr) {
+            const DuskModHudTransform transform = hud_layout_oxygen_transform();
+            meter->field_0x5cc[2] *= transform.scale;
+            meter->field_0x5d8[2] *= transform.scale;
+        }
+    }
 }
 
 void after_meter_midna_alpha(ModContext*, void* args, void*, void*) {
@@ -3064,7 +3094,13 @@ ModResult install_item_slot_hooks(ModError* error) {
         result = mods::hook_add_pre<MeterDrawKanteraHook>(svc_hook, before_meter_draw_kantera);
     }
     if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterDrawKanteraHook>(svc_hook, after_meter_draw_kantera);
+    }
+    if (result == MOD_OK) {
         result = mods::hook_add_pre<MeterDrawOxygenHook>(svc_hook, before_meter_draw_oxygen);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterDrawOxygenHook>(svc_hook, after_meter_draw_oxygen);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterMidnaAlphaHook>(svc_hook, after_meter_midna_alpha);

@@ -21,6 +21,34 @@ enum class HudLayout : int {
     GameCube = 0,
     WiiU = 1,
     Dawnlight = 2,
+    Custom = 3,
+};
+
+enum class HudElement : int {
+    A = 0,
+    B,
+    X,
+    Y,
+    Z,
+    ButtonBacking,
+    DPad,
+    Midna,
+    Hearts,
+    Rupees,
+    Keys,
+    Oil,
+    Oxygen,
+    Minimap,
+    Count,
+};
+
+enum class HudButton : int {
+    A = 0,
+    B,
+    X,
+    Y,
+    Z,
+    Count,
 };
 
 ModResult register_config(ModError* error);
@@ -36,7 +64,24 @@ bool r_jump_enabled();
 bool z_item_slot_enabled();
 HudLayout hud_layout();
 bool hardcoded_hud_layout_enabled();
+bool custom_hud_layout_enabled();
 bool round_xy_buttons_enabled();
+int hud_custom_element_x(HudElement element);
+int hud_custom_element_y(HudElement element);
+int hud_custom_element_scale_percent(HudElement element);
+int hud_custom_button_item_offset_x(HudButton button);
+int hud_custom_button_item_offset_y(HudButton button);
+int hud_custom_button_item_scale_percent(HudButton button);
+int hud_custom_button_ammo_offset_x(HudButton button);
+int hud_custom_button_ammo_offset_y(HudButton button);
+int hud_custom_button_ammo_scale_percent(HudButton button);
+int hud_custom_button_text_offset_x(HudButton button);
+int hud_custom_button_text_offset_y(HudButton button);
+int hud_custom_button_text_scale_percent(HudButton button);
+int hud_custom_button_item_anchor(HudButton button);
+int hud_custom_button_text_anchor(HudButton button);
+bool hud_custom_dpad_follows_minimap();
+int hud_custom_minimap_slide_direction();
 
 ConfigVarHandle health_scale_config_var();
 ConfigVarHandle automatic_health_scale_config_var();
@@ -50,5 +95,21 @@ ConfigVarHandle r_jump_config_var();
 ConfigVarHandle z_item_slot_config_var();
 ConfigVarHandle hud_layout_config_var();
 ConfigVarHandle round_xy_buttons_config_var();
+ConfigVarHandle hud_custom_element_x_config_var(HudElement element);
+ConfigVarHandle hud_custom_element_y_config_var(HudElement element);
+ConfigVarHandle hud_custom_element_scale_config_var(HudElement element);
+ConfigVarHandle hud_custom_button_item_offset_x_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_item_offset_y_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_item_scale_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_ammo_offset_x_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_ammo_offset_y_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_ammo_scale_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_text_offset_x_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_text_offset_y_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_text_scale_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_item_anchor_config_var(HudButton button);
+ConfigVarHandle hud_custom_button_text_anchor_config_var(HudButton button);
+ConfigVarHandle hud_custom_dpad_follows_minimap_config_var();
+ConfigVarHandle hud_custom_minimap_slide_direction_config_var();
 
 }  // namespace dawnlight
