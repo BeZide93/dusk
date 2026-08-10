@@ -2523,7 +2523,9 @@ void after_pad_read(ModContext*, void*, void*, void*) {
         --s_touchMidnaBlockStartFrames;
     }
 
-    if (z_item_menu_or_pause_context()) {
+    if (dComIfGp_getLinkPlayer() == nullptr || daAlink_getAlinkActorClass() == nullptr ||
+        z_item_menu_or_pause_context())
+    {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
         s_touchMidnaTrig = false;
