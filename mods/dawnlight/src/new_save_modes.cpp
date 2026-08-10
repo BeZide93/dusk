@@ -6,6 +6,7 @@
 #include "SSystem/SComponent/c_math.h"
 #include "Z2AudioLib/Z2SeqMgr.h"
 #include "m_Do/m_Do_ext.h"
+#include "m_Do/m_Do_Reset.h"
 class JPABaseEmitter;
 #include "d/actor/d_a_alink.h"
 #include "d/actor/d_a_b_gnd.h"
@@ -272,6 +273,27 @@ bool is_boss_hub_stage_name() {
 bool is_bossrush_hub_active() {
     return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() == kBossRushStateHub &&
            is_boss_hub_stage_name();
+}
+
+bool is_opening_stage(const char* stage, s16 point, s16 room, s16 layer) {
+    return stage != nullptr && std::strcmp(stage, "F_SP102") == 0 && point == 100 &&
+           room == 0 && layer == 10;
+}
+
+bool is_reset_to_opening_transition() {
+    if (mDoRst::isReset() || mDoRst::isReturnToMenu()) {
+        return true;
+    }
+
+    if (is_opening_stage(dComIfGp_getStartStageName(), dComIfGp_getStartStagePoint(),
+            dComIfGp_getStartStageRoomNo(), dComIfGp_getStartStageLayer()))
+    {
+        return true;
+    }
+
+    return dComIfGp_isEnableNextStage() &&
+           is_opening_stage(dComIfGp_getNextStageName(), dComIfGp_getNextStagePoint(),
+               dComIfGp_getNextStageRoomNo(), dComIfGp_getNextStageLayer());
 }
 
 bool is_current_stage_name(const char* stage) {
@@ -1353,6 +1375,13 @@ void resolve_hub_midna_prompt(bool accepted) {
 void update_bossrush_hub() {
     sAdvancePending = false;
     sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+
+    if (is_reset_to_opening_transition()) {
+        reset_hub_actor_ids();
+        clear_hub_confirm_state();
+        return;
+    }
+
     set_bossrush_return_place();
 
     if (!is_boss_hub_stage_name()) {
@@ -1399,6 +1428,14 @@ void update_bossrush() {
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
         reset_direct_final_boss_state();
+        return;
+    }
+
+    if (is_reset_to_opening_transition()) {
+        sAdvancePending = false;
+        sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+        reset_hub_actor_ids();
+        clear_hub_confirm_state();
         return;
     }
 
