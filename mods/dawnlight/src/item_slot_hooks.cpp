@@ -75,6 +75,7 @@ DEFINE_HOOK(&dMeter2Draw_c::draw, MeterDrawHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawKantera, MeterDrawKanteraHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawOxygen, MeterDrawOxygenHook);
 DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
+DEFINE_HOOK(&dMeter2Draw_c::drawButtonCross, MeterDrawButtonCrossHook);
 DEFINE_HOOK(&dMeterButton_c::setString, MeterButtonSetStringHook);
 DEFINE_HOOK(&dMeterButton_c::_execute, MeterButtonExecuteHook);
 DEFINE_HOOK(&dMeterMap_c::draw, MeterMapDrawHook);
@@ -1133,6 +1134,70 @@ bool nearly_equal(const f32 lhs, const f32 rhs) {
     return std::fabs(lhs - rhs) < 0.01f;
 }
 
+struct HudLayoutOffset {
+    f32 x = 0.0f;
+    f32 y = 0.0f;
+};
+
+HudLayoutOffset hud_item_anchor_position(const int anchor, const f32 defaultX,
+    const f32 defaultY) {
+    const f32 distance = std::fabs(defaultX) > 14.0f ? std::fabs(defaultX) : 14.0f;
+
+    switch (anchor) {
+    case kHudItemAnchorLeft:
+        return {-distance, defaultY};
+    case kHudItemAnchorTop:
+        return {0.0f, defaultY - distance};
+    case kHudItemAnchorBottom:
+        return {0.0f, defaultY + distance};
+    case kHudItemAnchorRight:
+    default:
+        return {distance, defaultY};
+    }
+}
+
+HudLayoutOffset hud_item_anchor_delta(const DuskModHudButtonLayout& layout,
+    const f32 defaultX, const f32 defaultY) {
+    const HudLayoutOffset selected =
+        hud_item_anchor_position(layout.item_anchor, defaultX, defaultY);
+    const HudLayoutOffset fallback =
+        hud_item_anchor_position(layout.default_item_anchor, defaultX, defaultY);
+    return {
+        .x = selected.x - fallback.x,
+        .y = selected.y - fallback.y,
+    };
+}
+
+f32 hud_item_scale(const DuskModHudTransform& transform,
+    const DuskModHudButtonLayout& layout) {
+    const f32 itemScale = layout.item_scale > 0.0f ? layout.item_scale : 1.0f;
+    return transform.scale * itemScale;
+}
+
+f32 hud_text_scale(const DuskModHudTransform& transform,
+    const DuskModHudButtonLayout& layout) {
+    const f32 textScale = layout.text_scale > 0.0f ? layout.text_scale : 1.0f;
+    return transform.scale * textScale;
+}
+
+int hud_button_b_item_variant(dMeter2Draw_c* meter) {
+    if (meter == nullptr) {
+        return 0;
+    }
+
+    switch (meter->mButtonBItem) {
+    case dItemNo_LURE_ROD_e:
+        return 2;
+    case dItemNo_WOOD_STICK_e:
+    case dItemNo_SWORD_e:
+    case dItemNo_MASTER_SWORD_e:
+    case dItemNo_LIGHT_SWORD_e:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 HudPaneTransformState& hud_pane_state(const HudPaneSlot slot) {
     return s_wiiUHudPaneTransforms[static_cast<std::size_t>(slot)];
 }
@@ -1204,47 +1269,79 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
 
     const bool enabled = wii_u_hud_enabled();
 
-    apply_hud_pane_transform(HudPaneSlot::ButtonA, meter->mpButtonA, enabled, -135.0f,
-        25.0f, 1.0f);
-    apply_hud_pane_transform(HudPaneSlot::TextA, meter->mpTextA, enabled, -135.0f, 25.0f,
-        1.0f);
+    const DuskModHudTransform aTransform = hud_layout_a_transform();
+    const DuskModHudButtonLayout aLayout = hud_layout_a_button_layout();
+    apply_hud_pane_transform(HudPaneSlot::ButtonA, meter->mpButtonA, enabled,
+        aTransform.offset_x, aTransform.offset_y, aTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::TextA, meter->mpTextA, enabled,
+        aTransform.offset_x + aLayout.text_offset_x,
+        aTransform.offset_y + aLayout.text_offset_y, hud_text_scale(aTransform, aLayout));
 
-    apply_hud_pane_transform(HudPaneSlot::ButtonB, meter->mpButtonB, enabled, -80.0f,
-        -27.0f, 1.5f);
-    apply_hud_pane_transform(HudPaneSlot::ItemB, meter->mpItemB, enabled, -50.0f,
-        -27.0f, 0.75f);
-    apply_hud_pane_transform(HudPaneSlot::LightB, meter->mpLightB, enabled, -50.0f,
-        -27.0f, 0.75f);
-    apply_hud_pane_transform(HudPaneSlot::TextB, meter->mpTextB, enabled, -70.0f, -27.0f,
-        0.75f);
+    const DuskModHudTransform bTransform = hud_layout_b_transform();
+    const DuskModHudButtonLayout bLayout = hud_layout_b_button_layout();
+    const int bVariant = hud_button_b_item_variant(meter);
+    const HudLayoutOffset bItemAnchor =
+        hud_item_anchor_delta(bLayout, g_drawHIO.mButtonBItemPosX[bVariant],
+            g_drawHIO.mButtonBItemPosY[bVariant]);
+    const f32 bItemOffsetX = bTransform.offset_x + bLayout.item_offset_x + bItemAnchor.x;
+    const f32 bItemOffsetY = bTransform.offset_y + bLayout.item_offset_y + bItemAnchor.y;
+    apply_hud_pane_transform(HudPaneSlot::ButtonB, meter->mpButtonB, enabled,
+        bTransform.offset_x, bTransform.offset_y, bTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::ItemB, meter->mpItemB, enabled, bItemOffsetX,
+        bItemOffsetY, hud_item_scale(bTransform, bLayout));
+    apply_hud_pane_transform(HudPaneSlot::LightB, meter->mpLightB, enabled, bItemOffsetX,
+        bItemOffsetY, hud_item_scale(bTransform, bLayout));
+    apply_hud_pane_transform(HudPaneSlot::TextB, meter->mpTextB, enabled,
+        bTransform.offset_x + bLayout.text_offset_x,
+        bTransform.offset_y + bLayout.text_offset_y, hud_text_scale(bTransform, bLayout));
 
-    apply_hud_pane_transform(HudPaneSlot::ButtonX, meter->mpButtonXY[0], enabled, -202.0f,
-        -1.0f, 1.7f);
-    apply_hud_pane_transform(HudPaneSlot::ItemX, meter->mpItemXY[0], enabled, -202.0f,
-        -1.0f, 0.85f);
-    apply_hud_pane_transform(HudPaneSlot::LightX, meter->mpLightXY[0], enabled, -202.0f,
-        -1.0f, 0.85f);
-    apply_hud_pane_transform(HudPaneSlot::TextX, meter->mpTextXY[0], enabled, -217.0f,
-        -16.0f, 0.85f);
+    const DuskModHudTransform xTransform = hud_layout_x_transform();
+    const DuskModHudButtonLayout xLayout = hud_layout_x_button_layout();
+    const HudLayoutOffset xItemAnchor =
+        hud_item_anchor_delta(xLayout, g_drawHIO.mButtonXItemBasePosX[0],
+            g_drawHIO.mButtonXItemBasePosY[0]);
+    const f32 xItemOffsetX = xTransform.offset_x + xLayout.item_offset_x + xItemAnchor.x;
+    const f32 xItemOffsetY = xTransform.offset_y + xLayout.item_offset_y + xItemAnchor.y;
+    apply_hud_pane_transform(HudPaneSlot::ButtonX, meter->mpButtonXY[0], enabled,
+        xTransform.offset_x, xTransform.offset_y, xTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::ItemX, meter->mpItemXY[0], enabled, xItemOffsetX,
+        xItemOffsetY, hud_item_scale(xTransform, xLayout));
+    apply_hud_pane_transform(HudPaneSlot::LightX, meter->mpLightXY[0], enabled, xItemOffsetX,
+        xItemOffsetY, hud_item_scale(xTransform, xLayout));
+    apply_hud_pane_transform(HudPaneSlot::TextX, meter->mpTextXY[0], enabled,
+        xTransform.offset_x + xLayout.text_offset_x,
+        xTransform.offset_y + xLayout.text_offset_y, hud_text_scale(xTransform, xLayout));
 
-    apply_hud_pane_transform(HudPaneSlot::ButtonY, meter->mpButtonXY[1], enabled, -122.0f,
-        0.0f, 1.7f);
-    apply_hud_pane_transform(HudPaneSlot::ItemY, meter->mpItemXY[1], enabled, -122.0f,
-        0.0f, 0.85f);
-    apply_hud_pane_transform(HudPaneSlot::LightY, meter->mpLightXY[1], enabled, -122.0f,
-        0.0f, 0.85f);
-    apply_hud_pane_transform(HudPaneSlot::TextY, meter->mpTextXY[1], enabled, -107.0f,
-        0.0f, 0.85f);
+    const DuskModHudTransform yTransform = hud_layout_y_transform();
+    const DuskModHudButtonLayout yLayout = hud_layout_y_button_layout();
+    const HudLayoutOffset yItemAnchor =
+        hud_item_anchor_delta(yLayout, g_drawHIO.mButtonYItemBasePosX[0],
+            g_drawHIO.mButtonYItemBasePosY[0]);
+    const f32 yItemOffsetX = yTransform.offset_x + yLayout.item_offset_x + yItemAnchor.x;
+    const f32 yItemOffsetY = yTransform.offset_y + yLayout.item_offset_y + yItemAnchor.y;
+    apply_hud_pane_transform(HudPaneSlot::ButtonY, meter->mpButtonXY[1], enabled,
+        yTransform.offset_x, yTransform.offset_y, yTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::ItemY, meter->mpItemXY[1], enabled, yItemOffsetX,
+        yItemOffsetY, hud_item_scale(yTransform, yLayout));
+    apply_hud_pane_transform(HudPaneSlot::LightY, meter->mpLightXY[1], enabled, yItemOffsetX,
+        yItemOffsetY, hud_item_scale(yTransform, yLayout));
+    apply_hud_pane_transform(HudPaneSlot::TextY, meter->mpTextXY[1], enabled,
+        yTransform.offset_x + yLayout.text_offset_x,
+        yTransform.offset_y + yLayout.text_offset_y, hud_text_scale(yTransform, yLayout));
 
-    apply_hud_pane_transform(HudPaneSlot::ButtonZ, meter->mpButtonXY[2], enabled, -100.0f,
-        0.0f, 1.0f);
-    apply_hud_pane_transform(HudPaneSlot::TextZ, meter->mpTextXY[2], enabled, -100.0f,
-        0.0f, 1.0f);
+    const DuskModHudTransform zTransform = hud_layout_z_transform();
+    const DuskModHudButtonLayout zLayout = hud_layout_z_button_layout();
+    apply_hud_pane_transform(HudPaneSlot::ButtonZ, meter->mpButtonXY[2], enabled,
+        zTransform.offset_x, zTransform.offset_y, zTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::TextZ, meter->mpTextXY[2], enabled,
+        zTransform.offset_x + zLayout.text_offset_x,
+        zTransform.offset_y + zLayout.text_offset_y, hud_text_scale(zTransform, zLayout));
 
     apply_hud_pane_transform(HudPaneSlot::Backing, meter->mpUzu, enabled, -100.0f, 0.0f,
         1.0f);
-    apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent, enabled, 0.0f,
-        -15.0f, 1.0f);
+    const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
+    apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent, enabled,
+        dpadTransform.offset_x, dpadTransform.offset_y, dpadTransform.scale);
     apply_hud_pane_transform(HudPaneSlot::Hearts, meter->mpLifeParent, enabled, 100.0f,
         0.0f, 1.0f);
     apply_hud_pane_transform(HudPaneSlot::Rupee0, meter->mpRupeeParent[0], enabled, 40.0f,
@@ -1833,6 +1930,17 @@ void move_midna_hud_to_dpad(dMeter2Draw_c* meter) {
     midnaPane->scale(scale, scale);
     midnaPane->move(-18.0f + midnaTransform.offset_x, midnaTransform.offset_y);
 
+    if (boss_rush_save_active() && meter->isEmphasisZ() &&
+        dComIfGp_getZStatus() == BUTTON_STATUS_CHECK && dComIfGp_isZSetFlag(BUTTON_STATUS_FLAG_EMPHASIS))
+    {
+        if (meter->field_0x738 == 0.0f) {
+            meter->field_0x738 = 18.0f;
+        }
+        const u8 midnaInitAlpha =
+            meter->mpButtonMidona != nullptr ? meter->mpButtonMidona->getInitAlpha() : 255;
+        meter->mButtonZAlpha = static_cast<f32>(midnaInitAlpha) / 255.0f;
+    }
+
     const u8 dpadAlpha = dpadPane->getAlpha();
     set_pane_tree_alpha_visible(midnaPane, dpadPane->isVisible() && dpadAlpha > 0, dpadAlpha);
 }
@@ -1845,6 +1953,10 @@ bool z_item_menu_or_pause_context() {
 }
 
 bool midna_unlocked() {
+    if (boss_rush_save_active()) {
+        return true;
+    }
+
     const daAlink_c* link = daAlink_getAlinkActorClass();
     return (link != nullptr && link->checkWolf()) || dComIfGs_getTransformStatus() != 0 ||
            dComIfGs_isEventBit(0x0520) || dComIfGs_isEventBit(0x0510) ||
@@ -2439,6 +2551,18 @@ void after_meter_midna_alpha(ModContext*, void* args, void*, void*) {
     move_midna_hud_to_dpad(mods::arg<dMeter2Draw_c*>(args, 0));
 }
 
+void after_meter_draw_button_cross(ModContext*, void* args, void*, void*) {
+    auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
+    if (meter == nullptr) {
+        return;
+    }
+
+    const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
+    apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent,
+        wii_u_hud_enabled(), dpadTransform.offset_x, dpadTransform.offset_y,
+        dpadTransform.scale);
+}
+
 HookAction before_meter_map_draw(ModContext*, void* args, void*, void*) {
     apply_wii_u_minimap_layout(mods::arg<dMeterMap_c*>(args, 0));
     return HOOK_CONTINUE;
@@ -2911,6 +3035,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterMidnaAlphaHook>(svc_hook, after_meter_midna_alpha);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterDrawButtonCrossHook>(svc_hook, after_meter_draw_button_cross);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<MeterMapDrawHook>(svc_hook, before_meter_map_draw);
