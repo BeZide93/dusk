@@ -102,10 +102,16 @@ bool action_prompt_context_active() {
            status_blocks_r_jump(dComIfGp_getDoStatusForce());
 }
 
+bool front_wall_context_active(daAlink_c* link) {
+    link->setFrontWallType();
+    return link->checkResetFlg0(daPy_py_c::RFLG0_UNK_8) != 0;
+}
+
 bool r_action_context_active(daAlink_c* link) {
     if (dComIfGp_getRStatus() != BUTTON_STATUS_NONE ||
         dComIfGp_getRStatusForce() != BUTTON_STATUS_NONE ||
-        action_prompt_context_active())
+        action_prompt_context_active() ||
+        front_wall_context_active(link))
     {
         return true;
     }
