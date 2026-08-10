@@ -78,9 +78,34 @@ bool chain_context_active(daAlink_c* link) {
     return available;
 }
 
+bool status_blocks_r_jump(u8 status) {
+    switch (status) {
+    case BUTTON_STATUS_ENTER:
+    case BUTTON_STATUS_GRAB:
+    case BUTTON_STATUS_PULL_DOWN:
+    case BUTTON_STATUS_PUSH:
+    case BUTTON_STATUS_RESIST:
+    case BUTTON_STATUS_STRIKE:
+    case BUTTON_STATUS_PULL:
+    case BUTTON_STATUS_HOLD_ON:
+    case BUTTON_STATUS_UNK_123:
+    case BUTTON_STATUS_UNK_150:
+    case BUTTON_STATUS_UNK_153:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool action_prompt_context_active() {
+    return status_blocks_r_jump(dComIfGp_getDoStatus()) ||
+           status_blocks_r_jump(dComIfGp_getDoStatusForce());
+}
+
 bool r_action_context_active(daAlink_c* link) {
     if (dComIfGp_getRStatus() != BUTTON_STATUS_NONE ||
-        dComIfGp_getRStatusForce() != BUTTON_STATUS_NONE)
+        dComIfGp_getRStatusForce() != BUTTON_STATUS_NONE ||
+        action_prompt_context_active())
     {
         return true;
     }
