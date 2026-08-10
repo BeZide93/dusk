@@ -20,6 +20,9 @@
 #include <cstdio>
 #include <string>
 
+#include "dusk/ui/controls.hpp"
+#include "dusk/ui/document.hpp"
+
 #define private public
 #include "dusk/ui/touch_controls.hpp"
 #undef private
