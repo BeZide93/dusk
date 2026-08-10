@@ -6,8 +6,19 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
+#include <cctype>
+#include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <iterator>
+#include <locale>
+#include <sstream>
+#include <string>
 
 namespace dawnlight {
 namespace {
@@ -95,6 +106,36 @@ constexpr std::array<HudButtonDefaults, kHudButtonCount> kHudButtonDefaults = {{
     {"z", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
 }};
 
+constexpr std::array<const char*, kHudElementCount> kHudElementJsonNames = {{
+    "A",
+    "B",
+    "X",
+    "Y",
+    "Z",
+    "Button Backing",
+    "D-Pad",
+    "Midna",
+    "Hearts",
+    "Rupees",
+    "Keys",
+    "Oil",
+    "Oxygen",
+    "Minimap",
+}};
+
+constexpr std::array<const char*, kHudButtonCount> kHudButtonJsonNames = {{
+    "A",
+    "B",
+    "X",
+    "Y",
+    "Z",
+}};
+
+constexpr const char* kHudSettingsFileName = "hud_layout_settings.json";
+constexpr const char* kItemAnchorNames[] = {"Left", "Right", "Top", "Bottom"};
+constexpr const char* kTextAnchorNames[] = {"Left", "Right"};
+constexpr const char* kSlideDirectionNames[] = {"Left -> Right", "Right -> Left"};
+
 size_t hud_element_index(HudElement element) {
     return std::clamp<size_t>(static_cast<size_t>(element), 0, kHudElementCount - 1);
 }
@@ -141,6 +182,372 @@ int get_int(ConfigVarHandle handle, int fallback, int min, int max) {
         svc_config->get_int(mod_ctx, handle, &value);
     }
     return static_cast<int>(std::clamp<int64_t>(value, min, max));
+}
+
+bool set_int(ConfigVarHandle handle, int value) {
+    return handle != 0 && svc_config->set_int(mod_ctx, handle, value) == MOD_OK;
+}
+
+bool set_bool(ConfigVarHandle handle, bool value) {
+    return handle != 0 && svc_config->set_bool(mod_ctx, handle, value) == MOD_OK;
+}
+
+int scale_to_percent(double scale) {
+    return static_cast<int>(std::clamp<long long>(std::llround(scale * 100.0), 1, 9999));
+}
+
+int position_to_int(double value) {
+    return static_cast<int>(std::clamp<long long>(std::llround(value), -9999, 9999));
+}
+
+const char* item_anchor_name(int anchor) {
+    return kItemAnchorNames[std::clamp(anchor, 0, 3)];
+}
+
+const char* text_anchor_name(int anchor) {
+    return kTextAnchorNames[std::clamp(anchor, 0, 1)];
+}
+
+std::filesystem::path hud_settings_file_path() {
+    const char* dataDir = nullptr;
+    if (svc_host == nullptr || svc_host->data_dir(mod_ctx, &dataDir) != MOD_OK || dataDir == nullptr) {
+        return {};
+    }
+
+    const std::filesystem::path dataPath(dataDir);
+    const std::filesystem::path configRoot = dataPath.parent_path().parent_path();
+    if (configRoot.empty()) {
+        return {};
+    }
+    return configRoot / "mods" / kHudSettingsFileName;
+}
+
+bool set_custom_hud_to_wii_u_defaults(bool setLayout) {
+    for (size_t i = 0; i < kHudElementCount; ++i) {
+        const auto& defaults = kHudElementDefaults[i];
+        if (!set_int(s_hudElementX[i], defaults.x) || !set_int(s_hudElementY[i], defaults.y) ||
+            !set_int(s_hudElementScale[i], defaults.scale))
+        {
+            return false;
+        }
+    }
+
+    for (size_t i = 0; i < kHudButtonCount; ++i) {
+        const auto& defaults = kHudButtonDefaults[i];
+        if (!set_int(s_hudButtonItemOffsetX[i], defaults.itemOffsetX) ||
+            !set_int(s_hudButtonItemOffsetY[i], defaults.itemOffsetY) ||
+            !set_int(s_hudButtonItemScale[i], defaults.itemScale) ||
+            !set_int(s_hudButtonAmmoOffsetX[i], defaults.ammoOffsetX) ||
+            !set_int(s_hudButtonAmmoOffsetY[i], defaults.ammoOffsetY) ||
+            !set_int(s_hudButtonAmmoScale[i], defaults.ammoScale) ||
+            !set_int(s_hudButtonTextOffsetX[i], defaults.textOffsetX) ||
+            !set_int(s_hudButtonTextOffsetY[i], defaults.textOffsetY) ||
+            !set_int(s_hudButtonTextScale[i], defaults.textScale) ||
+            !set_int(s_hudButtonItemAnchor[i], defaults.itemAnchor) ||
+            !set_int(s_hudButtonTextAnchor[i], defaults.textAnchor))
+        {
+            return false;
+        }
+    }
+
+    if (!set_bool(s_hudDpadFollowsMinimap, false) ||
+        !set_int(s_hudMinimapSlideDirection, 0) || !set_bool(s_roundXYButtons, true))
+    {
+        return false;
+    }
+
+    return !setLayout ||
+           set_int(s_hudLayout, static_cast<int>(HudLayout::Custom));
+}
+
+size_t find_key_value_start(const std::string& json, const char* key, size_t from = 0) {
+    const std::string needle = std::string("\"") + key + "\"";
+    const size_t keyPos = json.find(needle, from);
+    if (keyPos == std::string::npos) {
+        return std::string::npos;
+    }
+    const size_t colon = json.find(':', keyPos + needle.size());
+    if (colon == std::string::npos) {
+        return std::string::npos;
+    }
+    size_t value = colon + 1;
+    while (value < json.size() && std::isspace(static_cast<unsigned char>(json[value]))) {
+        ++value;
+    }
+    return value;
+}
+
+bool read_json_object(const std::string& json, const char* key, std::string& outObject) {
+    const size_t value = find_key_value_start(json, key);
+    if (value == std::string::npos || value >= json.size() || json[value] != '{') {
+        return false;
+    }
+
+    bool inString = false;
+    bool escaped = false;
+    int depth = 0;
+    const size_t bodyStart = value + 1;
+    for (size_t i = value; i < json.size(); ++i) {
+        const char c = json[i];
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+
+        if (c == '"') {
+            inString = true;
+        } else if (c == '{') {
+            ++depth;
+        } else if (c == '}') {
+            --depth;
+            if (depth == 0) {
+                outObject = json.substr(bodyStart, i - bodyStart);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool read_json_number(const std::string& json, const char* key, double& outValue) {
+    const size_t value = find_key_value_start(json, key);
+    if (value == std::string::npos) {
+        return false;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    const char* start = json.c_str() + value;
+    const double parsed = std::strtod(start, &end);
+    if (end == start || errno == ERANGE) {
+        return false;
+    }
+    outValue = parsed;
+    return true;
+}
+
+bool read_json_bool(const std::string& json, const char* key, bool& outValue) {
+    const size_t value = find_key_value_start(json, key);
+    if (value == std::string::npos) {
+        return false;
+    }
+    if (json.compare(value, 4, "true") == 0) {
+        outValue = true;
+        return true;
+    }
+    if (json.compare(value, 5, "false") == 0) {
+        outValue = false;
+        return true;
+    }
+    return false;
+}
+
+bool read_json_string(const std::string& json, const char* key, std::string& outValue) {
+    const size_t value = find_key_value_start(json, key);
+    if (value == std::string::npos || value >= json.size() || json[value] != '"') {
+        return false;
+    }
+
+    std::string parsed;
+    bool escaped = false;
+    for (size_t i = value + 1; i < json.size(); ++i) {
+        const char c = json[i];
+        if (escaped) {
+            parsed.push_back(c);
+            escaped = false;
+        } else if (c == '\\') {
+            escaped = true;
+        } else if (c == '"') {
+            outValue = parsed;
+            return true;
+        } else {
+            parsed.push_back(c);
+        }
+    }
+    return false;
+}
+
+bool apply_json_number(
+    const std::string& object, const char* key, ConfigVarHandle handle, bool isScale) {
+    double value = 0.0;
+    if (!read_json_number(object, key, value)) {
+        return true;
+    }
+    return set_int(handle, isScale ? scale_to_percent(value) : position_to_int(value));
+}
+
+bool apply_anchor_string(const std::string& object, const char* key, ConfigVarHandle handle,
+    const char* const* names, size_t count) {
+    std::string value;
+    if (!read_json_string(object, key, value)) {
+        return true;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (value == names[i]) {
+            return set_int(handle, static_cast<int>(i));
+        }
+    }
+    return true;
+}
+
+void write_json_number(std::ostream& out, const char* key, double value, bool comma) {
+    out << "            \"" << key << "\": " << value << (comma ? "," : "") << "\n";
+}
+
+void write_json_string(std::ostream& out, const char* key, const char* value, bool comma) {
+    out << "            \"" << key << "\": \"" << value << "\"" << (comma ? "," : "") << "\n";
+}
+
+void write_json_bool(std::ostream& out, const char* key, bool value, bool comma) {
+    out << "            \"" << key << "\": " << (value ? "true" : "false")
+        << (comma ? "," : "") << "\n";
+}
+
+void write_button_layout_fields(std::ostream& out, HudButton button, bool hasItem, bool hasAmmo,
+    bool hasText, bool hasTrailingElementField) {
+    if (hasItem) {
+        write_json_string(
+            out, "itemAnchor", item_anchor_name(hud_custom_button_item_anchor(button)), true);
+        write_json_number(out, "itemOffsetX", hud_custom_button_item_offset_x(button), true);
+        write_json_number(out, "itemOffsetY", hud_custom_button_item_offset_y(button), true);
+        write_json_number(
+            out, "itemScale", hud_custom_button_item_scale_percent(button) / 100.0, true);
+    }
+    if (hasAmmo) {
+        write_json_number(out, "ammoOffsetX", hud_custom_button_ammo_offset_x(button), true);
+        write_json_number(out, "ammoOffsetY", hud_custom_button_ammo_offset_y(button), true);
+        write_json_number(
+            out, "ammoScale", hud_custom_button_ammo_scale_percent(button) / 100.0, true);
+    }
+    if (hasText) {
+        write_json_string(
+            out, "textAnchor", text_anchor_name(hud_custom_button_text_anchor(button)), true);
+        write_json_number(out, "textOffsetX", hud_custom_button_text_offset_x(button), true);
+        write_json_number(out, "textOffsetY", hud_custom_button_text_offset_y(button), true);
+        write_json_number(out, "textScale", hud_custom_button_text_scale_percent(button) / 100.0,
+            hasTrailingElementField);
+    }
+}
+
+bool button_for_element(
+    HudElement element, HudButton& outButton, bool& outHasItem, bool& outHasAmmo, bool& outHasText) {
+    outHasItem = false;
+    outHasAmmo = false;
+    outHasText = false;
+
+    switch (element) {
+    case HudElement::A:
+        outButton = HudButton::A;
+        outHasText = true;
+        return true;
+    case HudElement::B:
+        outButton = HudButton::B;
+        outHasItem = true;
+        outHasText = true;
+        return true;
+    case HudElement::X:
+        outButton = HudButton::X;
+        outHasItem = true;
+        outHasAmmo = true;
+        outHasText = true;
+        return true;
+    case HudElement::Y:
+        outButton = HudButton::Y;
+        outHasItem = true;
+        outHasAmmo = true;
+        outHasText = true;
+        return true;
+    case HudElement::Z:
+        outButton = HudButton::Z;
+        outHasItem = true;
+        outHasAmmo = true;
+        outHasText = true;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool apply_button_layout_json(const std::string& object, HudButton button, bool hasItem,
+    bool hasAmmo, bool hasText) {
+    const size_t index = hud_button_index(button);
+    if (hasItem) {
+        if (!apply_anchor_string(object, "itemAnchor", s_hudButtonItemAnchor[index],
+                kItemAnchorNames, std::size(kItemAnchorNames)) ||
+            !apply_json_number(object, "itemOffsetX", s_hudButtonItemOffsetX[index], false) ||
+            !apply_json_number(object, "itemOffsetY", s_hudButtonItemOffsetY[index], false) ||
+            !apply_json_number(object, "itemScale", s_hudButtonItemScale[index], true))
+        {
+            return false;
+        }
+    }
+    if (hasAmmo &&
+        (!apply_json_number(object, "ammoOffsetX", s_hudButtonAmmoOffsetX[index], false) ||
+            !apply_json_number(object, "ammoOffsetY", s_hudButtonAmmoOffsetY[index], false) ||
+            !apply_json_number(object, "ammoScale", s_hudButtonAmmoScale[index], true)))
+    {
+        return false;
+    }
+    if (hasText) {
+        if (!apply_anchor_string(object, "textAnchor", s_hudButtonTextAnchor[index],
+                kTextAnchorNames, std::size(kTextAnchorNames)) ||
+            !apply_json_number(object, "textOffsetX", s_hudButtonTextOffsetX[index], false) ||
+            !apply_json_number(object, "textOffsetY", s_hudButtonTextOffsetY[index], false) ||
+            !apply_json_number(object, "textScale", s_hudButtonTextScale[index], true))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool apply_element_json(const std::string& elementsObject, HudElement element) {
+    const size_t index = hud_element_index(element);
+    std::string object;
+    if (!read_json_object(elementsObject, kHudElementJsonNames[index], object)) {
+        return true;
+    }
+
+    if (!apply_json_number(object, "x", s_hudElementX[index], false) ||
+        !apply_json_number(object, "y", s_hudElementY[index], false) ||
+        !apply_json_number(object, "scale", s_hudElementScale[index], true))
+    {
+        return false;
+    }
+
+    if (element == HudElement::Minimap) {
+        bool follows = false;
+        if (read_json_bool(object, "dpadFollowsMinimap", follows) &&
+            !set_bool(s_hudDpadFollowsMinimap, follows))
+        {
+            return false;
+        }
+
+        std::string slideDirection;
+        if (read_json_string(object, "slideDirection", slideDirection)) {
+            const int value = slideDirection == kSlideDirectionNames[1] ? 1 : 0;
+            if (!set_int(s_hudMinimapSlideDirection, value)) {
+                return false;
+            }
+        }
+    }
+
+    HudButton button = HudButton::A;
+    bool hasItem = false;
+    bool hasAmmo = false;
+    bool hasText = false;
+    if (button_for_element(element, button, hasItem, hasAmmo, hasText) &&
+        !apply_button_layout_json(object, button, hasItem, hasAmmo, hasText))
+    {
+        return false;
+    }
+    return true;
 }
 
 ModResult register_custom_hud_config() {
@@ -520,6 +927,130 @@ ConfigVarHandle hud_custom_dpad_follows_minimap_config_var() {
 
 ConfigVarHandle hud_custom_minimap_slide_direction_config_var() {
     return s_hudMinimapSlideDirection;
+}
+
+HudSettingsIoResult export_custom_hud_settings(std::string& outPath) {
+    const std::filesystem::path path = hud_settings_file_path();
+    if (path.empty()) {
+        return HudSettingsIoResult::PathUnavailable;
+    }
+    outPath = path.generic_string();
+
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    if (ec) {
+        return HudSettingsIoResult::WriteFailed;
+    }
+
+    std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) {
+        return HudSettingsIoResult::WriteFailed;
+    }
+    out.imbue(std::locale::classic());
+    out << std::setprecision(8);
+
+    out << "{\n";
+    out << "    \"background\": false,\n";
+    out << "    \"elements\": {\n";
+    for (size_t i = 0; i < kHudElementCount; ++i) {
+        const auto element = static_cast<HudElement>(i);
+        out << "        \"" << kHudElementJsonNames[i] << "\": {\n";
+        write_json_number(out, "scale", hud_custom_element_scale_percent(element) / 100.0, true);
+
+        HudButton button = HudButton::A;
+        bool hasItem = false;
+        bool hasAmmo = false;
+        bool hasText = false;
+        if (button_for_element(element, button, hasItem, hasAmmo, hasText)) {
+            write_button_layout_fields(out, button, hasItem, hasAmmo, hasText, true);
+        }
+
+        if (element == HudElement::Minimap) {
+            write_json_bool(out, "dpadFollowsMinimap", hud_custom_dpad_follows_minimap(), true);
+            write_json_string(out, "slideDirection",
+                kSlideDirectionNames[std::clamp(hud_custom_minimap_slide_direction(), 0, 1)],
+                true);
+        }
+
+        write_json_number(out, "x", hud_custom_element_x(element), true);
+        write_json_number(out, "y", hud_custom_element_y(element), false);
+        out << "        }" << (i + 1 < kHudElementCount ? "," : "") << "\n";
+    }
+    out << "    },\n";
+    out << "    \"roundXYButtons\": " << (round_xy_buttons_enabled() ? "true" : "false") << ",\n";
+    out << "    \"version\": 10\n";
+    out << "}\n";
+
+    return out.good() ? HudSettingsIoResult::Ok : HudSettingsIoResult::WriteFailed;
+}
+
+HudSettingsIoResult import_custom_hud_settings(std::string& outPath) {
+    const std::filesystem::path path = hud_settings_file_path();
+    if (path.empty()) {
+        return HudSettingsIoResult::PathUnavailable;
+    }
+    outPath = path.generic_string();
+
+    std::error_code ec;
+    if (!std::filesystem::exists(path, ec)) {
+        return HudSettingsIoResult::FileMissing;
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    if (!in) {
+        return HudSettingsIoResult::ReadFailed;
+    }
+    std::ostringstream buffer;
+    buffer << in.rdbuf();
+    const std::string json = buffer.str();
+
+    std::string elementsObject;
+    if (!read_json_object(json, "elements", elementsObject)) {
+        return HudSettingsIoResult::InvalidFormat;
+    }
+
+    if (!set_custom_hud_to_wii_u_defaults(true)) {
+        return HudSettingsIoResult::ConfigFailed;
+    }
+
+    bool roundXY = true;
+    if (read_json_bool(json, "roundXYButtons", roundXY) && !set_bool(s_roundXYButtons, roundXY)) {
+        return HudSettingsIoResult::ConfigFailed;
+    }
+
+    for (size_t i = 0; i < kHudElementCount; ++i) {
+        if (!apply_element_json(elementsObject, static_cast<HudElement>(i))) {
+            return HudSettingsIoResult::ConfigFailed;
+        }
+    }
+
+    return HudSettingsIoResult::Ok;
+}
+
+HudSettingsIoResult reset_custom_hud_settings() {
+    return set_custom_hud_to_wii_u_defaults(true) ? HudSettingsIoResult::Ok :
+                                                    HudSettingsIoResult::ConfigFailed;
+}
+
+const char* hud_settings_io_result_message(HudSettingsIoResult result) {
+    switch (result) {
+    case HudSettingsIoResult::Ok:
+        return "OK";
+    case HudSettingsIoResult::FileMissing:
+        return "Place hud_layout_settings.json in the mods folder, then press IMPORT HUD again.";
+    case HudSettingsIoResult::PathUnavailable:
+        return "The mods folder path is currently unavailable.";
+    case HudSettingsIoResult::ReadFailed:
+        return "Unable to read hud_layout_settings.json.";
+    case HudSettingsIoResult::WriteFailed:
+        return "Unable to write hud_layout_settings.json.";
+    case HudSettingsIoResult::InvalidFormat:
+        return "hud_layout_settings.json is not a valid Dawnlight HUD layout file.";
+    case HudSettingsIoResult::ConfigFailed:
+        return "Unable to apply the HUD layout settings.";
+    default:
+        return "Unknown HUD layout settings error.";
+    }
 }
 
 }  // namespace dawnlight

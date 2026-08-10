@@ -3,6 +3,8 @@
 #include "mods/api.h"
 #include "mods/svc/config.h"
 
+#include <string>
+
 namespace dawnlight {
 
 enum class AimMode : int {
@@ -49,6 +51,16 @@ enum class HudButton : int {
     Y,
     Z,
     Count,
+};
+
+enum class HudSettingsIoResult {
+    Ok,
+    FileMissing,
+    PathUnavailable,
+    ReadFailed,
+    WriteFailed,
+    InvalidFormat,
+    ConfigFailed,
 };
 
 ModResult register_config(ModError* error);
@@ -111,5 +123,10 @@ ConfigVarHandle hud_custom_button_item_anchor_config_var(HudButton button);
 ConfigVarHandle hud_custom_button_text_anchor_config_var(HudButton button);
 ConfigVarHandle hud_custom_dpad_follows_minimap_config_var();
 ConfigVarHandle hud_custom_minimap_slide_direction_config_var();
+
+HudSettingsIoResult export_custom_hud_settings(std::string& outPath);
+HudSettingsIoResult import_custom_hud_settings(std::string& outPath);
+HudSettingsIoResult reset_custom_hud_settings();
+const char* hud_settings_io_result_message(HudSettingsIoResult result);
 
 }  // namespace dawnlight

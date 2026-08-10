@@ -5,6 +5,7 @@
 #include "mods/svc/ui.h"
 
 #include <array>
+#include <string>
 
 namespace dawnlight {
 namespace {
@@ -65,6 +66,14 @@ ModResult add_button(ModContext* ctx, UiElementHandle pane, const char* label,
     return svc_ui->pane_add_control(ctx, pane, &desc, nullptr);
 }
 
+void push_toast(const char* title, const char* body, const char* type = nullptr) {
+    UiToastDesc toast = UI_TOAST_DESC_INIT;
+    toast.type = type;
+    toast.title_rml = title;
+    toast.body_rml = body;
+    svc_ui->push_toast(mod_ctx, &toast);
+}
+
 ModResult add_toggle(ModContext* ctx, UiElementHandle pane, const char* label,
     ConfigVarHandle var, const char* help = nullptr, UiPredicateFn isDisabled = nullptr) {
     UiControlDesc desc = UI_CONTROL_DESC_INIT;
@@ -111,6 +120,35 @@ ModResult add_select(ModContext* ctx, UiElementHandle pane, const char* label,
 
 bool custom_hud_controls_disabled(ModContext*, void*) {
     return !custom_hud_layout_enabled();
+}
+
+void export_hud_settings(ModContext*, void*) {
+    std::string path;
+    const HudSettingsIoResult result = export_custom_hud_settings(path);
+    if (result == HudSettingsIoResult::Ok) {
+        push_toast("HUD Exported", "Exported hud_layout_settings.json to the mods folder.");
+    } else {
+        push_toast("HUD Export Failed", hud_settings_io_result_message(result), "warning");
+    }
+}
+
+void import_hud_settings(ModContext*, void*) {
+    std::string path;
+    const HudSettingsIoResult result = import_custom_hud_settings(path);
+    if (result == HudSettingsIoResult::Ok) {
+        push_toast("HUD Imported", "Imported hud_layout_settings.json from the mods folder.");
+    } else {
+        push_toast("HUD Import Failed", hud_settings_io_result_message(result), "warning");
+    }
+}
+
+void reset_hud_settings(ModContext*, void*) {
+    const HudSettingsIoResult result = reset_custom_hud_settings();
+    if (result == HudSettingsIoResult::Ok) {
+        push_toast("HUD Reset", "Custom HUD reset to Wii-U defaults.");
+    } else {
+        push_toast("HUD Reset Failed", hud_settings_io_result_message(result), "warning");
+    }
 }
 
 ModResult add_custom_transform_controls(
@@ -280,6 +318,15 @@ ModResult build_hud_tab(
             "Draws X and Y with Dawnlight's round HUD button style.")
         != MOD_OK)
     {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "EXPORT HUD", export_hud_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "IMPORT HUD", import_hud_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "RESET HUD", reset_hud_settings) != MOD_OK) {
         return MOD_ERROR;
     }
     if (add_section(ctx, left, "Custom Minimap") != MOD_OK) return MOD_ERROR;
