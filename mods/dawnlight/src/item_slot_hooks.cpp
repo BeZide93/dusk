@@ -123,6 +123,7 @@ RingZButtonPrompt s_ringZPrompt;
 alignas(32) u8 s_zHudItemTexBuf[2][2][0xC00];
 u8 s_zHudItemTexPage = 0;
 u8 s_zHudLastItem = dItemNo_NONE_e;
+J2DPicture* s_zHudLastPicture = nullptr;
 J2DPicture* s_zItemNumTex[3] = {};
 dKantera_icon_c* s_zOilMeter = nullptr;
 daAlink_c* s_zHeavyBootsGuardLink = nullptr;
@@ -1604,7 +1605,18 @@ void pane_trans_to_global_center(CPaneMgr* pane, const f32 targetX, const f32 ta
 
 void change_z_hud_item_texture(dMeter2Draw_c* meter, const u8 itemNo) {
     const u8 textureItem = hud_texture_item(itemNo);
-    if (s_zHudLastItem == textureItem) {
+    auto* picture = static_cast<J2DPicture*>(meter->mpItemR->getPanePtr());
+    if (picture == nullptr) {
+        return;
+    }
+
+    const ResTIMG* activeTexture = nullptr;
+    if (auto* texture = picture->getTexture(0)) {
+        activeTexture = texture->getTexInfo();
+    }
+    if (s_zHudLastItem == textureItem && s_zHudLastPicture == picture &&
+        activeTexture == z_hud_item_tex(s_zHudItemTexPage, 0))
+    {
         return;
     }
 
@@ -1613,8 +1625,7 @@ void change_z_hud_item_texture(dMeter2Draw_c* meter, const u8 itemNo) {
     ResTIMG* secondary = z_hud_item_tex(s_zHudItemTexPage, 1);
     const s32 textureCount =
         dMeter2Info_readItemTexture(textureItem, primary,
-            static_cast<J2DPicture*>(meter->mpItemR->getPanePtr()), secondary,
-            meter->mpItemXYPane[2], nullptr, nullptr, nullptr, nullptr, -1);
+            picture, secondary, meter->mpItemXYPane[2], nullptr, nullptr, nullptr, nullptr, -1);
     if (textureCount <= 1) {
         meter->mpItemXYPane[2]->hide();
     } else {
@@ -1633,6 +1644,7 @@ void change_z_hud_item_texture(dMeter2Draw_c* meter, const u8 itemNo) {
     meter->mpItemR->resize(meter->field_0x6c4[2], meter->field_0x6d0[2]);
     meter->mpItemXYPane[2]->resize(meter->field_0x6c4[2], meter->field_0x6d0[2]);
     s_zHudLastItem = textureItem;
+    s_zHudLastPicture = picture;
 }
 
 void layout_z_hud_item(dMeter2Draw_c* meter, const u8 itemNo) {
