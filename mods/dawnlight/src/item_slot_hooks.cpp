@@ -23,6 +23,7 @@
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JKernel/JKRMemArchive.h"
 #define private public
+#include "d/d_meter2.h"
 #include "d/d_menu_ring.h"
 #include "d/d_meter_map.h"
 #include "d/d_meter2_draw.h"
@@ -76,6 +77,7 @@ DEFINE_HOOK(&dMeter2Draw_c::drawKantera, MeterDrawKanteraHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawOxygen, MeterDrawOxygenHook);
 DEFINE_HOOK(&dMeter2Draw_c::setButtonIconMidonaAlpha, MeterMidnaAlphaHook);
 DEFINE_HOOK(&dMeter2Draw_c::drawButtonCross, MeterDrawButtonCrossHook);
+DEFINE_HOOK(&dMeter2_c::moveButtonCross, MeterMoveButtonCrossHook);
 DEFINE_HOOK(&dMeterButton_c::setString, MeterButtonSetStringHook);
 DEFINE_HOOK(&dMeterButton_c::_execute, MeterButtonExecuteHook);
 DEFINE_HOOK(&dMeterMap_c::draw, MeterMapDrawHook);
@@ -1267,7 +1269,7 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         return;
     }
 
-    const bool enabled = wii_u_hud_enabled();
+    const bool enabled = hardcoded_hud_layout_enabled();
 
     const DuskModHudTransform aTransform = hud_layout_a_transform();
     const DuskModHudButtonLayout aLayout = hud_layout_a_button_layout();
@@ -1337,32 +1339,41 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         zTransform.offset_x + zLayout.text_offset_x,
         zTransform.offset_y + zLayout.text_offset_y, hud_text_scale(zTransform, zLayout));
 
-    apply_hud_pane_transform(HudPaneSlot::Backing, meter->mpUzu, enabled, -100.0f, 0.0f,
-        1.0f);
+    const DuskModHudTransform backingTransform = hud_layout_backing_transform();
+    apply_hud_pane_transform(HudPaneSlot::Backing, meter->mpUzu, enabled,
+        backingTransform.offset_x, backingTransform.offset_y, backingTransform.scale);
     const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
     apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent, enabled,
         dpadTransform.offset_x, dpadTransform.offset_y, dpadTransform.scale);
-    apply_hud_pane_transform(HudPaneSlot::Hearts, meter->mpLifeParent, enabled, 100.0f,
-        0.0f, 1.0f);
-    apply_hud_pane_transform(HudPaneSlot::Rupee0, meter->mpRupeeParent[0], enabled, 40.0f,
-        0.0f, 1.0f);
-    apply_hud_pane_transform(HudPaneSlot::Rupee1, meter->mpRupeeParent[1], enabled, 40.0f,
-        0.0f, 1.0f);
-    apply_hud_pane_transform(HudPaneSlot::Rupee2, meter->mpRupeeParent[2], enabled, 40.0f,
-        0.0f, 1.0f);
+    const DuskModHudTransform heartsTransform = hud_layout_hearts_transform();
+    apply_hud_pane_transform(HudPaneSlot::Hearts, meter->mpLifeParent, enabled,
+        heartsTransform.offset_x, heartsTransform.offset_y, heartsTransform.scale);
+    const DuskModHudTransform rupeesTransform = hud_layout_rupees_transform();
+    apply_hud_pane_transform(HudPaneSlot::Rupee0, meter->mpRupeeParent[0], enabled,
+        rupeesTransform.offset_x, rupeesTransform.offset_y, rupeesTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::Rupee1, meter->mpRupeeParent[1], enabled,
+        rupeesTransform.offset_x, rupeesTransform.offset_y, rupeesTransform.scale);
+    apply_hud_pane_transform(HudPaneSlot::Rupee2, meter->mpRupeeParent[2], enabled,
+        rupeesTransform.offset_x, rupeesTransform.offset_y, rupeesTransform.scale);
 }
 
 void apply_hud_backing_visibility(dMeter2Draw_c* meter) {
-    if (meter == nullptr || meter->mpUzu == nullptr || hud_backing_texture_enabled()) {
+    if (meter == nullptr || meter->mpUzu == nullptr) {
         return;
     }
 
-    meter->mpUzu->setAlpha(0);
-    meter->mpUzu->setAlphaRate(0.0f);
+    if (hardcoded_hud_layout_enabled()) {
+        meter->mpUzu->setAlpha(0);
+        meter->mpUzu->setAlphaRate(0.0f);
+        return;
+    }
+
+    meter->mpUzu->setAlpha(meter->mpUzu->getInitAlpha());
+    meter->mpUzu->setAlphaRate(1.0f);
 }
 
 void apply_wii_u_minimap_layout(dMeterMap_c* map) {
-    if (!wii_u_hud_enabled() || map == nullptr) {
+    if (!hardcoded_hud_layout_enabled() || map == nullptr) {
         return;
     }
 
@@ -1375,10 +1386,16 @@ void apply_wii_u_minimap_layout(dMeterMap_c* map) {
         .active = true,
     };
 
-    map->mDrawPosX += 730.0f;
-    map->mDrawPosY += -190.0f;
-    map->mSizeW *= 0.7f;
-    map->mSizeH *= 0.7f;
+    const DuskModHudTransform transform = hud_layout_minimap_transform();
+    if (transform.slide_direction == kHudSlideRightToLeft) {
+        const f32 insidePosX =
+            map->mDrawPosX - (static_cast<f32>(map->mSlidePositionOffset) * 2.0f);
+        map->mDrawPosX = insidePosX - (map->mDrawPosX - insidePosX);
+    }
+    map->mDrawPosX += transform.offset_x;
+    map->mDrawPosY += transform.offset_y;
+    map->mSizeW *= transform.scale;
+    map->mSizeH *= transform.scale;
 }
 
 void restore_wii_u_minimap_layout(dMeterMap_c* map) {
@@ -2534,15 +2551,15 @@ void after_meter_draw(ModContext*, void* args, void*, void*) {
 }
 
 HookAction before_meter_draw_kantera(ModContext*, void* args, void*, void*) {
-    if (wii_u_hud_enabled()) {
-        mods::arg_ref<f32>(args, 3) += 100.0f;
+    if (hardcoded_hud_layout_enabled()) {
+        mods::arg_ref<f32>(args, 3) += hud_layout_oil_transform().offset_x;
     }
     return HOOK_CONTINUE;
 }
 
 HookAction before_meter_draw_oxygen(ModContext*, void* args, void*, void*) {
-    if (wii_u_hud_enabled()) {
-        mods::arg_ref<f32>(args, 3) += 100.0f;
+    if (hardcoded_hud_layout_enabled()) {
+        mods::arg_ref<f32>(args, 3) += hud_layout_oxygen_transform().offset_x;
     }
     return HOOK_CONTINUE;
 }
@@ -2559,8 +2576,24 @@ void after_meter_draw_button_cross(ModContext*, void* args, void*, void*) {
 
     const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
     apply_hud_pane_transform(HudPaneSlot::DPad, meter->mpButtonCrossParent,
-        wii_u_hud_enabled(), dpadTransform.offset_x, dpadTransform.offset_y,
+        hardcoded_hud_layout_enabled(), dpadTransform.offset_x, dpadTransform.offset_y,
         dpadTransform.scale);
+}
+
+void after_meter_move_button_cross(ModContext*, void* args, void*, void*) {
+    auto* meter = mods::arg<dMeter2_c*>(args, 0);
+    if (!hardcoded_hud_layout_enabled() || meter == nullptr || meter->mpMeterDraw == nullptr) {
+        return;
+    }
+
+    const DuskModHudTransform dpadTransform = hud_layout_dpad_transform();
+    if (dpadTransform.parent_mode != kHudParentIndependent) {
+        return;
+    }
+
+    meter->field_0x1b4 = 0;
+    meter->field_0x15c = meter->mButtonCrossOFFPosY;
+    meter->mpMeterDraw->drawButtonCross(meter->mButtonCrossOFFPosX, meter->mButtonCrossOFFPosY);
 }
 
 HookAction before_meter_map_draw(ModContext*, void* args, void*, void*) {
@@ -3038,6 +3071,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterDrawButtonCrossHook>(svc_hook, after_meter_draw_button_cross);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterMoveButtonCrossHook>(svc_hook, after_meter_move_button_cross);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<MeterMapDrawHook>(svc_hook, before_meter_map_draw);

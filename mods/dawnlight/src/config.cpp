@@ -20,10 +20,11 @@ ConfigVarHandle s_aimMovement = 0;
 ConfigVarHandle s_manualShielding = 0;
 ConfigVarHandle s_rJump = 0;
 ConfigVarHandle s_zItemSlot = 0;
-ConfigVarHandle s_wiiUHud = 0;
+ConfigVarHandle s_hudLayout = 0;
+ConfigVarHandle s_legacyWiiUHud = 0;
 ConfigVarHandle s_roundXYButtons = 0;
-ConfigVarHandle s_hudBackingTexture = 0;
 ConfigVarHandle s_aimDefaultsMigrated = 0;
+ConfigVarHandle s_hudLayoutMigrated = 0;
 
 ModResult register_bool(const char* name, bool defaultValue, ConfigVarHandle& handle) {
     ConfigVarDesc desc = CONFIG_VAR_DESC_INIT;
@@ -62,10 +63,12 @@ ModResult register_config(ModError* error) {
         register_bool("manual-shielding", true, s_manualShielding) != MOD_OK ||
         register_bool("r-jump", true, s_rJump) != MOD_OK ||
         register_bool("z-item-slot", true, s_zItemSlot) != MOD_OK ||
-        register_bool("wii-u-hud", false, s_wiiUHud) != MOD_OK ||
+        register_int("hud-layout", static_cast<int64_t>(HudLayout::GameCube), s_hudLayout) !=
+            MOD_OK ||
+        register_bool("wii-u-hud", false, s_legacyWiiUHud) != MOD_OK ||
         register_bool("round-xy-buttons", false, s_roundXYButtons) != MOD_OK ||
-        register_bool("hud-backing-texture", true, s_hudBackingTexture) != MOD_OK ||
-        register_bool("aim-defaults-v2", false, s_aimDefaultsMigrated) != MOD_OK)
+        register_bool("aim-defaults-v2", false, s_aimDefaultsMigrated) != MOD_OK ||
+        register_bool("hud-layout-migrated-v1", false, s_hudLayoutMigrated) != MOD_OK)
     {
         return mods::set_error(error, MOD_ERROR, "failed to register Dawnlight config variables");
     }
@@ -77,6 +80,20 @@ ModResult register_config(ModError* error) {
         {
             return mods::set_error(
                 error, MOD_ERROR, "failed to migrate Dawnlight aim defaults");
+        }
+    }
+
+    if (!get_bool(s_hudLayoutMigrated, false)) {
+        if (get_bool(s_legacyWiiUHud, false) &&
+            svc_config->set_int(mod_ctx, s_hudLayout,
+                static_cast<int64_t>(HudLayout::Dawnlight)) != MOD_OK)
+        {
+            return mods::set_error(
+                error, MOD_ERROR, "failed to migrate Dawnlight HUD layout");
+        }
+        if (svc_config->set_bool(mod_ctx, s_hudLayoutMigrated, true) != MOD_OK) {
+            return mods::set_error(
+                error, MOD_ERROR, "failed to finish Dawnlight HUD layout migration");
         }
     }
     return MOD_OK;
@@ -134,16 +151,20 @@ bool z_item_slot_enabled() {
     return get_bool(s_zItemSlot, true);
 }
 
-bool wii_u_hud_enabled() {
-    return get_bool(s_wiiUHud, false);
+HudLayout hud_layout() {
+    int64_t value = static_cast<int64_t>(HudLayout::GameCube);
+    if (s_hudLayout != 0) {
+        svc_config->get_int(mod_ctx, s_hudLayout, &value);
+    }
+    return static_cast<HudLayout>(std::clamp<int64_t>(value, 0, 2));
+}
+
+bool hardcoded_hud_layout_enabled() {
+    return hud_layout() != HudLayout::GameCube;
 }
 
 bool round_xy_buttons_enabled() {
     return get_bool(s_roundXYButtons, false);
-}
-
-bool hud_backing_texture_enabled() {
-    return get_bool(s_hudBackingTexture, true);
 }
 
 ConfigVarHandle health_scale_config_var() {
@@ -186,16 +207,12 @@ ConfigVarHandle z_item_slot_config_var() {
     return s_zItemSlot;
 }
 
-ConfigVarHandle wii_u_hud_config_var() {
-    return s_wiiUHud;
+ConfigVarHandle hud_layout_config_var() {
+    return s_hudLayout;
 }
 
 ConfigVarHandle round_xy_buttons_config_var() {
     return s_roundXYButtons;
-}
-
-ConfigVarHandle hud_backing_texture_config_var() {
-    return s_hudBackingTexture;
 }
 
 }  // namespace dawnlight

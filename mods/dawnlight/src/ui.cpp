@@ -24,6 +24,12 @@ constexpr const char* kNewSaveModeOptions[] = {
     "Boss Rush",
 };
 
+constexpr const char* kHudLayoutOptions[] = {
+    "GameCube",
+    "Wii-U",
+    "Dawnlight",
+};
+
 ModResult add_section(ModContext* ctx, UiElementHandle pane, const char* title) {
     return svc_ui->pane_add_section(ctx, pane, title);
 }
@@ -126,21 +132,21 @@ ModResult build_controls_tab(
     {
         return MOD_ERROR;
     }
+    return MOD_OK;
+}
+
+ModResult build_hud_tab(
+    ModContext* ctx, UiWindowHandle, UiElementHandle left, UiElementHandle, void*, ModError*) {
     if (add_section(ctx, left, "HUD") != MOD_OK) return MOD_ERROR;
-    if (add_toggle(ctx, left, "Wii-U HUD", wii_u_hud_config_var(),
-            "Applies Dawnlight's fixed Wii U-style HUD layout preset.")
+    if (add_select(ctx, left, "HUD Layout", hud_layout_config_var(), kHudLayoutOptions,
+            std::size(kHudLayoutOptions),
+            "GameCube keeps the original HUD. Wii-U and Dawnlight apply fixed HUD layout presets.")
         != MOD_OK)
     {
         return MOD_ERROR;
     }
     if (add_toggle(ctx, left, "Round X/Y Buttons", round_xy_buttons_config_var(),
             "Draws X and Y with Dawnlight's round HUD button style.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
-    if (add_toggle(ctx, left, "HUD Backing Texture", hud_backing_texture_config_var(),
-            "Shows or hides the decorative backing behind the A/B/X/Y HUD buttons.")
         != MOD_OK)
     {
         return MOD_ERROR;
@@ -214,7 +220,7 @@ void open_settings(ModContext* ctx, void*) {
         return;
     }
 
-    std::array<UiTabDesc, 4> tabs{};
+    std::array<UiTabDesc, 5> tabs{};
     for (auto& tab : tabs) {
         tab = UI_TAB_DESC_INIT;
     }
@@ -222,10 +228,12 @@ void open_settings(ModContext* ctx, void*) {
     tabs[0].build = build_aiming_tab;
     tabs[1].title = "Controls";
     tabs[1].build = build_controls_tab;
-    tabs[2].title = "Gameplay";
-    tabs[2].build = build_gameplay_tab;
-    tabs[3].title = "Deferred";
-    tabs[3].build = build_deferred_tab;
+    tabs[2].title = "HUD";
+    tabs[2].build = build_hud_tab;
+    tabs[3].title = "Gameplay";
+    tabs[3].build = build_gameplay_tab;
+    tabs[4].title = "Deferred";
+    tabs[4].build = build_deferred_tab;
 
     UiWindowDesc desc = UI_WINDOW_DESC_INIT;
     desc.tabs = tabs.data();
@@ -243,7 +251,7 @@ ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModErro
     if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Z item slot support") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Intro Skip and Boss Rush new-save modes") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Wii U HUD preset, round buttons, and HUD backing toggle") != MOD_OK) {
+    if (add_text(ctx, panel, "HUD layout presets and round buttons") != MOD_OK) {
         return MOD_ERROR;
     }
     return MOD_OK;
