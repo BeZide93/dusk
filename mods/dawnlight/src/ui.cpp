@@ -100,14 +100,6 @@ ModResult build_aiming_tab(
     {
         return MOD_ERROR;
     }
-    if (add_text(ctx, left,
-            "The host-clean .dusk can adjust supported vanilla subject-aim states while they are "
-            "active. Full Dawnlight camera-profile replacement still needs upstream camera and "
-            "item-aim extension points.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
     return MOD_OK;
 }
 
@@ -149,14 +141,6 @@ ModResult build_controls_tab(
     }
     if (add_toggle(ctx, left, "HUD Backing Texture", hud_backing_texture_config_var(),
             "Shows or hides the decorative backing behind the A/B/X/Y HUD buttons.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
-    if (add_text(ctx, left,
-            "Wii U controller style remains outside this hook-only package. The Z item slot uses "
-            "the existing Z input and can later be remapped to a dedicated Wii U layout button "
-            "once upstream exposes input-layout extension points.")
         != MOD_OK)
     {
         return MOD_ERROR;
@@ -212,23 +196,8 @@ ModResult build_deferred_tab(
     ModContext* ctx, UiWindowHandle, UiElementHandle left, UiElementHandle, void*, ModError*) {
     if (add_section(ctx, left, "Waiting For Services") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, left,
-            "New Game+ is not enabled in this upstream-main package because it needs a source-save "
-            "selection flow. Intro Skip and Boss Rush can be selected from Gameplay > New Save Mode "
-            "and apply to newly created empty slots.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
-    if (add_text(ctx, left,
-            "Full HUD layout import/export is not enabled here because upstream does not yet expose "
-            "a HUD layout or meter-pane service compatible with hud_layout_settings.json.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
-    if (add_text(ctx, left,
-            "Touch-specific Z/Midna layout changes and full Wii U controller style are deferred "
-            "until upstream exposes input-layout and touch-control extension points.")
+            "New Game+ is not enabled in this upstream-main package yet because it needs a "
+            "source-save selection flow.")
         != MOD_OK)
     {
         return MOD_ERROR;
@@ -268,6 +237,13 @@ void open_settings(ModContext* ctx, void*) {
 ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModError*) {
     if (add_section(ctx, panel, "Dawnlight Settings") != MOD_OK) return MOD_ERROR;
     if (add_button(ctx, panel, "Open Dawnlight Settings", open_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_text(ctx, panel, "Aim Movement and Aim Mode helpers") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Z item slot support") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Intro Skip and Boss Rush new-save modes") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Wii U HUD preset, round buttons, and HUD backing toggle") != MOD_OK) {
         return MOD_ERROR;
     }
     return MOD_OK;

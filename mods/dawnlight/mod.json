@@ -3,5 +3,5 @@
   "name": "Dawnlight",
   "version": "0.7.0-main",
   "author": "BeZide93",
-  "description": "Host-clean Dawnlight feature subset for upstream Dusklight main. Features that still need new services are documented as TODOs."
+  "description": "Dawnlight gameplay and HUD features for Dusklight."
 }
