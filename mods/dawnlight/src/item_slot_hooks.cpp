@@ -779,19 +779,22 @@ void set_skip_touch_hidden(Rml::Element* element, const bool hidden) {
 
 void sync_skip_touch_midna_button(Rml::Element* element) {
     const std::string source = true_midna_icon_source();
-    if (element == s_skipTouchElement && s_skipTouchMidnaMode && source == s_skipTouchMidnaSource) {
+    if (element == s_skipTouchElement && s_skipTouchMidnaMode &&
+        (!s_skipTouchMidnaSource.empty() || source == s_skipTouchMidnaSource))
+    {
         return;
     }
 
     s_skipTouchElement = element;
     s_skipTouchMidnaMode = true;
-    s_skipTouchMidnaSource = source;
 
     if (source.empty()) {
+        s_skipTouchMidnaSource.clear();
         set_skip_touch_rml(element, "<span>Midna</span>");
         return;
     }
 
+    s_skipTouchMidnaSource = source;
     set_skip_touch_rml(element,
         "<img class=\"midna-icon visible\" src=\"" + source + "\" /><span></span>");
 }
