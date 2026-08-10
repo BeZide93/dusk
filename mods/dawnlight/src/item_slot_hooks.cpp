@@ -1428,21 +1428,29 @@ void apply_item_wheel_z_offset(Vec& pos) {
     pos.y -= 5.0f;
 }
 
+void clear_ring_z_prompt_refs() {
+    s_ringZPrompt.button = nullptr;
+    s_ringZPrompt.screen = nullptr;
+    s_ringZPrompt.ring = nullptr;
+}
+
 void destroy_ring_z_prompt(dMenu_Ring_c* ring) {
     if (s_ringZPrompt.ring != ring) {
         return;
     }
 
-    JKR_DELETE(s_ringZPrompt.button);
-    s_ringZPrompt.button = nullptr;
-    JKR_DELETE(s_ringZPrompt.screen);
-    s_ringZPrompt.screen = nullptr;
-    s_ringZPrompt.ring = nullptr;
+    // The ring menu owns this heap lifetime; keep only per-menu references here.
+    clear_ring_z_prompt_refs();
 }
 
 void create_ring_z_prompt(dMenu_Ring_c* ring) {
-    destroy_ring_z_prompt(s_ringZPrompt.ring);
+    clear_ring_z_prompt_refs();
     if (!z_item_slot_enabled() || ring == nullptr || ring->mPlayerIsWolf || ring->mpScreen == nullptr) {
+        return;
+    }
+
+    auto* archive = dComIfGp_getMain2DArchive();
+    if (archive == nullptr) {
         return;
     }
 
@@ -1456,7 +1464,7 @@ void create_ring_z_prompt(dMenu_Ring_c* ring) {
     if (screen == nullptr) {
         return;
     }
-    if (!screen->setPriority("zelda_game_image.blo", 0x20000, dComIfGp_getMain2DArchive())) {
+    if (!screen->setPriority("zelda_game_image.blo", 0x20000, archive)) {
         JKR_DELETE(screen);
         return;
     }
@@ -3082,9 +3090,7 @@ ModResult install_item_slot_hooks(ModError* error) {
     if (result == MOD_OK) {
         result = mods::hook_add_post<RingCreateHook>(svc_hook, after_ring_create);
     }
-    if (result == MOD_OK) {
-        result = mods::hook_add_pre<RingDeleteHook>(svc_hook, before_ring_delete);
-    }
+    (void)mods::hook_add_pre<RingDeleteHook>(svc_hook, before_ring_delete);
     if (result == MOD_OK) {
         result = mods::hook_add_post<RingDrawHook>(svc_hook, after_ring_draw);
     }
@@ -3163,6 +3169,7 @@ ModResult install_item_slot_hooks(ModError* error) {
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterButtonExecuteHook>(svc_hook, after_meter_button_execute);
     }
+#if defined(__ANDROID__)
     if (result == MOD_OK) {
         result = mods::hook_add_post<MidnaIconSourceHook>(svc_hook, after_midna_icon_source);
     }
@@ -3188,10 +3195,13 @@ ModResult install_item_slot_hooks(ModError* error) {
         result = mods::hook_add_pre<TouchSetControlPressedHook>(
             svc_hook, before_touch_set_control_pressed);
     }
+#endif
     return add_hook(result, error);
 }
 
 void shutdown_item_slot_hooks() {
+    clear_ring_z_prompt_refs();
+
     if (s_dpadPromptTextureBuffer != nullptr) {
         JKRFreeToHeap(static_cast<JKRHeap*>(mDoExt_getJ2dHeap()), s_dpadPromptTextureBuffer);
         s_dpadPromptTextureBuffer = nullptr;

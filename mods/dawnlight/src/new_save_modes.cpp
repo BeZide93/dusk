@@ -772,7 +772,6 @@ void grant_bossrush_items() {
     }
     set_select_item(SELECT_ITEM_X, SLOT_4);
     set_select_item(SELECT_ITEM_Y, SLOT_10);
-    set_select_item(SELECT_ITEM_DOWN, SLOT_6);
 
     dComIfGs_setArrowMax(60);
     dComIfGs_setArrowNum(60);
@@ -1422,6 +1421,31 @@ void finish_prompt_and_advance() {
     }
 }
 
+bool restore_bossrush_hub_load_state() {
+    if (!is_boss_hub_stage_name() || boss_rush_state() == kBossRushStateHub ||
+        dComIfGp_isEnableNextStage() || fopOvlpM_IsPeek())
+    {
+        return false;
+    }
+
+    const u8 index = boss_rush_index();
+    if (index < kBossRushEntryCount &&
+        kBossRushEntries[index].clearMode == BossRushEntry::FinalGanondorf)
+    {
+        return false;
+    }
+
+    sAdvancePending = false;
+    sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+    set_boss_rush_state(kBossRushStateHub);
+    set_bossrush_return_place();
+    reset_direct_final_boss_state();
+    reset_hub_actor_ids();
+    clear_hub_confirm_state();
+    update_bossrush_hub();
+    return true;
+}
+
 void update_bossrush() {
     if (!is_boss_rush(dComIfGs_getSaveData())) {
         sAdvancePending = false;
@@ -1436,6 +1460,10 @@ void update_bossrush() {
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
         clear_hub_confirm_state();
+        return;
+    }
+
+    if (restore_bossrush_hub_load_state()) {
         return;
     }
 
