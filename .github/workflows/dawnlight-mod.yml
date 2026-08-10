@@ -1,0 +1,145 @@
+name: Dawnlight Mod
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build Linux (${{ matrix.platform }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x86_64
+            runner: ubuntu-24.04
+            preset: x-linux-ci-gcc
+          - platform: linux-aarch64
+            runner: ubuntu-24.04-arm
+            preset: x-linux-ci-gcc
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build clang lld mold openssl libcurl4-openssl-dev \
+            zlib1g-dev libglu1-mesa-dev libdbus-1-dev libvulkan-dev libxi-dev libxrandr-dev libasound2-dev \
+            libpulse-dev libudev-dev libpng-dev libncurses5-dev libx11-xcb-dev libfreetype-dev \
+            libxinerama-dev libxcursor-dev python3-markupsafe libgtk-3-dev libssl-dev \
+            libxss-dev libfuse2 libusb-1.0-0-dev libdecor-0-dev libpipewire-0.3-dev libunwind-dev
+
+      - name: Configure host dependencies
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build Dawnlight mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
+          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
+          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
+          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
+          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DDUSK_DIR="$PWD" \
+            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include" \
+            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
+          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
+
+      - name: Upload mod package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-mod-${{ matrix.platform }}
+          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
+
+  build-apple:
+    name: Build Apple (${{ matrix.platform }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-arm64
+            preset: x-macos-ci-arm64
+            arch: arm64
+          - platform: macos-x86_64
+            preset: x-macos-ci-x86_64
+            arch: x86_64
+          - platform: ios-arm64
+            preset: x-ios-ci
+            arch: arm64
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: brew install cmake ninja
+
+      - name: Install Rust iOS target
+        if: matrix.platform == 'ios-arm64'
+        run: |
+          rustup toolchain install stable
+          rustup target add aarch64-apple-ios
+
+      - name: Install Rust x86_64 macOS target
+        if: matrix.platform == 'macos-x86_64'
+        run: |
+          rustup toolchain install stable
+          rustup target add x86_64-apple-darwin
+
+      - name: Configure host dependencies
+        run: cmake --preset ${{ matrix.preset }}
+
+      - name: Build Dawnlight mod
+        shell: bash
+        run: |
+          set -euo pipefail
+          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
+          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
+          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
+          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
+          args=(
+            -S mods/dawnlight
+            -B build/dawnlight-mod
+            -G Ninja
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo
+            -DDUSK_DIR="$PWD"
+            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include"
+            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
+          )
+          if [[ "${{ matrix.platform }}" == "ios-arm64" ]]; then
+            args+=(
+              -DCMAKE_TOOLCHAIN_FILE="$PWD/ios.toolchain.cmake"
+              -DPLATFORM=OS64
+              -DDEPLOYMENT_TARGET=14.0
+              -DENABLE_BITCODE=OFF
+              -DENABLE_ARC=OFF
+              -DENABLE_VISIBILITY=ON
+              -DBUILD_SHARED_LIBS=OFF
+              -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
+              -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew
+            )
+          else
+            args+=(
+              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+              -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
+              -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew
+            )
+          fi
+          cmake "${args[@]}"
+          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
+
+      - name: Upload mod package
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-mod-${{ matrix.platform }}
+          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
