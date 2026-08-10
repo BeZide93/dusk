@@ -23,6 +23,7 @@ ModResult install_jump_hooks(ModError* error);
 ModResult install_manual_shield_hooks(ModError* error);
 ModResult install_new_save_mode_hooks(ModError* error);
 ModResult register_ui(ModError* error);
+void shutdown_item_slot_hooks();
 }
 
 extern "C" {
@@ -68,6 +69,7 @@ MOD_EXPORT ModResult mod_update(ModError*) {
 }
 
 MOD_EXPORT ModResult mod_shutdown(ModError*) {
+    dawnlight::shutdown_item_slot_hooks();
     svc_log->info(mod_ctx, "Dawnlight portable feature pack stopped");
     return MOD_OK;
 }
