@@ -187,6 +187,10 @@ u32 s_dpadPromptTextureSize = 0;
 u8 s_dpadPromptArchivePathIndex = 0;
 bool s_dpadPromptArchiveUnavailable = false;
 
+void reset_z_prompt_visual_state() {
+    s_zPromptVisualState = ZPromptVisualState();
+}
+
 struct J2DPictureTexCoordAccess : J2DPicture {
     static JGeometry::TVec2<s16>* coords(J2DPicture* picture) {
         return reinterpret_cast<J2DPictureTexCoordAccess*>(picture)->field_0x10a;
@@ -567,7 +571,7 @@ void restore_z_prompt_visuals(dMeterButton_c* meter) {
         }
     }
 
-    s_zPromptVisualState = {};
+    reset_z_prompt_visual_state();
     s_zPromptCustomVisualsActive = false;
 }
 
@@ -586,7 +590,7 @@ void apply_z_prompt_visuals(dMeterButton_c* meter) {
     if (!s_zPromptCustomVisualsActive || s_zPromptVisualState.icon != icon ||
         s_zPromptVisualState.overlay != overlay)
     {
-        s_zPromptVisualState = {};
+        reset_z_prompt_visual_state();
         s_zPromptVisualState.icon = icon;
         s_zPromptVisualState.overlay = overlay;
         s_zPromptVisualState.textureCount = std::min<u8>(icon->getTextureCount(), 2);
