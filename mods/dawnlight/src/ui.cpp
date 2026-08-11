@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "service_imports.hpp"
+#include "update_check.hpp"
 
 #include "mods/service.hpp"
 #include "mods/svc/ui.h"
@@ -584,6 +585,12 @@ void open_settings(ModContext* ctx, void*) {
 
 ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModError*) {
     if (add_section(ctx, panel, "Dawnlight Settings") != MOD_OK) return MOD_ERROR;
+    if (add_toggle(ctx, panel, "CHECK FOR UPDATES", check_for_updates_config_var(),
+            "Checks BeZide93/dusk releases for a newer Dawnlight mod version.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
     if (add_button(ctx, panel, "Open Dawnlight Settings", open_settings) != MOD_OK) {
         return MOD_ERROR;
     }
@@ -597,11 +604,17 @@ ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModErro
     return MOD_OK;
 }
 
+ModResult update_mod_panel(ModContext*, void*, ModError*) {
+    update_check_tick();
+    return MOD_OK;
+}
+
 }  // namespace
 
 ModResult register_ui(ModError* error) {
     UiModsPanelDesc panel = UI_MODS_PANEL_DESC_INIT;
     panel.build = build_mod_panel;
+    panel.update = update_mod_panel;
     ModResult result = svc_ui->register_mods_panel(mod_ctx, &panel);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to register Dawnlight mod panel");

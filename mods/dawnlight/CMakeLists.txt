@@ -31,6 +31,7 @@ add_mod(dawnlight_mod
         src/new_save_modes.cpp
         src/save_compat.cpp
         src/ui.cpp
+        src/update_check.cpp
     MOD_JSON mod.json
     RES_DIR res
     OUTPUT_DIR "${CMAKE_BINARY_DIR}/mods"

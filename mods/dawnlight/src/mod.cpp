@@ -1,6 +1,7 @@
 #include "config.hpp"
 #include "save_compat.hpp"
 #include "service_imports.hpp"
+#include "update_check.hpp"
 
 #include "mods/service.hpp"
 #include "mods/svc/config.h"
@@ -67,10 +68,12 @@ MOD_EXPORT ModResult mod_initialize(ModError* error) {
 }
 
 MOD_EXPORT ModResult mod_update(ModError*) {
+    dawnlight::update_check_tick();
     return MOD_OK;
 }
 
 MOD_EXPORT ModResult mod_shutdown(ModError*) {
+    dawnlight::shutdown_update_check();
     dawnlight::shutdown_item_slot_hooks();
     svc_log->info(mod_ctx, "Dawnlight portable feature pack stopped");
     return MOD_OK;
