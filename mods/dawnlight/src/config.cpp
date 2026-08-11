@@ -38,6 +38,7 @@ ConfigVarHandle s_legacyWiiUHud = 0;
 ConfigVarHandle s_roundXYButtons = 0;
 ConfigVarHandle s_aimDefaultsMigrated = 0;
 ConfigVarHandle s_hudLayoutMigrated = 0;
+ConfigVarHandle s_hudLayoutMigratedV2 = 0;
 
 constexpr size_t kHudElementCount = static_cast<size_t>(HudElement::Count);
 constexpr size_t kHudButtonCount = static_cast<size_t>(HudButton::Count);
@@ -83,7 +84,7 @@ struct HudButtonDefaults {
 
 constexpr std::array<HudElementDefaults, kHudElementCount> kHudElementDefaults = {{
     {"a", -35, 25, 100},
-    {"b", 20, -27, 150},
+    {"b", 20, -27, 149},
     {"x", -102, -1, 170},
     {"y", -22, 0, 170},
     {"z", 0, 0, 100},
@@ -99,11 +100,11 @@ constexpr std::array<HudElementDefaults, kHudElementCount> kHudElementDefaults =
 }};
 
 constexpr std::array<HudButtonDefaults, kHudButtonCount> kHudButtonDefaults = {{
-    {"a", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 1},
-    {"b", 30, 0, 50, 0, 0, 100, 10, 0, 50, 2, 1},
-    {"x", -15, -15, 50, 0, 0, 100, -15, -15, 50, 0, 0},
-    {"y", 0, 0, 50, 0, 0, 100, 15, 0, 50, 2, 0},
-    {"z", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
+    {"a", 0, 0, 100, 0, 0, 100, 200, 0, 100, 1, 1},
+    {"b", 30, 0, 50, 0, 0, 100, 160, 0, 50, 2, 1},
+    {"x", -15, -15, 50, 0, 0, 100, 100, -15, 50, 0, 1},
+    {"y", 0, 0, 50, 0, 0, 100, 150, 0, 50, 2, 1},
+    {"z", 0, 0, 100, 0, -15, 70, 0, 0, 100, 1, 0},
 }};
 
 constexpr std::array<const char*, kHudElementCount> kHudElementJsonNames = {{
@@ -222,7 +223,7 @@ std::filesystem::path hud_settings_file_path() {
     return configRoot / "mods" / kHudSettingsFileName;
 }
 
-bool set_custom_hud_to_wii_u_defaults(bool setLayout) {
+bool set_custom_hud_to_xbox_defaults(bool setLayout) {
     for (size_t i = 0; i < kHudElementCount; ++i) {
         const auto& defaults = kHudElementDefaults[i];
         if (!set_int(s_hudElementX[i], defaults.x) || !set_int(s_hudElementY[i], defaults.y) ||
@@ -623,7 +624,8 @@ ModResult register_config(ModError* error) {
         register_bool("wii-u-hud", false, s_legacyWiiUHud) != MOD_OK ||
         register_bool("round-xy-buttons", false, s_roundXYButtons) != MOD_OK ||
         register_bool("aim-defaults-v2", false, s_aimDefaultsMigrated) != MOD_OK ||
-        register_bool("hud-layout-migrated-v1", false, s_hudLayoutMigrated) != MOD_OK)
+        register_bool("hud-layout-migrated-v1", false, s_hudLayoutMigrated) != MOD_OK ||
+        register_bool("hud-layout-migrated-v2", false, s_hudLayoutMigratedV2) != MOD_OK)
     {
         return mods::set_error(error, MOD_ERROR, "failed to register Dawnlight config variables");
     }
@@ -639,6 +641,21 @@ ModResult register_config(ModError* error) {
         {
             return mods::set_error(
                 error, MOD_ERROR, "failed to migrate Dawnlight aim defaults");
+        }
+    }
+
+    if (!get_bool(s_hudLayoutMigratedV2, false)) {
+        int64_t layoutValue = static_cast<int64_t>(HudLayout::GameCube);
+        svc_config->get_int(mod_ctx, s_hudLayout, &layoutValue);
+        if (layoutValue == 2 || layoutValue == 3) {
+            if (svc_config->set_int(mod_ctx, s_hudLayout, layoutValue + 1) != MOD_OK) {
+                return mods::set_error(
+                    error, MOD_ERROR, "failed to migrate Dawnlight HUD layout presets");
+            }
+        }
+        if (svc_config->set_bool(mod_ctx, s_hudLayoutMigratedV2, true) != MOD_OK) {
+            return mods::set_error(
+                error, MOD_ERROR, "failed to finish Dawnlight HUD layout preset migration");
         }
     }
 
@@ -715,7 +732,7 @@ HudLayout hud_layout() {
     if (s_hudLayout != 0) {
         svc_config->get_int(mod_ctx, s_hudLayout, &value);
     }
-    return static_cast<HudLayout>(std::clamp<int64_t>(value, 0, 3));
+    return static_cast<HudLayout>(std::clamp<int64_t>(value, 0, 4));
 }
 
 bool hardcoded_hud_layout_enabled() {
@@ -1009,7 +1026,7 @@ HudSettingsIoResult import_custom_hud_settings(std::string& outPath) {
         return HudSettingsIoResult::InvalidFormat;
     }
 
-    if (!set_custom_hud_to_wii_u_defaults(true)) {
+    if (!set_custom_hud_to_xbox_defaults(true)) {
         return HudSettingsIoResult::ConfigFailed;
     }
 
@@ -1028,8 +1045,8 @@ HudSettingsIoResult import_custom_hud_settings(std::string& outPath) {
 }
 
 HudSettingsIoResult reset_custom_hud_settings() {
-    return set_custom_hud_to_wii_u_defaults(true) ? HudSettingsIoResult::Ok :
-                                                    HudSettingsIoResult::ConfigFailed;
+    return set_custom_hud_to_xbox_defaults(true) ? HudSettingsIoResult::Ok :
+                                                   HudSettingsIoResult::ConfigFailed;
 }
 
 const char* hud_settings_io_result_message(HudSettingsIoResult result) {

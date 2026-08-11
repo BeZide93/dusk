@@ -21,9 +21,10 @@ enum class NewSaveMode : int {
 
 enum class HudLayout : int {
     GameCube = 0,
-    WiiU = 1,
-    Dawnlight = 2,
-    Custom = 3,
+    XBox = 1,
+    WiiU = 2,
+    Dawnlight = 3,
+    Custom = 4,
 };
 
 enum class HudElement : int {

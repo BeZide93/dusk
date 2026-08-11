@@ -73,10 +73,16 @@ inline DuskModHudButtonLayout hud_custom_button_layout(
 
 inline DuskModHudTransform hud_layout_a_transform() {
     switch (hud_layout()) {
-    case HudLayout::WiiU:
+    case HudLayout::XBox:
         return {
             .offset_x = -35.0f,
             .offset_y = 25.0f,
+            .scale = 1.0f,
+        };
+    case HudLayout::WiiU:
+        return {
+            .offset_x = -5.0f,
+            .offset_y = -3.0f,
             .scale = 1.0f,
         };
     case HudLayout::Dawnlight:
@@ -97,9 +103,27 @@ inline DuskModHudButtonLayout hud_layout_a_button_layout() {
     if (custom_hud_layout_enabled()) {
         return hud_custom_button_layout(HudButton::A, kHudItemAnchorRight);
     }
+    if (hud_layout() == HudLayout::WiiU) {
+        return {
+            .text_scale = 1.0f,
+            .text_offset_x = 200.0f,
+            .text_offset_y = 0.0f,
+            .text_anchor = kHudTextAnchorRight,
+        };
+    }
+    if (hud_layout() == HudLayout::XBox) {
+        return {
+            .text_scale = 1.0f,
+            .text_offset_x = 200.0f,
+            .text_offset_y = 0.0f,
+            .text_anchor = kHudTextAnchorRight,
+        };
+    }
     if (hardcoded_hud_layout_enabled()) {
         return {
             .text_scale = 1.0f,
+            .text_offset_x = 200.0f,
+            .text_offset_y = 0.0f,
             .text_anchor = kHudTextAnchorRight,
         };
     }
@@ -108,10 +132,16 @@ inline DuskModHudButtonLayout hud_layout_a_button_layout() {
 
 inline DuskModHudTransform hud_layout_b_transform() {
     switch (hud_layout()) {
-    case HudLayout::WiiU:
+    case HudLayout::XBox:
         return {
             .offset_x = 20.0f,
             .offset_y = -27.0f,
+            .scale = 1.49f,
+        };
+    case HudLayout::WiiU:
+        return {
+            .offset_x = -11.0f,
+            .offset_y = 5.0f,
             .scale = 1.5f,
         };
     case HudLayout::Dawnlight:
@@ -132,13 +162,39 @@ inline DuskModHudButtonLayout hud_layout_b_button_layout() {
     if (custom_hud_layout_enabled()) {
         return hud_custom_button_layout(HudButton::B, kHudItemAnchorRight);
     }
+    if (hud_layout() == HudLayout::WiiU) {
+        return {
+            .item_scale = 0.5f,
+            .item_offset_x = 30.0f,
+            .item_offset_y = 0.0f,
+            .text_scale = 0.5f,
+            .text_offset_x = 160.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorTop,
+            .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorRight,
+        };
+    }
+    if (hud_layout() == HudLayout::XBox) {
+        return {
+            .item_scale = 0.5f,
+            .item_offset_x = 30.0f,
+            .item_offset_y = 0.0f,
+            .text_scale = 0.5f,
+            .text_offset_x = 160.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorTop,
+            .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorRight,
+        };
+    }
     if (hardcoded_hud_layout_enabled()) {
         return {
             .item_scale = 0.5f,
             .item_offset_x = 30.0f,
             .item_offset_y = 0.0f,
             .text_scale = 0.5f,
-            .text_offset_x = 10.0f,
+            .text_offset_x = 160.0f,
             .text_offset_y = 0.0f,
             .item_anchor = kHudItemAnchorTop,
             .default_item_anchor = kHudItemAnchorRight,
@@ -150,10 +206,16 @@ inline DuskModHudButtonLayout hud_layout_b_button_layout() {
 
 inline DuskModHudTransform hud_layout_x_transform() {
     switch (hud_layout()) {
-    case HudLayout::WiiU:
+    case HudLayout::XBox:
         return {
             .offset_x = -102.0f,
             .offset_y = -1.0f,
+            .scale = 1.7000000476837158f,
+        };
+    case HudLayout::WiiU:
+        return {
+            .offset_x = -73.0f,
+            .offset_y = -35.0f,
             .scale = 1.7000000476837158f,
         };
     case HudLayout::Dawnlight:
@@ -177,17 +239,32 @@ inline DuskModHudButtonLayout hud_layout_x_button_layout() {
     case HudLayout::WiiU:
         return {
             .item_scale = 0.5f,
+            .item_offset_x = -10.0f,
+            .item_offset_y = -5.0f,
+            .ammo_scale = 1.0f,
+            .ammo_offset_x = 0.0f,
+            .ammo_offset_y = 0.0f,
+            .text_scale = 0.5f,
+            .text_offset_x = 30.0f,
+            .text_offset_y = -15.0f,
+            .item_anchor = kHudItemAnchorTop,
+            .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorLeft,
+        };
+    case HudLayout::XBox:
+        return {
+            .item_scale = 0.5f,
             .item_offset_x = -15.0f,
             .item_offset_y = -15.0f,
             .ammo_scale = 1.0f,
             .ammo_offset_x = 0.0f,
             .ammo_offset_y = 0.0f,
             .text_scale = 0.5f,
-            .text_offset_x = -15.0f,
+            .text_offset_x = 100.0f,
             .text_offset_y = -15.0f,
             .item_anchor = kHudItemAnchorLeft,
             .default_item_anchor = kHudItemAnchorRight,
-            .text_anchor = kHudTextAnchorLeft,
+            .text_anchor = kHudTextAnchorRight,
         };
     case HudLayout::Dawnlight:
         return {
@@ -198,11 +275,11 @@ inline DuskModHudButtonLayout hud_layout_x_button_layout() {
             .ammo_offset_x = 0.0f,
             .ammo_offset_y = 0.0f,
             .text_scale = 0.5f,
-            .text_offset_x = -15.0f,
+            .text_offset_x = 100.0f,
             .text_offset_y = -15.0f,
             .item_anchor = kHudItemAnchorLeft,
             .default_item_anchor = kHudItemAnchorRight,
-            .text_anchor = kHudTextAnchorLeft,
+            .text_anchor = kHudTextAnchorRight,
         };
     case HudLayout::GameCube:
     default:
@@ -212,10 +289,16 @@ inline DuskModHudButtonLayout hud_layout_x_button_layout() {
 
 inline DuskModHudTransform hud_layout_y_transform() {
     switch (hud_layout()) {
-    case HudLayout::WiiU:
+    case HudLayout::XBox:
         return {
             .offset_x = -22.0f,
             .offset_y = 0.0f,
+            .scale = 1.7000000476837158f,
+        };
+    case HudLayout::WiiU:
+        return {
+            .offset_x = -52.0f,
+            .offset_y = 32.0f,
             .scale = 1.7000000476837158f,
         };
     case HudLayout::Dawnlight:
@@ -236,6 +319,38 @@ inline DuskModHudButtonLayout hud_layout_y_button_layout() {
     if (custom_hud_layout_enabled()) {
         return hud_custom_button_layout(HudButton::Y, kHudItemAnchorLeft);
     }
+    if (hud_layout() == HudLayout::WiiU) {
+        return {
+            .item_scale = 0.5f,
+            .item_offset_x = 20.0f,
+            .item_offset_y = 6.0f,
+            .ammo_scale = 1.0f,
+            .ammo_offset_x = 0.0f,
+            .ammo_offset_y = 0.0f,
+            .text_scale = 0.5f,
+            .text_offset_x = 65.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorLeft,
+            .default_item_anchor = kHudItemAnchorLeft,
+            .text_anchor = kHudTextAnchorLeft,
+        };
+    }
+    if (hud_layout() == HudLayout::XBox) {
+        return {
+            .item_scale = 0.5f,
+            .item_offset_x = 0.0f,
+            .item_offset_y = 0.0f,
+            .ammo_scale = 1.0f,
+            .ammo_offset_x = 0.0f,
+            .ammo_offset_y = 0.0f,
+            .text_scale = 0.5f,
+            .text_offset_x = 150.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorTop,
+            .default_item_anchor = kHudItemAnchorLeft,
+            .text_anchor = kHudTextAnchorRight,
+        };
+    }
     if (hardcoded_hud_layout_enabled()) {
         return {
             .item_scale = 0.5f,
@@ -245,11 +360,11 @@ inline DuskModHudButtonLayout hud_layout_y_button_layout() {
             .ammo_offset_x = 0.0f,
             .ammo_offset_y = 0.0f,
             .text_scale = 0.5f,
-            .text_offset_x = 15.0f,
+            .text_offset_x = 150.0f,
             .text_offset_y = 0.0f,
             .item_anchor = kHudItemAnchorTop,
             .default_item_anchor = kHudItemAnchorLeft,
-            .text_anchor = kHudTextAnchorLeft,
+            .text_anchor = kHudTextAnchorRight,
         };
     }
     return {};
@@ -257,6 +372,7 @@ inline DuskModHudButtonLayout hud_layout_y_button_layout() {
 
 inline DuskModHudTransform hud_layout_z_transform() {
     switch (hud_layout()) {
+    case HudLayout::XBox:
     case HudLayout::WiiU:
         return {
             .offset_x = 0.0f,
@@ -279,6 +395,7 @@ inline DuskModHudTransform hud_layout_z_transform() {
 
 inline DuskModHudTransform hud_layout_dpad_transform() {
     switch (hud_layout()) {
+    case HudLayout::XBox:
     case HudLayout::WiiU:
         return {
             .offset_x = 0.0f,
@@ -309,7 +426,7 @@ inline DuskModHudTransform hud_layout_midna_transform() {
     if (hud_layout() == HudLayout::Custom) {
         return hud_custom_element_transform(HudElement::Midna);
     }
-    if (hud_layout() == HudLayout::WiiU) {
+    if (hud_layout() == HudLayout::XBox || hud_layout() == HudLayout::WiiU) {
         return {
             .offset_x = -6.0f,
             .offset_y = 0.0f,
@@ -323,17 +440,52 @@ inline DuskModHudButtonLayout hud_layout_z_button_layout() {
     if (custom_hud_layout_enabled()) {
         return hud_custom_button_layout(HudButton::Z, kHudItemAnchorRight);
     }
+    if (hud_layout() == HudLayout::WiiU) {
+        return {
+            .item_scale = 1.0f,
+            .item_offset_x = 0.0f,
+            .item_offset_y = 0.0f,
+            .ammo_scale = 0.8f,
+            .ammo_offset_x = 0.0f,
+            .ammo_offset_y = -15.0f,
+            .text_scale = 1.0f,
+            .text_offset_x = 0.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorRight,
+            .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorLeft,
+        };
+    }
+    if (hud_layout() == HudLayout::XBox) {
+        return {
+            .item_scale = 1.0f,
+            .item_offset_x = 0.0f,
+            .item_offset_y = 0.0f,
+            .ammo_scale = 0.7f,
+            .ammo_offset_x = 0.0f,
+            .ammo_offset_y = -15.0f,
+            .text_scale = 1.0f,
+            .text_offset_x = 0.0f,
+            .text_offset_y = 0.0f,
+            .item_anchor = kHudItemAnchorRight,
+            .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorLeft,
+        };
+    }
     if (hardcoded_hud_layout_enabled()) {
         return {
             .item_scale = 1.0f,
             .item_offset_x = 0.0f,
             .item_offset_y = 0.0f,
-            .ammo_scale = 1.0f,
+            .ammo_scale = 0.7f,
             .ammo_offset_x = 0.0f,
-            .ammo_offset_y = 0.0f,
+            .ammo_offset_y = -15.0f,
             .text_scale = 1.0f,
+            .text_offset_x = 0.0f,
+            .text_offset_y = 0.0f,
             .item_anchor = kHudItemAnchorRight,
             .default_item_anchor = kHudItemAnchorRight,
+            .text_anchor = kHudTextAnchorLeft,
         };
     }
     return {};
@@ -418,6 +570,7 @@ inline DuskModHudTransform hud_layout_oxygen_transform() {
 
 inline DuskModHudTransform hud_layout_minimap_transform() {
     switch (hud_layout()) {
+    case HudLayout::XBox:
     case HudLayout::WiiU:
         return {
             .offset_x = 0.0f,

@@ -20,6 +20,7 @@
 #include "JSystem/J2DGraph/J2DPane.h"
 #include "JSystem/J2DGraph/J2DScreen.h"
 #include "JSystem/J2DGraph/J2DPicture.h"
+#include "JSystem/J2DGraph/J2DTextBox.h"
 #include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JKernel/JKRMemArchive.h"
 #define private public
@@ -207,6 +208,14 @@ struct HudPaneTransformState {
     f32 appliedY = 0.0f;
     f32 appliedScaleX = 1.0f;
     f32 appliedScaleY = 1.0f;
+    u8 originalTextFlags = 0;
+    bool hasOriginalTextFlags = false;
+    bool active = false;
+};
+
+struct HudTextBoxFlagState {
+    J2DTextBox* textBox = nullptr;
+    u8 originalFlags = 0;
     bool active = false;
 };
 
@@ -239,6 +248,10 @@ enum class HudPaneSlot : std::size_t {
 
 std::array<HudPaneTransformState, static_cast<std::size_t>(HudPaneSlot::Count)>
     s_wiiUHudPaneTransforms;
+std::array<std::array<HudTextBoxFlagState, 5>, static_cast<std::size_t>(HudPaneSlot::Count)>
+    s_hudTextBoxFlags;
+std::array<dMeter2Draw_c::item_params, 2> s_xyAmmoOriginalParams = {};
+std::array<bool, 2> s_xyAmmoOriginalValid = {};
 
 struct MinimapTransformState {
     dMeterMap_c* map = nullptr;
@@ -1191,6 +1204,23 @@ f32 hud_text_scale(const DuskModHudTransform& transform,
     return transform.scale * textScale;
 }
 
+f32 hud_ammo_scale(const DuskModHudTransform& transform,
+    const DuskModHudButtonLayout& layout) {
+    const f32 itemScale = layout.item_scale > 0.0f ? layout.item_scale : 1.0f;
+    const f32 ammoScale = layout.ammo_scale > 0.0f ? layout.ammo_scale : 1.0f;
+    return transform.scale * itemScale * ammoScale;
+}
+
+DuskModHudTransform hud_layout_xy_transform(const int slot) {
+    return slot == dMeter2Draw_c::SELECT_Y_e ? hud_layout_y_transform() :
+                                               hud_layout_x_transform();
+}
+
+DuskModHudButtonLayout hud_layout_xy_button_layout(const int slot) {
+    return slot == dMeter2Draw_c::SELECT_Y_e ? hud_layout_y_button_layout() :
+                                               hud_layout_x_button_layout();
+}
+
 int hud_button_b_item_variant(dMeter2Draw_c* meter) {
     if (meter == nullptr) {
         return 0;
@@ -1217,6 +1247,72 @@ J2DPane* pane_ptr(CPaneMgrAlpha* pane) {
     return pane != nullptr ? pane->getPanePtr() : nullptr;
 }
 
+J2DTextBox* text_box_ptr(CPaneMgr* pane) {
+    J2DPane* j2dPane = pane_ptr(pane);
+    if (j2dPane == nullptr || j2dPane->getTypeID() != 19) {
+        return nullptr;
+    }
+    return static_cast<J2DTextBox*>(j2dPane);
+}
+
+void set_text_box_h_binding(J2DTextBox* textBox, const J2DTextBoxHBinding binding) {
+    if (textBox == nullptr) {
+        return;
+    }
+    textBox->mFlags = (textBox->mFlags & ~0x0C) | ((static_cast<u8>(binding) & 0x03) << 2);
+}
+
+J2DTextBoxHBinding hud_text_anchor_binding(const int textAnchor) {
+    return textAnchor == kHudTextAnchorRight ? HBIND_LEFT : HBIND_RIGHT;
+}
+
+void apply_hud_text_box_binding(const HudPaneSlot slot, const std::size_t index,
+    CPaneMgr* pane, const bool enabled, const int textAnchor) {
+    if (index >= s_hudTextBoxFlags[static_cast<std::size_t>(slot)].size()) {
+        return;
+    }
+
+    HudTextBoxFlagState& state =
+        s_hudTextBoxFlags[static_cast<std::size_t>(slot)][index];
+    J2DTextBox* textBox = text_box_ptr(pane);
+    if (textBox == nullptr) {
+        state = {};
+        return;
+    }
+
+    if (!enabled) {
+        if (state.active && state.textBox == textBox) {
+            textBox->mFlags = state.originalFlags;
+        }
+        state = {};
+        return;
+    }
+
+    if (!state.active || state.textBox != textBox) {
+        state = {
+            .textBox = textBox,
+            .originalFlags = textBox->mFlags,
+            .active = true,
+        };
+    }
+
+    set_text_box_h_binding(textBox, hud_text_anchor_binding(textAnchor));
+}
+
+void apply_hud_text_box_group_binding(const HudPaneSlot slot, CPaneMgr* const* panes,
+    const std::size_t count, const bool enabled, const int textAnchor) {
+    for (std::size_t i = 0; i < count; ++i) {
+        apply_hud_text_box_binding(slot, i, panes[i], enabled, textAnchor);
+    }
+}
+
+void apply_hud_xy_text_box_group_binding(const HudPaneSlot slot, CPaneMgr* panes[5][3],
+    const std::size_t xySlot, const bool enabled, const int textAnchor) {
+    for (std::size_t i = 0; i < 5; ++i) {
+        apply_hud_text_box_binding(slot, i, panes[i][xySlot], enabled, textAnchor);
+    }
+}
+
 void apply_hud_pane_transform(HudPaneTransformState& state, J2DPane* pane, const bool enabled,
     const f32 offsetX, const f32 offsetY, const f32 scale) {
     if (pane == nullptr || scale <= 0.0f) {
@@ -1241,6 +1337,8 @@ void apply_hud_pane_transform(HudPaneTransformState& state, J2DPane* pane, const
         return;
     }
 
+    const u8 originalTextFlags = state.originalTextFlags;
+    const bool hasOriginalTextFlags = state.hasOriginalTextFlags;
     const f32 baseX = pane->getTranslateX();
     const f32 baseY = pane->getTranslateY();
     const f32 baseScaleX = pane->getScaleX();
@@ -1257,6 +1355,8 @@ void apply_hud_pane_transform(HudPaneTransformState& state, J2DPane* pane, const
         .appliedY = pane->getTranslateY(),
         .appliedScaleX = pane->getScaleX(),
         .appliedScaleY = pane->getScaleY(),
+        .originalTextFlags = originalTextFlags,
+        .hasOriginalTextFlags = hasOriginalTextFlags,
         .active = true,
     };
 }
@@ -1273,6 +1373,12 @@ void apply_hud_pane_transform(const HudPaneSlot slot, CPaneMgrAlpha* pane, const
         scale);
 }
 
+void apply_hud_text_pane_transform(const HudPaneSlot slot, CPaneMgr* pane, const bool enabled,
+    const f32 offsetX, const f32 offsetY, const f32 scale, const int) {
+    HudPaneTransformState& state = hud_pane_state(slot);
+    apply_hud_pane_transform(state, pane_ptr(pane), enabled, offsetX, offsetY, scale);
+}
+
 void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
     if (meter == nullptr) {
         return;
@@ -1284,9 +1390,12 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
     const DuskModHudButtonLayout aLayout = hud_layout_a_button_layout();
     apply_hud_pane_transform(HudPaneSlot::ButtonA, meter->mpButtonA, enabled,
         aTransform.offset_x, aTransform.offset_y, aTransform.scale);
-    apply_hud_pane_transform(HudPaneSlot::TextA, meter->mpTextA, enabled,
+    apply_hud_text_pane_transform(HudPaneSlot::TextA, meter->mpTextA, enabled,
         aTransform.offset_x + aLayout.text_offset_x,
-        aTransform.offset_y + aLayout.text_offset_y, hud_text_scale(aTransform, aLayout));
+        aTransform.offset_y + aLayout.text_offset_y, hud_text_scale(aTransform, aLayout),
+        aLayout.text_anchor);
+    apply_hud_text_box_group_binding(
+        HudPaneSlot::TextA, meter->mpAText, 5, enabled, aLayout.text_anchor);
 
     const DuskModHudTransform bTransform = hud_layout_b_transform();
     const DuskModHudButtonLayout bLayout = hud_layout_b_button_layout();
@@ -1302,9 +1411,12 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         bItemOffsetY, hud_item_scale(bTransform, bLayout));
     apply_hud_pane_transform(HudPaneSlot::LightB, meter->mpLightB, enabled, bItemOffsetX,
         bItemOffsetY, hud_item_scale(bTransform, bLayout));
-    apply_hud_pane_transform(HudPaneSlot::TextB, meter->mpTextB, enabled,
+    apply_hud_text_pane_transform(HudPaneSlot::TextB, meter->mpTextB, enabled,
         bTransform.offset_x + bLayout.text_offset_x,
-        bTransform.offset_y + bLayout.text_offset_y, hud_text_scale(bTransform, bLayout));
+        bTransform.offset_y + bLayout.text_offset_y, hud_text_scale(bTransform, bLayout),
+        bLayout.text_anchor);
+    apply_hud_text_box_group_binding(
+        HudPaneSlot::TextB, meter->mpBText, 5, enabled, bLayout.text_anchor);
 
     const DuskModHudTransform xTransform = hud_layout_x_transform();
     const DuskModHudButtonLayout xLayout = hud_layout_x_button_layout();
@@ -1319,9 +1431,12 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         xItemOffsetY, hud_item_scale(xTransform, xLayout));
     apply_hud_pane_transform(HudPaneSlot::LightX, meter->mpLightXY[0], enabled, xItemOffsetX,
         xItemOffsetY, hud_item_scale(xTransform, xLayout));
-    apply_hud_pane_transform(HudPaneSlot::TextX, meter->mpTextXY[0], enabled,
+    apply_hud_text_pane_transform(HudPaneSlot::TextX, meter->mpTextXY[0], enabled,
         xTransform.offset_x + xLayout.text_offset_x,
-        xTransform.offset_y + xLayout.text_offset_y, hud_text_scale(xTransform, xLayout));
+        xTransform.offset_y + xLayout.text_offset_y, hud_text_scale(xTransform, xLayout),
+        xLayout.text_anchor);
+    apply_hud_xy_text_box_group_binding(
+        HudPaneSlot::TextX, meter->mpXYText, 0, enabled, xLayout.text_anchor);
 
     const DuskModHudTransform yTransform = hud_layout_y_transform();
     const DuskModHudButtonLayout yLayout = hud_layout_y_button_layout();
@@ -1336,9 +1451,12 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
         yItemOffsetY, hud_item_scale(yTransform, yLayout));
     apply_hud_pane_transform(HudPaneSlot::LightY, meter->mpLightXY[1], enabled, yItemOffsetX,
         yItemOffsetY, hud_item_scale(yTransform, yLayout));
-    apply_hud_pane_transform(HudPaneSlot::TextY, meter->mpTextXY[1], enabled,
+    apply_hud_text_pane_transform(HudPaneSlot::TextY, meter->mpTextXY[1], enabled,
         yTransform.offset_x + yLayout.text_offset_x,
-        yTransform.offset_y + yLayout.text_offset_y, hud_text_scale(yTransform, yLayout));
+        yTransform.offset_y + yLayout.text_offset_y, hud_text_scale(yTransform, yLayout),
+        yLayout.text_anchor);
+    apply_hud_xy_text_box_group_binding(
+        HudPaneSlot::TextY, meter->mpXYText, 1, enabled, yLayout.text_anchor);
 
     const DuskModHudTransform zTransform = hud_layout_z_transform();
     const DuskModHudButtonLayout zLayout = hud_layout_z_button_layout();
@@ -1367,6 +1485,39 @@ void apply_wii_u_hud_layout(dMeter2Draw_c* meter) {
     const DuskModHudTransform keysTransform = hud_layout_keys_transform();
     apply_hud_pane_transform(HudPaneSlot::Keys, meter->mpKeyParent, enabled,
         keysTransform.offset_x, keysTransform.offset_y, keysTransform.scale);
+}
+
+void apply_xy_ammo_layout(dMeter2Draw_c* meter) {
+    s_xyAmmoOriginalValid.fill(false);
+    if (!hardcoded_hud_layout_enabled() || meter == nullptr) {
+        return;
+    }
+
+    for (int slot = dMeter2Draw_c::SELECT_X_e; slot <= dMeter2Draw_c::SELECT_Y_e; ++slot) {
+        if (meter->mpItemXY[slot] == nullptr) {
+            continue;
+        }
+
+        s_xyAmmoOriginalParams[slot] = meter->mItemParams[slot];
+        s_xyAmmoOriginalValid[slot] = true;
+
+        const DuskModHudTransform transform = hud_layout_xy_transform(slot);
+        const DuskModHudButtonLayout layout = hud_layout_xy_button_layout(slot);
+        meter->mItemParams[slot].num_pos_x += layout.ammo_offset_x;
+        meter->mItemParams[slot].num_pos_y += layout.ammo_offset_y;
+        meter->mItemParams[slot].num_scale *= hud_ammo_scale(transform, layout);
+    }
+}
+
+void restore_xy_ammo_layout(dMeter2Draw_c* meter) {
+    if (meter != nullptr) {
+        for (int slot = dMeter2Draw_c::SELECT_X_e; slot <= dMeter2Draw_c::SELECT_Y_e; ++slot) {
+            if (s_xyAmmoOriginalValid[slot]) {
+                meter->mItemParams[slot] = s_xyAmmoOriginalParams[slot];
+            }
+        }
+    }
+    s_xyAmmoOriginalValid.fill(false);
 }
 
 void apply_hud_backing_visibility(dMeter2Draw_c* meter) {
@@ -1840,10 +1991,15 @@ void draw_z_ammo(dMeter2Draw_c* meter, const u8 itemNo, const f32 itemAlphaRate)
 
     const DuskModHudTransform hudTransform = hud_layout_z_transform();
     const DuskModHudButtonLayout buttonLayout = hud_layout_z_button_layout();
-    const f32 itemScale = buttonLayout.item_scale > 0.0f ? buttonLayout.item_scale : 1.0f;
-    const f32 ammoScale =
-        hudTransform.scale * itemScale * (buttonLayout.ammo_scale > 0.0f ? buttonLayout.ammo_scale : 1.0f);
-    const f32 digitSize = meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_scale * 16.0f * ammoScale;
+    f32 numPosX = meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_x;
+    f32 numPosY = meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_y;
+    f32 numScale = meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_scale;
+    if (hardcoded_hud_layout_enabled()) {
+        numPosX = g_drawHIO.field_0x1f8;
+        numPosY = g_drawHIO.field_0x208;
+        numScale = g_drawHIO.field_0x218;
+    }
+    const f32 digitSize = numScale * 16.0f * hud_ammo_scale(hudTransform, buttonLayout);
 
     Vec vtx0 = meter->mpItemR->getPanePtr()->getGlbVtx(0);
     Vec vtx3 = meter->mpItemR->getPanePtr()->getGlbVtx(3);
@@ -1856,10 +2012,8 @@ void draw_z_ammo(dMeter2Draw_c* meter, const u8 itemNo, const f32 itemAlphaRate)
             continue;
         }
         s_zItemNumTex[i]->setAlpha(alpha);
-        s_zItemNumTex[i]->draw(meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_x +
-                buttonLayout.ammo_offset_x + centerX + digitSize * i,
-            meter->mItemParams[dMeter2Draw_c::SELECT_Z_e].num_pos_y +
-                buttonLayout.ammo_offset_y + centerY + meter->mpItemR->getSizeY(),
+        s_zItemNumTex[i]->draw(numPosX + buttonLayout.ammo_offset_x + centerX + digitSize * i,
+            numPosY + buttonLayout.ammo_offset_y + centerY + meter->mpItemR->getSizeY(),
             digitSize, digitSize, false, false, false);
     }
 }
@@ -2575,12 +2729,15 @@ HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
     update_z_hud_item(meter);
     apply_round_xy_buttons(meter);
     apply_wii_u_hud_layout(meter);
+    apply_xy_ammo_layout(meter);
     apply_hud_backing_visibility(meter);
     return HOOK_CONTINUE;
 }
 
 void after_meter_draw(ModContext*, void* args, void*, void*) {
-    draw_z_hud_item_meters(mods::arg<dMeter2Draw_c*>(args, 0));
+    auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
+    draw_z_hud_item_meters(meter);
+    restore_xy_ammo_layout(meter);
 }
 
 HookAction before_meter_draw_kantera(ModContext*, void* args, void*, void*) {

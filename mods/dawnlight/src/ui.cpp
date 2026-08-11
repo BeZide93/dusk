@@ -27,6 +27,7 @@ constexpr const char* kNewSaveModeOptions[] = {
 
 constexpr const char* kHudLayoutOptions[] = {
     "GameCube",
+    "X-Box",
     "Wii-U",
     "Dawnlight",
     "Custom",
@@ -145,7 +146,7 @@ void import_hud_settings(ModContext*, void*) {
 void reset_hud_settings(ModContext*, void*) {
     const HudSettingsIoResult result = reset_custom_hud_settings();
     if (result == HudSettingsIoResult::Ok) {
-        push_toast("HUD Reset", "Custom HUD reset to Wii-U defaults.");
+        push_toast("HUD Reset", "Custom HUD reset to X-Box defaults.");
     } else {
         push_toast("HUD Reset Failed", hud_settings_io_result_message(result), "warning");
     }
@@ -308,8 +309,8 @@ ModResult build_hud_tab(
     if (add_section(ctx, left, "HUD") != MOD_OK) return MOD_ERROR;
     if (add_select(ctx, left, "HUD Layout", hud_layout_config_var(), kHudLayoutOptions,
             std::size(kHudLayoutOptions),
-            "GameCube keeps the original HUD. Wii-U and Dawnlight apply fixed HUD layout presets. "
-            "Custom exposes the same layout fields as editable settings.")
+            "GameCube keeps the original HUD. X-Box, Wii-U and Dawnlight apply fixed HUD layout "
+            "presets. Custom exposes the same layout fields as editable settings.")
         != MOD_OK)
     {
         return MOD_ERROR;
