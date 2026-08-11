@@ -594,13 +594,15 @@ ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModErro
     if (add_button(ctx, panel, "Open Dawnlight Settings", open_settings) != MOD_OK) {
         return MOD_ERROR;
     }
-    if (add_text(ctx, panel, "Aim Movement and Aim Mode helpers") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Z item slot support") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Intro Skip and Boss Rush new-save modes") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "HUD layout presets and round buttons") != MOD_OK) {
+    if (add_text(ctx, panel, "Aim Movement, Aim Modes, and Bullet Time") != MOD_OK) {
         return MOD_ERROR;
     }
+    if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Z and D-Pad Down item slots") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Intro Skip and Boss Rush new-save modes") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Boss Rush hub and portal prompts") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "HUD Layout Editor") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Save compatibility and item integrity fixes") != MOD_OK) return MOD_ERROR;
     return MOD_OK;
 }
 

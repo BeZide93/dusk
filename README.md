@@ -11,8 +11,10 @@ aiming, boss, and HUD features for Twilight Princess.
 
 - Z item slot: bind a third item to Z, move Midna to the D-Pad prompt, and use
   the Z slot from the item wheel.
-- Improved item HUD support for Z, including item icons, ammo, oil, and combine
-  prompts.
+- D-Pad Down item slot: bind a fourth item, including item-wheel assignment and
+  HUD display.
+- Improved item HUD support for extra item slots, including item icons, ammo,
+  oil, bottle contents, and combine prompts.
 - Aim Movement and Aim Mode settings with Vanilla, 3rd Person, and Cinema
   options.
 - Touch and gyro aiming support for the modded aiming modes.
@@ -22,9 +24,10 @@ aiming, boss, and HUD features for Twilight Princess.
   upstream exposes the remaining mod services needed for a clean implementation.
 - Boss Rush hub, individual boss portals, Boss Rush run portal, Midna prompts,
   and return-to-hub support.
-- Hardcoded HUD presets for GameCube, Wii-U, and Dawnlight layouts.
-- Custom HUD editing for supported HUD elements, item/text/ammo offsets, round
-  X/Y buttons, and HUD import/export/reset.
+- Hardcoded HUD presets for GameCube, X-Box, Wii-U, and Dawnlight layouts.
+- HUD Layout Editor for supported HUD elements, item/text/ammo offsets, button
+  backing, round X/Y buttons, and HUD import/export.
+- Optional update checks against the Dawnlight GitHub releases.
 
 ## Installation
 
@@ -48,18 +51,19 @@ Dusklight. If you changed it with `Change Data Folder`, create or use the
 
 Open `Mod Manager -> Dawnlight -> Open Dawnlight Settings -> HUD`.
 
-The HUD layout setting has four modes:
+The HUD layout setting has five modes:
 
 - GameCube: vanilla-style HUD placement and backing.
+- X-Box: Dawnlight's X-Box-style HUD placement with hidden button backing.
 - Wii-U: Wii-U inspired HUD placement with hidden button backing.
 - Dawnlight: Dawnlight's compact custom layout with hidden button backing.
-- Custom: editable layout, initialized from the Wii-U preset.
+- Custom: editable layout, initialized from the X-Box preset.
 
 The Custom layout can move and scale supported HUD elements and can adjust item,
-text, and ammo offsets on the HUD buttons. `EXPORT HUD` writes
-`hud_layout_settings.json` into the `mods` folder, `IMPORT HUD` reads the same
-file from that folder, and `RESET HUD` restores the Custom layout to the Wii-U
-preset.
+text, ammo, and button-backing offsets on the HUD buttons. `EXPORT HUD` writes
+`hud_layout_settings.json` into the `mods` folder, and `IMPORT HUD` reads the
+same file from that folder. The copy buttons can seed Custom from the GameCube,
+X-Box, Wii-U, or Dawnlight presets.
 
 The `hud_layout_settings.json` format is compatible with the Dawnlight fork's
 HUD layout export where the same fields are available.
