@@ -35,6 +35,7 @@ DEFINE_HOOK(&daAlink_c::procBoomerangSubject, BoomerangSubjectHook);
 DEFINE_HOOK(&daAlink_c::procHookshotSubject, HookshotSubjectHook);
 DEFINE_HOOK(&daAlink_c::procIronBallSubject, IronBallSubjectHook);
 DEFINE_HOOK(&daAlink_c::procCopyRodSubject, CopyRodSubjectHook);
+DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
 DEFINE_HOOK(&dCamera_c::Run, CameraRunHook);
 DEFINE_HOOK(&dCamera_c::nextMode, CameraNextModeHook);
 DEFINE_HOOK(&dCamera_c::nextType, CameraNextTypeHook);
@@ -114,6 +115,7 @@ struct SavedTouchMove {
 };
 
 SavedTouchMove s_savedTouchMove;
+bool s_customCinemaSightActive = false;
 
 bool use_custom_aim_movement() {
     return aim_mode() != AimMode::Vanilla || aim_movement_enabled();
@@ -125,6 +127,12 @@ bool use_third_person_camera() {
 
 bool use_cinema_camera() {
     return aim_mode() == AimMode::Cinema;
+}
+
+void remember_custom_cinema_sight() {
+    if (use_cinema_camera()) {
+        s_customCinemaSightActive = true;
+    }
 }
 
 bool use_scope_suppress_camera() {
@@ -342,6 +350,7 @@ void draw_iron_ball_sight(daAlink_c* link) {
     link->mSight.setPos(&position);
     link->mSight.onDrawFlg();
     link->mSight.offLockFlg();
+    remember_custom_cinema_sight();
 }
 
 void draw_camera_center_sight(daAlink_c* link) {
@@ -367,6 +376,7 @@ void draw_camera_center_sight(daAlink_c* link) {
     link->mSight.setPos(&position);
     link->mSight.onDrawFlg();
     link->mSight.offLockFlg();
+    remember_custom_cinema_sight();
 }
 
 void draw_subject_sight(daAlink_c* link, AimItem item) {
@@ -375,15 +385,18 @@ void draw_subject_sight(daAlink_c* link, AimItem item) {
         if (link->mEquipItem != dItemNo_HAWK_ARROW_e) {
             link->setBowSight();
             link->mSight.onDrawFlg();
+            remember_custom_cinema_sight();
         }
         break;
     case AimItem::Boomerang:
         link->setBoomerangSight();
         link->mSight.onDrawFlg();
+        remember_custom_cinema_sight();
         break;
     case AimItem::Hookshot:
         link->setHookshotSight();
         link->mSight.onDrawFlg();
+        remember_custom_cinema_sight();
         break;
     case AimItem::IronBall:
         draw_iron_ball_sight(link);
@@ -391,6 +404,7 @@ void draw_subject_sight(daAlink_c* link, AimItem item) {
     case AimItem::CopyRod:
         link->setCopyRodSight();
         link->mSight.onDrawFlg();
+        remember_custom_cinema_sight();
         break;
     }
 }
@@ -732,6 +746,25 @@ void after_camera_next_type(ModContext*, void* args, void* retval, void*) {
     }
 }
 
+void after_player_execute(ModContext*, void* args, void*, void*) {
+    if (!s_customCinemaSightActive) {
+        return;
+    }
+
+    auto* link = mods::arg<daAlink_c*>(args, 0);
+    if (link != nullptr && use_cinema_camera() && dCamera_c::isAimActive() &&
+        player_in_supported_aim_status(0))
+    {
+        return;
+    }
+
+    if (link != nullptr) {
+        link->mSight.offDrawFlg();
+        link->mSight.offLockFlg();
+    }
+    s_customCinemaSightActive = false;
+}
+
 ModResult add_aim_hooks(ModError* error, ModResult result) {
     if (result == MOD_OK) {
         result = mods::hook_add_pre<BoomerangSubjectHook>(svc_hook, replace_boomerang_subject);
@@ -762,6 +795,9 @@ ModResult add_aim_hooks(ModError* error, ModResult result) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<TouchHandleDownHook>(svc_hook, before_touch_handle_down);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<CameraRunHook>(svc_hook, after_camera_run);
