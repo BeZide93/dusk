@@ -430,13 +430,11 @@ bool update_subject_aim(daAlink_c* link, AimItem item) {
     }
 
     const bool hawkeyeBow = item == AimItem::Bow && is_hawkeye_bow(link);
-    if ((hawkeyeBow && !aim_movement_enabled()) ||
-        (!hawkeyeBow && !use_custom_aim_movement()))
-    {
+    if (hawkeyeBow || !use_custom_aim_movement()) {
         return false;
     }
 
-    if (!hawkeyeBow && use_cinema_camera()) {
+    if (use_cinema_camera()) {
         face_camera_view_yaw(link);
     }
 
