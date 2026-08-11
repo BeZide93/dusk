@@ -321,6 +321,12 @@ ModResult build_aiming_tab(
     {
         return MOD_ERROR;
     }
+    if (add_number(ctx, left, "Cinema Zoom", cinema_zoom_config_var(), 25, 400, 5, "%",
+            "Adjusts Cinema aim zoom. 100% is the current 1.0 zoom.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
     return MOD_OK;
 }
 

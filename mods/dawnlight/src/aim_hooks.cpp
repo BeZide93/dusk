@@ -35,6 +35,7 @@ DEFINE_HOOK(&daAlink_c::procBoomerangSubject, BoomerangSubjectHook);
 DEFINE_HOOK(&daAlink_c::procHookshotSubject, HookshotSubjectHook);
 DEFINE_HOOK(&daAlink_c::procIronBallSubject, IronBallSubjectHook);
 DEFINE_HOOK(&daAlink_c::procCopyRodSubject, CopyRodSubjectHook);
+DEFINE_HOOK(&dCamera_c::Run, CameraRunHook);
 DEFINE_HOOK(&dCamera_c::nextMode, CameraNextModeHook);
 DEFINE_HOOK(&dCamera_c::nextType, CameraNextTypeHook);
 #if defined(__ANDROID__)
@@ -140,6 +141,14 @@ bool hawkeye_active() noexcept {
 
 bool touch_aim_movement_enabled() {
     return aim_movement_enabled() && dCamera_c::isAimActive() && !hawkeye_active();
+}
+
+bool player_in_supported_aim_status(const u32 pad) {
+    return dComIfGp_checkPlayerStatus0(pad, 0x1040) ||
+           dComIfGp_checkPlayerStatus0(pad, 0x80000) ||
+           dComIfGp_checkPlayerStatus0(pad, 0x80) ||
+           dComIfGp_checkPlayerStatus0(pad, 0x4000) ||
+           dComIfGp_checkPlayerStatus0(pad, 0x400);
 }
 
 template <typename Fn>
@@ -335,6 +344,31 @@ void draw_iron_ball_sight(daAlink_c* link) {
     link->mSight.offLockFlg();
 }
 
+void draw_camera_center_sight(daAlink_c* link) {
+    auto* camera = link != nullptr ? dComIfGp_getCamera(link->field_0x317c) : nullptr;
+    if (camera == nullptr) {
+        return;
+    }
+
+    cXyz* eye = fopCamM_GetEye_p(camera);
+    cXyz* center = fopCamM_GetCenter_p(camera);
+    cXyz direction = *center - *eye;
+    if (direction.abs() <= 0.001f) {
+        return;
+    }
+
+    direction.normalize();
+    cXyz position = *eye + direction * 10000.0f;
+    link->mArrowLinChk.Set(eye, &position, link);
+    if (dComIfG_Bgsp().LineCross(&link->mArrowLinChk)) {
+        position = link->mArrowLinChk.GetCross();
+    }
+
+    link->mSight.setPos(&position);
+    link->mSight.onDrawFlg();
+    link->mSight.offLockFlg();
+}
+
 void draw_subject_sight(daAlink_c* link, AimItem item) {
     switch (item) {
     case AimItem::Bow:
@@ -358,6 +392,35 @@ void draw_subject_sight(daAlink_c* link, AimItem item) {
         link->setCopyRodSight();
         link->mSight.onDrawFlg();
         break;
+    }
+}
+
+bool should_keep_cinema_bow_sight(daAlink_c* link) {
+    return link != nullptr && use_cinema_camera() && link->mEquipItem != dItemNo_HAWK_ARROW_e;
+}
+
+void keep_cinema_bow_sight(daAlink_c* link) {
+    if (should_keep_cinema_bow_sight(link)) {
+        aim_with_c_stick(link);
+        draw_camera_center_sight(link);
+    }
+}
+
+void normalize_forward_aim_speed(daAlink_c* link) {
+    if (link == nullptr || !use_custom_aim_movement() || link->mTargetedActor != nullptr ||
+        !link->checkInputOnR())
+    {
+        return;
+    }
+
+    const s16 moveDelta = link->mMoveAngle - link->shape_angle.y;
+    if (cM_scos(moveDelta) < 0.99f || std::fabs(cM_ssin(moveDelta)) > 0.02f) {
+        return;
+    }
+
+    const f32 targetSpeed = link->mMaxSpeed * link->mStickValue * link->mStickValue;
+    if (link->mNormalSpeed >= 0.0f && link->mNormalSpeed < targetSpeed) {
+        link->mNormalSpeed = targetSpeed;
     }
 }
 
@@ -386,6 +449,8 @@ bool update_subject_aim(daAlink_c* link, AimItem item) {
         update_move_animation(link, 3, true, false);
         if (aim_with_c_stick(link)) {
             draw_subject_sight(link, item);
+        } else if (should_keep_cinema_bow_sight(link)) {
+            draw_camera_center_sight(link);
         }
         break;
     case AimItem::Boomerang:
@@ -418,6 +483,7 @@ bool update_subject_aim(daAlink_c* link, AimItem item) {
         }
         break;
     }
+    normalize_forward_aim_speed(link);
     return true;
 }
 
@@ -513,6 +579,7 @@ HookAction replace_bow_subject(ModContext*, void* args, void* retval, void*) {
     {
         link->setBowSight();
     }
+    keep_cinema_bow_sight(link);
     *static_cast<int*>(retval) = 1;
     return HOOK_SKIP_ORIGINAL;
 }
@@ -612,12 +679,24 @@ bool player_in_supported_aim_state(dCamera_c* camera) {
         return false;
     }
 
-    const u32 pad = camera->mPadID;
-    return dComIfGp_checkPlayerStatus0(pad, 0x1040) ||
-           dComIfGp_checkPlayerStatus0(pad, 0x80000) ||
-           dComIfGp_checkPlayerStatus0(pad, 0x80) ||
-           dComIfGp_checkPlayerStatus0(pad, 0x4000) ||
-           dComIfGp_checkPlayerStatus0(pad, 0x400);
+    return player_in_supported_aim_status(camera->mPadID);
+}
+
+void after_camera_run(ModContext*, void* args, void*, void*) {
+    auto* camera = mods::arg<dCamera_c*>(args, 0);
+    if (camera == nullptr || !use_cinema_camera() || !player_in_supported_aim_state(camera) ||
+        is_hawkeye_bow(daAlink_getAlinkActorClass()))
+    {
+        return;
+    }
+
+    const int zoomPercent = cinema_zoom_percent();
+    if (zoomPercent == 100) {
+        return;
+    }
+
+    const float zoom = std::clamp(static_cast<float>(zoomPercent) / 100.0f, 0.25f, 4.0f);
+    camera->mFovy = std::clamp(camera->mFovy / zoom, 10.0f, 120.0f);
 }
 
 void after_camera_next_mode(ModContext*, void* args, void* retval, void*) {
@@ -685,6 +764,9 @@ ModResult add_aim_hooks(ModError* error, ModResult result) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_pre<TouchHandleDownHook>(svc_hook, before_touch_handle_down);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<CameraRunHook>(svc_hook, after_camera_run);
     }
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight aim hooks");
