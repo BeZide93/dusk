@@ -143,13 +143,29 @@ void import_hud_settings(ModContext*, void*) {
     }
 }
 
-void reset_hud_settings(ModContext*, void*) {
-    const HudSettingsIoResult result = reset_custom_hud_settings();
+void copy_hud_preset_settings(HudLayout layout, const char* successBody) {
+    const HudSettingsIoResult result = copy_hud_preset_to_custom(layout);
     if (result == HudSettingsIoResult::Ok) {
-        push_toast("HUD Reset", "Custom HUD reset to X-Box defaults.");
+        push_toast("HUD Copied", successBody);
     } else {
-        push_toast("HUD Reset Failed", hud_settings_io_result_message(result), "warning");
+        push_toast("HUD Copy Failed", hud_settings_io_result_message(result), "warning");
     }
+}
+
+void copy_gamecube_hud_settings(ModContext*, void*) {
+    copy_hud_preset_settings(HudLayout::GameCube, "GameCube copied to Custom HUD.");
+}
+
+void copy_xbox_hud_settings(ModContext*, void*) {
+    copy_hud_preset_settings(HudLayout::XBox, "X-Box copied to Custom HUD.");
+}
+
+void copy_wiiu_hud_settings(ModContext*, void*) {
+    copy_hud_preset_settings(HudLayout::WiiU, "Wii-U copied to Custom HUD.");
+}
+
+void copy_dawnlight_hud_settings(ModContext*, void*) {
+    copy_hud_preset_settings(HudLayout::Dawnlight, "Dawnlight copied to Custom HUD.");
 }
 
 ModResult add_custom_transform_controls(
@@ -167,6 +183,36 @@ ModResult add_custom_transform_controls(
     }
     if (add_number(ctx, pane, "Scale", hud_custom_element_scale_config_var(element), 1, 9999,
             1, "%", nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    return MOD_OK;
+}
+
+ModResult add_custom_button_backing_controls(ModContext* ctx, UiElementHandle pane) {
+    if (add_section(ctx, pane, "Custom Button Backing") != MOD_OK) return MOD_ERROR;
+    if (add_toggle(ctx, pane, "Button Backing",
+            hud_custom_button_backing_visible_config_var(),
+            "Shows the decorative backing texture behind the HUD buttons.",
+            custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, pane, "X Position",
+            hud_custom_element_x_config_var(HudElement::ButtonBacking), -9999, 9999, 1, " px",
+            nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, pane, "Y Position",
+            hud_custom_element_y_config_var(HudElement::ButtonBacking), -9999, 9999, 1, " px",
+            nullptr, custom_hud_controls_disabled) != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_number(ctx, pane, "Scale",
+            hud_custom_element_scale_config_var(HudElement::ButtonBacking), 1, 9999, 1, "%",
+            nullptr, custom_hud_controls_disabled) != MOD_OK)
     {
         return MOD_ERROR;
     }
@@ -327,7 +373,16 @@ ModResult build_hud_tab(
     if (add_button(ctx, left, "IMPORT HUD", import_hud_settings) != MOD_OK) {
         return MOD_ERROR;
     }
-    if (add_button(ctx, left, "RESET HUD", reset_hud_settings) != MOD_OK) {
+    if (add_button(ctx, left, "COPY GAMECUBE TO CUSTOM", copy_gamecube_hud_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "COPY X-BOX TO CUSTOM", copy_xbox_hud_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "COPY WII-U TO CUSTOM", copy_wiiu_hud_settings) != MOD_OK) {
+        return MOD_ERROR;
+    }
+    if (add_button(ctx, left, "COPY DAWNLIGHT TO CUSTOM", copy_dawnlight_hud_settings) != MOD_OK) {
         return MOD_ERROR;
     }
     if (add_section(ctx, left, "Custom Minimap") != MOD_OK) return MOD_ERROR;
@@ -400,9 +455,7 @@ ModResult build_hud_tab(
     {
         return MOD_ERROR;
     }
-    if (add_custom_transform_controls(
-            ctx, left, "Custom Button Backing", HudElement::ButtonBacking) != MOD_OK)
-    {
+    if (add_custom_button_backing_controls(ctx, left) != MOD_OK) {
         return MOD_ERROR;
     }
     if (add_custom_transform_controls(ctx, left, "Custom D-Pad", HudElement::DPad) != MOD_OK) {

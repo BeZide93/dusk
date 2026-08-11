@@ -36,6 +36,7 @@ ConfigVarHandle s_zItemSlot = 0;
 ConfigVarHandle s_hudLayout = 0;
 ConfigVarHandle s_legacyWiiUHud = 0;
 ConfigVarHandle s_roundXYButtons = 0;
+ConfigVarHandle s_hudButtonBackingVisible = 0;
 ConfigVarHandle s_aimDefaultsMigrated = 0;
 ConfigVarHandle s_hudLayoutMigrated = 0;
 ConfigVarHandle s_hudLayoutMigratedV2 = 0;
@@ -82,6 +83,34 @@ struct HudButtonDefaults {
     int textAnchor;
 };
 
+using HudElementDefaultArray = std::array<HudElementDefaults, kHudElementCount>;
+using HudButtonDefaultArray = std::array<HudButtonDefaults, kHudButtonCount>;
+
+constexpr HudElementDefaultArray kGameCubeHudElementDefaults = {{
+    {"a", 0, 0, 100},
+    {"b", 0, 0, 100},
+    {"x", 0, 0, 100},
+    {"y", 0, 0, 100},
+    {"z", 0, 0, 100},
+    {"button-backing", 0, 0, 100},
+    {"dpad", 0, 0, 100},
+    {"midna", 0, 0, 100},
+    {"hearts", 0, 0, 100},
+    {"rupees", 0, 0, 100},
+    {"keys", 0, 0, 100},
+    {"oil", 0, 0, 100},
+    {"oxygen", 0, 0, 100},
+    {"minimap", 0, 0, 100},
+}};
+
+constexpr HudButtonDefaultArray kGameCubeHudButtonDefaults = {{
+    {"a", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
+    {"b", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
+    {"x", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
+    {"y", 0, 0, 100, 0, 0, 100, 0, 0, 100, 0, 0},
+    {"z", 0, 0, 100, 0, 0, 100, 0, 0, 100, 1, 0},
+}};
+
 constexpr std::array<HudElementDefaults, kHudElementCount> kHudElementDefaults = {{
     {"a", -35, 25, 100},
     {"b", 20, -27, 149},
@@ -103,6 +132,56 @@ constexpr std::array<HudButtonDefaults, kHudButtonCount> kHudButtonDefaults = {{
     {"a", 0, 0, 100, 0, 0, 100, 200, 0, 100, 1, 1},
     {"b", 30, 0, 50, 0, 0, 100, 160, 0, 50, 2, 1},
     {"x", -15, -15, 50, 0, 0, 100, 100, -15, 50, 0, 1},
+    {"y", 0, 0, 50, 0, 0, 100, 150, 0, 50, 2, 1},
+    {"z", 0, 0, 100, 0, -15, 70, 0, 0, 100, 1, 0},
+}};
+
+constexpr HudElementDefaultArray kWiiUHudElementDefaults = {{
+    {"a", -5, -3, 100},
+    {"b", -11, 5, 150},
+    {"x", -73, -35, 170},
+    {"y", -52, 32, 170},
+    {"z", 0, 0, 100},
+    {"button-backing", -100, 0, 100},
+    {"dpad", 0, -280, 100},
+    {"midna", -6, 0, 100},
+    {"hearts", 0, 0, 100},
+    {"rupees", 0, 0, 100},
+    {"keys", 0, 0, 100},
+    {"oil", 0, 0, 100},
+    {"oxygen", 0, 0, 100},
+    {"minimap", 0, 50, 70},
+}};
+
+constexpr HudButtonDefaultArray kWiiUHudButtonDefaults = {{
+    {"a", 0, 0, 100, 0, 0, 100, 200, 0, 100, 1, 1},
+    {"b", 30, 0, 50, 0, 0, 100, 160, 0, 50, 2, 1},
+    {"x", -10, -5, 50, 0, 0, 100, 30, -15, 50, 2, 0},
+    {"y", 20, 6, 50, 0, 0, 100, 65, 0, 50, 0, 0},
+    {"z", 0, 0, 100, 0, -15, 80, 0, 0, 100, 1, 0},
+}};
+
+constexpr HudElementDefaultArray kDawnlightHudElementDefaults = {{
+    {"a", -135, 25, 100},
+    {"b", -80, -27, 150},
+    {"x", -202, -1, 170},
+    {"y", -122, 0, 170},
+    {"z", -100, 0, 100},
+    {"button-backing", -100, 0, 100},
+    {"dpad", 0, -15, 100},
+    {"midna", 0, 0, 100},
+    {"hearts", 100, 0, 100},
+    {"rupees", 40, 0, 100},
+    {"keys", 0, 0, 100},
+    {"oil", 100, 0, 100},
+    {"oxygen", 100, 0, 100},
+    {"minimap", 730, -190, 70},
+}};
+
+constexpr HudButtonDefaultArray kDawnlightHudButtonDefaults = {{
+    {"a", 0, 0, 100, 0, 0, 100, 200, 0, 100, 1, 1},
+    {"b", 30, 0, 50, 0, 0, 100, 160, 0, 50, 2, 1},
+    {"x", 0, 0, 50, 0, 0, 100, 100, -15, 50, 0, 1},
     {"y", 0, 0, 50, 0, 0, 100, 150, 0, 50, 2, 1},
     {"z", 0, 0, 100, 0, -15, 70, 0, 0, 100, 1, 0},
 }};
@@ -223,9 +302,11 @@ std::filesystem::path hud_settings_file_path() {
     return configRoot / "mods" / kHudSettingsFileName;
 }
 
-bool set_custom_hud_to_xbox_defaults(bool setLayout) {
+bool set_custom_hud_from_defaults(const HudElementDefaultArray& elementDefaults,
+    const HudButtonDefaultArray& buttonDefaults, bool dpadFollowsMinimap,
+    int minimapSlideDirection, bool roundXYButtons, bool buttonBackingVisible, bool setLayout) {
     for (size_t i = 0; i < kHudElementCount; ++i) {
-        const auto& defaults = kHudElementDefaults[i];
+        const auto& defaults = elementDefaults[i];
         if (!set_int(s_hudElementX[i], defaults.x) || !set_int(s_hudElementY[i], defaults.y) ||
             !set_int(s_hudElementScale[i], defaults.scale))
         {
@@ -234,7 +315,7 @@ bool set_custom_hud_to_xbox_defaults(bool setLayout) {
     }
 
     for (size_t i = 0; i < kHudButtonCount; ++i) {
-        const auto& defaults = kHudButtonDefaults[i];
+        const auto& defaults = buttonDefaults[i];
         if (!set_int(s_hudButtonItemOffsetX[i], defaults.itemOffsetX) ||
             !set_int(s_hudButtonItemOffsetY[i], defaults.itemOffsetY) ||
             !set_int(s_hudButtonItemScale[i], defaults.itemScale) ||
@@ -251,14 +332,21 @@ bool set_custom_hud_to_xbox_defaults(bool setLayout) {
         }
     }
 
-    if (!set_bool(s_hudDpadFollowsMinimap, false) ||
-        !set_int(s_hudMinimapSlideDirection, 0) || !set_bool(s_roundXYButtons, true))
+    if (!set_bool(s_hudDpadFollowsMinimap, dpadFollowsMinimap) ||
+        !set_int(s_hudMinimapSlideDirection, minimapSlideDirection) ||
+        !set_bool(s_roundXYButtons, roundXYButtons) ||
+        !set_bool(s_hudButtonBackingVisible, buttonBackingVisible))
     {
         return false;
     }
 
     return !setLayout ||
            set_int(s_hudLayout, static_cast<int>(HudLayout::Custom));
+}
+
+bool set_custom_hud_to_xbox_defaults(bool setLayout) {
+    return set_custom_hud_from_defaults(
+        kHudElementDefaults, kHudButtonDefaults, false, 0, true, false, setLayout);
 }
 
 size_t find_key_value_start(const std::string& json, const char* key, size_t from = 0) {
@@ -539,6 +627,15 @@ bool apply_element_json(const std::string& elementsObject, HudElement element) {
         }
     }
 
+    if (element == HudElement::ButtonBacking) {
+        bool visible = false;
+        if (read_json_bool(object, "visible", visible) &&
+            !set_bool(s_hudButtonBackingVisible, visible))
+        {
+            return false;
+        }
+    }
+
     HudButton button = HudButton::A;
     bool hasItem = false;
     bool hasAmmo = false;
@@ -623,6 +720,8 @@ ModResult register_config(ModError* error) {
             MOD_OK ||
         register_bool("wii-u-hud", false, s_legacyWiiUHud) != MOD_OK ||
         register_bool("round-xy-buttons", false, s_roundXYButtons) != MOD_OK ||
+        register_bool("hud-custom-button-backing-visible", false, s_hudButtonBackingVisible) !=
+            MOD_OK ||
         register_bool("aim-defaults-v2", false, s_aimDefaultsMigrated) != MOD_OK ||
         register_bool("hud-layout-migrated-v1", false, s_hudLayoutMigrated) != MOD_OK ||
         register_bool("hud-layout-migrated-v2", false, s_hudLayoutMigratedV2) != MOD_OK)
@@ -745,6 +844,24 @@ bool custom_hud_layout_enabled() {
 
 bool round_xy_buttons_enabled() {
     return get_bool(s_roundXYButtons, false);
+}
+
+bool hud_custom_button_backing_visible() {
+    return get_bool(s_hudButtonBackingVisible, false);
+}
+
+bool hud_button_backing_visible() {
+    switch (hud_layout()) {
+    case HudLayout::GameCube:
+        return true;
+    case HudLayout::Custom:
+        return hud_custom_button_backing_visible();
+    case HudLayout::XBox:
+    case HudLayout::WiiU:
+    case HudLayout::Dawnlight:
+    default:
+        return false;
+    }
 }
 
 int hud_custom_element_x(HudElement element) {
@@ -882,6 +999,10 @@ ConfigVarHandle round_xy_buttons_config_var() {
     return s_roundXYButtons;
 }
 
+ConfigVarHandle hud_custom_button_backing_visible_config_var() {
+    return s_hudButtonBackingVisible;
+}
+
 ConfigVarHandle hud_custom_element_x_config_var(HudElement element) {
     return s_hudElementX[hud_element_index(element)];
 }
@@ -967,7 +1088,8 @@ HudSettingsIoResult export_custom_hud_settings(std::string& outPath) {
     out << std::setprecision(8);
 
     out << "{\n";
-    out << "    \"background\": false,\n";
+    out << "    \"background\": " << (hud_custom_button_backing_visible() ? "true" : "false")
+        << ",\n";
     out << "    \"elements\": {\n";
     for (size_t i = 0; i < kHudElementCount; ++i) {
         const auto element = static_cast<HudElement>(i);
@@ -987,6 +1109,10 @@ HudSettingsIoResult export_custom_hud_settings(std::string& outPath) {
             write_json_string(out, "slideDirection",
                 kSlideDirectionNames[std::clamp(hud_custom_minimap_slide_direction(), 0, 1)],
                 true);
+        }
+
+        if (element == HudElement::ButtonBacking) {
+            write_json_bool(out, "visible", hud_custom_button_backing_visible(), true);
         }
 
         write_json_number(out, "x", hud_custom_element_x(element), true);
@@ -1034,6 +1160,12 @@ HudSettingsIoResult import_custom_hud_settings(std::string& outPath) {
     if (read_json_bool(json, "roundXYButtons", roundXY) && !set_bool(s_roundXYButtons, roundXY)) {
         return HudSettingsIoResult::ConfigFailed;
     }
+    bool background = false;
+    if (read_json_bool(json, "background", background) &&
+        !set_bool(s_hudButtonBackingVisible, background))
+    {
+        return HudSettingsIoResult::ConfigFailed;
+    }
 
     for (size_t i = 0; i < kHudElementCount; ++i) {
         if (!apply_element_json(elementsObject, static_cast<HudElement>(i))) {
@@ -1044,9 +1176,35 @@ HudSettingsIoResult import_custom_hud_settings(std::string& outPath) {
     return HudSettingsIoResult::Ok;
 }
 
+HudSettingsIoResult copy_hud_preset_to_custom(HudLayout layout) {
+    bool applied = false;
+    switch (layout) {
+    case HudLayout::GameCube:
+        applied = set_custom_hud_from_defaults(
+            kGameCubeHudElementDefaults, kGameCubeHudButtonDefaults, true, 0, false, true, true);
+        break;
+    case HudLayout::XBox:
+        applied = set_custom_hud_to_xbox_defaults(true);
+        break;
+    case HudLayout::WiiU:
+        applied = set_custom_hud_from_defaults(
+            kWiiUHudElementDefaults, kWiiUHudButtonDefaults, false, 0, true, false, true);
+        break;
+    case HudLayout::Dawnlight:
+        applied = set_custom_hud_from_defaults(
+            kDawnlightHudElementDefaults, kDawnlightHudButtonDefaults, false, 1, true, false,
+            true);
+        break;
+    case HudLayout::Custom:
+    default:
+        applied = false;
+        break;
+    }
+    return applied ? HudSettingsIoResult::Ok : HudSettingsIoResult::ConfigFailed;
+}
+
 HudSettingsIoResult reset_custom_hud_settings() {
-    return set_custom_hud_to_xbox_defaults(true) ? HudSettingsIoResult::Ok :
-                                                   HudSettingsIoResult::ConfigFailed;
+    return copy_hud_preset_to_custom(HudLayout::XBox);
 }
 
 const char* hud_settings_io_result_message(HudSettingsIoResult result) {

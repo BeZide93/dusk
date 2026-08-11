@@ -1525,7 +1525,7 @@ void apply_hud_backing_visibility(dMeter2Draw_c* meter) {
         return;
     }
 
-    if (hardcoded_hud_layout_enabled()) {
+    if (!hud_button_backing_visible()) {
         meter->mpUzu->setAlpha(0);
         meter->mpUzu->setAlphaRate(0.0f);
         return;

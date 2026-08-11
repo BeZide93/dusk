@@ -79,6 +79,8 @@ HudLayout hud_layout();
 bool hardcoded_hud_layout_enabled();
 bool custom_hud_layout_enabled();
 bool round_xy_buttons_enabled();
+bool hud_custom_button_backing_visible();
+bool hud_button_backing_visible();
 int hud_custom_element_x(HudElement element);
 int hud_custom_element_y(HudElement element);
 int hud_custom_element_scale_percent(HudElement element);
@@ -108,6 +110,7 @@ ConfigVarHandle r_jump_config_var();
 ConfigVarHandle z_item_slot_config_var();
 ConfigVarHandle hud_layout_config_var();
 ConfigVarHandle round_xy_buttons_config_var();
+ConfigVarHandle hud_custom_button_backing_visible_config_var();
 ConfigVarHandle hud_custom_element_x_config_var(HudElement element);
 ConfigVarHandle hud_custom_element_y_config_var(HudElement element);
 ConfigVarHandle hud_custom_element_scale_config_var(HudElement element);
@@ -127,6 +130,7 @@ ConfigVarHandle hud_custom_minimap_slide_direction_config_var();
 
 HudSettingsIoResult export_custom_hud_settings(std::string& outPath);
 HudSettingsIoResult import_custom_hud_settings(std::string& outPath);
+HudSettingsIoResult copy_hud_preset_to_custom(HudLayout layout);
 HudSettingsIoResult reset_custom_hud_settings();
 const char* hud_settings_io_result_message(HudSettingsIoResult result);
 
