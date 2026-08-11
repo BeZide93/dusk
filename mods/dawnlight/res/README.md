@@ -9,8 +9,8 @@ available upstream, so several full Dawnlight fork features are intentionally de
   adjustments active while vanilla subject aim is running.
 - Manual Shielding with Target + R and Target + R + B shield attacks.
 - R Jump and R+B jump attacks when no vanilla R interaction is available.
-- Z item-slot assignment and use through existing hook points where possible. Touch-specific Z and
-  Midna layout overrides are deferred until upstream exposes touch-control extension points.
+- Optional extra item-slot assignment and use on Z and D-Pad Down, with Midna moved off Z when
+  the Z slot is enabled.
 - Existing Dawnlight save compatibility repairs and NG+ enemy HP scaling for saves that already
   carry Dawnlight markers.
 - Existing NG+ save repair for the Ordon sword and shield quests.
@@ -28,6 +28,7 @@ Configuration is stored in `config.json` using these keys:
 - `mod.dev_bezide_dawnlight.manual-shielding`
 - `mod.dev_bezide_dawnlight.r-jump`
 - `mod.dev_bezide_dawnlight.z-item-slot`
+- `mod.dev_bezide_dawnlight.dpad-down-item-slot`
 
 ## Installation
 
@@ -42,7 +43,6 @@ These full Dawnlight fork features are not enabled in this upstream-main-only pa
 - New Game Plus, Intro Skip, and Boss Rush creation/flow.
 - Boss Rush hub portals, Midna confirmations, and hub warp.
 - HUD layout editing and `hud_layout_settings.json` import/export.
-- Touch-specific D-Pad Down Midna and Z item HUD/input overrides.
 - Complete Wii U controller style, including native L/ZL/R/ZR labels and full physical controller
   binding UI changes.
 - Wii U-specific input labels.

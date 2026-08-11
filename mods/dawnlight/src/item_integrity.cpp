@@ -10,6 +10,8 @@
 #include "mods/svc/hook.h"
 
 namespace dawnlight {
+bool item_slots_proc_select_item_index(int index, u8* slot);
+
 namespace {
 
 DEFINE_HOOK(&dSv_player_item_c::setItem, SetItem);
@@ -104,7 +106,10 @@ HookAction on_set_equipped_bottle_pre(ModContext*, void* args, void*, void*) {
         return HOOK_CONTINUE;
     }
     const u8 selectIndex = mods::arg<u8>(args, 1);
-    const u8 slot = dComIfGs_getSelectItemIndex(selectIndex);
+    u8 slot = dItemNo_NONE_e;
+    if (!item_slots_proc_select_item_index(selectIndex, &slot)) {
+        slot = dComIfGs_getSelectItemIndex(selectIndex);
+    }
     if (slot >= SLOT_11 && slot < SLOT_15) {
         s_bottleIndex = slot - SLOT_11;
     }

@@ -17,7 +17,9 @@
 #include "d/d_menu_item_explain.h"
 #include "d/d_pane_class.h"
 #include "d/d_msg_object.h"
+#include "d/d_save.h"
 #include "JSystem/J2DGraph/J2DPane.h"
+#include "JSystem/J2DGraph/J2DOrthoGraph.h"
 #include "JSystem/J2DGraph/J2DScreen.h"
 #include "JSystem/J2DGraph/J2DPicture.h"
 #include "JSystem/J2DGraph/J2DTextBox.h"
@@ -58,15 +60,25 @@ namespace dawnlight {
 namespace {
 
 constexpr u8 kZItemSlot = SELECT_ITEM_DOWN;
-constexpr int kExtendedSelectItemCount = 3;
-constexpr int kSelectItemNotFound = 3;
+constexpr u8 kDpadDownItemSlot = SELECT_ITEM_B;
+constexpr u8 kExtraItemProcSlot = kZItemSlot;
+constexpr int kExtendedSelectItemCount = MAX_SELECT_ITEM;
+constexpr int kSelectItemNotFound = MAX_SELECT_ITEM;
 constexpr int kItemProcBootsEquip = 1;
 constexpr size_t kDawnlightReserveOffset = 0x8F0;
 constexpr size_t kBossRushMarkerOffset = 32;
+constexpr size_t kItemSlotStateOffset = 64;
+constexpr size_t kItemSlotStateMagicSize = 8;
 constexpr char kBossRushMarker[] = "DUSKBR1";
+constexpr char kItemSlotStateMagic[] = "DUSKITM1";
 
 DEFINE_HOOK(&dComIfGp_getSelectItem, GetSelectItemHook);
 DEFINE_HOOK(&dComIfGp_setSelectItem, SetSelectItemHook);
+DEFINE_HOOK(&dComIfGp_getSelectItemNum, GetSelectItemNumHook);
+DEFINE_HOOK(&dComIfGp_getSelectItemMaxNum, GetSelectItemMaxNumHook);
+DEFINE_HOOK(&dComIfGp_setSelectItemNum, SetSelectItemNumHook);
+DEFINE_HOOK(&dComIfGp_addSelectItemNum, AddSelectItemNumHook);
+DEFINE_HOOK(&dSv_player_item_c::setEquipBottleItemIn, SetEquipBottleItemInHook);
 DEFINE_HOOK(&dMenu_Ring_c::_create, RingCreateHook);
 DEFINE_HOOK(&dMenu_Ring_c::_delete, RingDeleteHook);
 DEFINE_HOOK(&dMenu_Ring_c::_draw, RingDrawHook);
@@ -121,18 +133,34 @@ struct RingZButtonPrompt {
 };
 
 RingZButtonPrompt s_ringZPrompt;
+struct RingDpadDownPrompt {
+    dMenu_Ring_c* ring = nullptr;
+    J2DPicture* picture = nullptr;
+    J2DPicture* overlay = nullptr;
+};
+
+RingDpadDownPrompt s_ringDpadDownPrompt;
 alignas(32) u8 s_zHudItemTexBuf[2][2][0xC00];
 u8 s_zHudItemTexPage = 0;
 u8 s_zHudLastItem = dItemNo_NONE_e;
 J2DPicture* s_zHudLastPicture = nullptr;
 J2DPicture* s_zItemNumTex[3] = {};
 dKantera_icon_c* s_zOilMeter = nullptr;
+alignas(32) u8 s_dpadDownHudItemTexBuf[2][2][0xC00];
+u8 s_dpadDownHudItemTexPage = 0;
+u8 s_dpadDownHudLastItem = dItemNo_NONE_e;
+J2DPicture* s_dpadDownHudItemPane[2] = {};
+J2DPicture* s_dpadDownItemNumTex[3] = {};
+dKantera_icon_c* s_dpadDownOilMeter = nullptr;
 daAlink_c* s_zHeavyBootsGuardLink = nullptr;
 bool s_zHeavyBootsManualToggleOff = false;
 bool s_zHeavyBootsWaitRelease = false;
 u8 s_zHeavyBootsGuardFrames = 0;
+u8 s_zHeavyBootsGuardSlot = kZItemSlot;
 bool s_dpadLeftHeld = false;
 bool s_dpadLeftTrig = false;
+bool s_dpadDownHeld = false;
+bool s_dpadDownTrig = false;
 bool s_touchMidnaTrig = false;
 u8 s_touchMidnaBlockStartFrames = 0;
 bool s_inTouchActionBarSync = false;
@@ -144,6 +172,12 @@ std::string s_skipTouchMidnaSource;
 bool s_zPromptAsDpadLeftThisFrame = false;
 bool s_zPromptCustomVisualsActive = false;
 bool s_applyZPromptDpadIcon = false;
+bool s_dpadDownProcSelectOverride = false;
+u8 s_procSelectOverrideSlot = dItemNo_NONE_e;
+u8 s_activeExtraProcSlot = dItemNo_NONE_e;
+bool s_zHudSelectLookup = false;
+bool s_dpadDownBottleSlotRedirect = false;
+u8 s_dpadDownBottleOldSelectSlot = dItemNo_NONE_e;
 
 struct ZPromptVisualState {
     J2DPicture* icon = nullptr;
@@ -196,6 +230,32 @@ void reset_z_prompt_visual_state() {
 struct J2DPictureTexCoordAccess : J2DPicture {
     static JGeometry::TVec2<s16>* coords(J2DPicture* picture) {
         return reinterpret_cast<J2DPictureTexCoordAccess*>(picture)->field_0x10a;
+    }
+};
+
+struct ScopedBool {
+    bool& ref;
+    bool old;
+
+    ScopedBool(bool& value, bool next) : ref(value), old(value) {
+        ref = next;
+    }
+
+    ~ScopedBool() {
+        ref = old;
+    }
+};
+
+struct ScopedU8 {
+    u8& ref;
+    u8 old;
+
+    ScopedU8(u8& value, u8 next) : ref(value), old(value) {
+        ref = next;
+    }
+
+    ~ScopedU8() {
+        ref = old;
     }
 };
 
@@ -704,6 +764,115 @@ void apply_z_prompt_visuals(dMeterButton_c* meter) {
 bool z_item_menu_or_pause_context();
 bool midna_unlocked();
 u8 resolved_select_item(int index);
+bool z_item_ammo_values_for_slot(int slotIndex, u8 itemNo, u8& itemNum, u8& itemMax);
+
+bool any_extra_item_slot_enabled() {
+    return z_item_slot_enabled() || dpad_down_item_slot_enabled();
+}
+
+bool extra_item_slot_enabled(const int index) {
+    switch (index) {
+    case kZItemSlot:
+        return z_item_slot_enabled();
+    case kDpadDownItemSlot:
+        return dpad_down_item_slot_enabled();
+    default:
+        return false;
+    }
+}
+
+u8* item_slot_state_bytes() {
+    dSv_save_c* save = dComIfGs_getSaveData();
+    u8* reserve = save == nullptr ? nullptr :
+        reinterpret_cast<u8*>(save) + kDawnlightReserveOffset;
+    if (reserve == nullptr) {
+        return nullptr;
+    }
+
+    u8* state = reserve + kItemSlotStateOffset;
+    if (std::memcmp(state, kItemSlotStateMagic, kItemSlotStateMagicSize) != 0) {
+        const u8 oldZSlot = dComIfGs_getSelectItemIndex(kZItemSlot);
+        const u8 oldZMix = dComIfGs_getMixItemIndex(kZItemSlot);
+        std::memcpy(state, kItemSlotStateMagic, kItemSlotStateMagicSize);
+        state[kItemSlotStateMagicSize + 0] = oldZSlot;
+        state[kItemSlotStateMagicSize + 1] = oldZMix;
+        state[kItemSlotStateMagicSize + 2] = dItemNo_NONE_e;
+        state[kItemSlotStateMagicSize + 3] = dItemNo_NONE_e;
+    }
+    return state;
+}
+
+int dawnlight_extra_slot_index(const int index) {
+    switch (index) {
+    case kZItemSlot:
+        return 0;
+    case kDpadDownItemSlot:
+        return 1;
+    default:
+        return -1;
+    }
+}
+
+bool is_dawnlight_item_slot(const int index) {
+    return dawnlight_extra_slot_index(index) >= 0;
+}
+
+bool is_active_dawnlight_item_slot(const int index) {
+    return is_dawnlight_item_slot(index) && extra_item_slot_enabled(index);
+}
+
+bool logical_item_slot_enabled(const int index) {
+    if (index == SELECT_ITEM_X || index == SELECT_ITEM_Y) {
+        return true;
+    }
+    return is_active_dawnlight_item_slot(index);
+}
+
+u8 stored_select_slot(const int index) {
+    const int extra = dawnlight_extra_slot_index(index);
+    if (extra < 0) {
+        return dComIfGs_getSelectItemIndex(index);
+    }
+
+    u8* state = item_slot_state_bytes();
+    return state != nullptr ? state[kItemSlotStateMagicSize + extra * 2] : dItemNo_NONE_e;
+}
+
+u8 stored_mix_slot(const int index) {
+    const int extra = dawnlight_extra_slot_index(index);
+    if (extra < 0) {
+        return dComIfGs_getMixItemIndex(index);
+    }
+
+    u8* state = item_slot_state_bytes();
+    return state != nullptr ? state[kItemSlotStateMagicSize + extra * 2 + 1] : dItemNo_NONE_e;
+}
+
+void set_stored_select_slot(const int index, const u8 slot) {
+    const int extra = dawnlight_extra_slot_index(index);
+    if (extra < 0) {
+        dComIfGs_setSelectItemIndex(index, slot);
+        return;
+    }
+
+    u8* state = item_slot_state_bytes();
+    if (state != nullptr) {
+        state[kItemSlotStateMagicSize + extra * 2] = slot;
+    }
+}
+
+void set_stored_mix_slot(const int index, const u8 slot) {
+    const int extra = dawnlight_extra_slot_index(index);
+    if (extra < 0) {
+        dComIfGs_setMixItemIndex(index, slot);
+        return;
+    }
+
+    u8* state = item_slot_state_bytes();
+    if (state != nullptr) {
+        state[kItemSlotStateMagicSize + extra * 2 + 1] = slot;
+    }
+}
 
 struct PaneRenderState {
     J2DPane* pane = nullptr;
@@ -1583,10 +1752,21 @@ void apply_item_wheel_z_offset(Vec& pos) {
     pos.y -= 5.0f;
 }
 
+void apply_item_wheel_dpad_down_offset(Vec& pos) {
+    pos.x += 40.0f;
+    pos.y -= 5.0f;
+}
+
 void clear_ring_z_prompt_refs() {
     s_ringZPrompt.button = nullptr;
     s_ringZPrompt.screen = nullptr;
     s_ringZPrompt.ring = nullptr;
+}
+
+void clear_ring_dpad_down_prompt_refs() {
+    s_ringDpadDownPrompt.picture = nullptr;
+    s_ringDpadDownPrompt.overlay = nullptr;
+    s_ringDpadDownPrompt.ring = nullptr;
 }
 
 void destroy_ring_z_prompt(dMenu_Ring_c* ring) {
@@ -1596,6 +1776,14 @@ void destroy_ring_z_prompt(dMenu_Ring_c* ring) {
 
     // The ring menu owns this heap lifetime; keep only per-menu references here.
     clear_ring_z_prompt_refs();
+}
+
+void destroy_ring_dpad_down_prompt(dMenu_Ring_c* ring) {
+    if (s_ringDpadDownPrompt.ring != ring) {
+        return;
+    }
+
+    clear_ring_dpad_down_prompt_refs();
 }
 
 void create_ring_z_prompt(dMenu_Ring_c* ring) {
@@ -1647,10 +1835,47 @@ void create_ring_z_prompt(dMenu_Ring_c* ring) {
     s_ringZPrompt = {.ring = ring, .screen = screen, .button = button};
 }
 
+bool ring_extra_item_prompts_visible(dMenu_Ring_c* ring) {
+    if (ring == nullptr || ring->mPlayerIsWolf ||
+        dMeter2Info_getItemExplainWindowStatus() != 0)
+    {
+        return false;
+    }
+
+    return ring->mStatus == dMenu_Ring_c::STATUS_WAIT ||
+           ring->mStatus == dMenu_Ring_c::STATUS_MOVE;
+}
+
+void create_ring_dpad_down_prompt(dMenu_Ring_c* ring) {
+    clear_ring_dpad_down_prompt_refs();
+    if (!dpad_down_item_slot_enabled() || ring == nullptr || ring->mPlayerIsWolf) {
+        return;
+    }
+
+    ResTIMG const* texture = z_prompt_dpad_texture(nullptr);
+    if (texture == nullptr) {
+        s_ringDpadDownPrompt = {.ring = ring, .picture = nullptr, .overlay = nullptr};
+        return;
+    }
+
+    J2DPicture* picture = JKR_NEW J2DPicture(texture);
+    J2DPicture* overlay = JKR_NEW J2DPicture(texture);
+    if (picture == nullptr || overlay == nullptr) {
+        return;
+    }
+
+    picture->setBasePosition(J2DBasePosition_4);
+    overlay->setBasePosition(J2DBasePosition_4);
+    overlay->setBlackWhite(JUtility::TColor(0x00000000), JUtility::TColor(0xFFFFFFFF));
+    overlay->setCornerColor(JUtility::TColor(0xFF0000C0));
+    overlay->show();
+    s_ringDpadDownPrompt = {.ring = ring, .picture = picture, .overlay = overlay};
+}
+
 void draw_ring_z_prompt(dMenu_Ring_c* ring) {
     if (!z_item_slot_enabled() || s_ringZPrompt.ring != ring ||
         s_ringZPrompt.screen == nullptr || s_ringZPrompt.button == nullptr ||
-        ring == nullptr || ring->mpScreen == nullptr || ring->mPlayerIsWolf)
+        ring == nullptr || ring->mpScreen == nullptr || !ring_extra_item_prompts_visible(ring))
     {
         return;
     }
@@ -1671,6 +1896,56 @@ void draw_ring_z_prompt(dMenu_Ring_c* ring) {
                                     pos.y - s_ringZPrompt.button->getInitGlobalCenterPosY());
     s_ringZPrompt.button->setAlphaRate(ring->mAlphaRate);
     s_ringZPrompt.screen->draw(0.0f, 0.0f, dComIfGp_getCurrentGrafPort());
+}
+
+void draw_ring_dpad_down_prompt(dMenu_Ring_c* ring) {
+    if (!dpad_down_item_slot_enabled() || s_ringDpadDownPrompt.ring != ring ||
+        ring == nullptr || ring->mpScreen == nullptr || !ring_extra_item_prompts_visible(ring))
+    {
+        return;
+    }
+
+    if (s_ringDpadDownPrompt.picture == nullptr) {
+        ResTIMG const* texture = z_prompt_dpad_texture(nullptr);
+        if (texture == nullptr) {
+            return;
+        }
+        s_ringDpadDownPrompt.picture = JKR_NEW J2DPicture(texture);
+        s_ringDpadDownPrompt.overlay = JKR_NEW J2DPicture(texture);
+        if (s_ringDpadDownPrompt.picture == nullptr || s_ringDpadDownPrompt.overlay == nullptr) {
+            return;
+        }
+        s_ringDpadDownPrompt.picture->setBasePosition(J2DBasePosition_4);
+        s_ringDpadDownPrompt.overlay->setBasePosition(J2DBasePosition_4);
+        s_ringDpadDownPrompt.overlay->setBlackWhite(
+            JUtility::TColor(0x00000000), JUtility::TColor(0xFFFFFFFF));
+        s_ringDpadDownPrompt.overlay->setCornerColor(JUtility::TColor(0xFF0000C0));
+        s_ringDpadDownPrompt.overlay->show();
+    }
+
+    J2DPane* anchor = item_wheel_z_anchor(ring->mpScreen);
+    if (anchor == nullptr) {
+        return;
+    }
+
+    CPaneMgr paneMgr;
+    Vec pos = paneMgr.getGlobalVtxCenter(anchor, true, 0);
+    pos.x += ring->mCenterPosX;
+    pos.y += ring->mCenterPosY;
+    apply_item_wheel_dpad_down_offset(pos);
+
+    const u8 alpha = clamp_hud_alpha(ring->mAlphaRate * 255.0f);
+    s_ringDpadDownPrompt.picture->setAlpha(alpha);
+    s_ringDpadDownPrompt.picture->draw(pos.x - 14.0f, pos.y - 14.0f, 28.0f, 28.0f,
+        false, false, false);
+
+    if (s_ringDpadDownPrompt.overlay != nullptr) {
+        const f32 overlayWidth = 28.0f / 3.0f;
+        const f32 overlayHeight = 28.0f / 3.0f;
+        J2DFillBox(pos.x - overlayWidth * 0.5f, pos.y + 14.0f - overlayHeight,
+            overlayWidth, overlayHeight, JUtility::TColor(255, 0, 0,
+                clamp_hud_alpha(ring->mAlphaRate * 128.0f)));
+    }
 }
 
 bool pane_current_global_bounds(CPaneMgr* pane, f32& left, f32& top, f32& right, f32& bottom) {
@@ -1852,7 +2127,23 @@ bool z_item_has_ammo(const u8 itemNo) {
     }
 }
 
+u8 stored_select_mix_no_arrow_slot(const int slotIndex) {
+    const u8 selectSlot = stored_select_slot(slotIndex);
+    const u8 mixSlot = stored_mix_slot(slotIndex);
+    if (selectSlot >= SLOT_15 && selectSlot < SLOT_18) {
+        return selectSlot;
+    }
+    if (mixSlot != dItemNo_NONE_e && mixSlot >= SLOT_15 && mixSlot < SLOT_18) {
+        return mixSlot;
+    }
+    return dItemNo_NONE_e;
+}
+
 bool z_item_ammo_values(const u8 itemNo, u8& itemNum, u8& itemMax) {
+    return z_item_ammo_values_for_slot(kZItemSlot, itemNo, itemNum, itemMax);
+}
+
+bool z_item_ammo_values_for_slot(const int slotIndex, const u8 itemNo, u8& itemNum, u8& itemMax) {
     if (!z_item_has_ammo(itemNo)) {
         return false;
     }
@@ -1868,8 +2159,12 @@ bool z_item_ammo_values(const u8 itemNo, u8& itemNum, u8& itemMax) {
         itemMax = static_cast<u8>(dComIfGs_getArrowMax());
         return true;
     case dItemNo_BOMB_ARROW_e: {
-        itemNum = static_cast<u8>(std::max<s16>(0, dComIfGp_getSelectItemNum(kZItemSlot)));
-        itemMax = static_cast<u8>(std::max(0, dComIfGp_getSelectItemMaxNum(kZItemSlot)));
+        const u8 bombSlot = stored_select_mix_no_arrow_slot(slotIndex);
+        if (bombSlot == dItemNo_NONE_e) {
+            return false;
+        }
+        itemNum = static_cast<u8>(std::max<s16>(0, dComIfGs_getBombNum(bombSlot - SLOT_15)));
+        itemMax = static_cast<u8>(std::max<int>(0, dComIfGs_getBombMax(itemNo)));
         itemNum = std::min(itemNum, static_cast<u8>(dComIfGs_getArrowNum()));
         itemMax = std::max(itemMax, static_cast<u8>(dComIfGs_getArrowMax()));
         return true;
@@ -1878,9 +2173,29 @@ bool z_item_ammo_values(const u8 itemNo, u8& itemNum, u8& itemMax) {
         itemNum = static_cast<u8>(dComIfGs_getPachinkoNum());
         itemMax = static_cast<u8>(dComIfGs_getPachinkoMax());
         return true;
+    case dItemNo_BEE_CHILD_e: {
+        const u8 bottleSlot = stored_select_slot(slotIndex);
+        if (bottleSlot < SLOT_11 || bottleSlot >= SLOT_15) {
+            return false;
+        }
+        itemNum = static_cast<u8>(dComIfGs_getBottleNum(bottleSlot - SLOT_11));
+        itemMax = static_cast<u8>(dComIfGs_getBottleMax());
+        return true;
+    }
     default:
-        itemNum = static_cast<u8>(std::max<s16>(0, dComIfGp_getSelectItemNum(kZItemSlot)));
-        itemMax = static_cast<u8>(std::max(0, dComIfGp_getSelectItemMaxNum(kZItemSlot)));
+        if (itemNo == dItemNo_NORMAL_BOMB_e || itemNo == dItemNo_WATER_BOMB_e ||
+            itemNo == dItemNo_POKE_BOMB_e)
+        {
+            const u8 bombSlot = stored_select_mix_no_arrow_slot(slotIndex);
+            if (bombSlot == dItemNo_NONE_e) {
+                return false;
+            }
+            itemNum = static_cast<u8>(std::max<s16>(0, dComIfGs_getBombNum(bombSlot - SLOT_15)));
+            itemMax = static_cast<u8>(std::max<int>(0, dComIfGs_getBombMax(itemNo)));
+            return true;
+        }
+        itemNum = 0;
+        itemMax = 0;
         return true;
     }
 }
@@ -2069,6 +2384,243 @@ void draw_z_hud_item_meters(dMeter2Draw_c* meter) {
     draw_z_oil_meter(meter, itemNo, itemAlphaRate);
 }
 
+ResTIMG* dpad_down_hud_item_tex(const u8 page, const u8 layer) {
+    return reinterpret_cast<ResTIMG*>(s_dpadDownHudItemTexBuf[page][layer]);
+}
+
+bool ensure_dpad_down_hud_item_panes() {
+    for (int i = 0; i < 2; ++i) {
+        if (s_dpadDownHudItemPane[i] != nullptr) {
+            continue;
+        }
+        s_dpadDownHudItemPane[i] = JKR_NEW J2DPicture(dpad_down_hud_item_tex(0, i));
+        if (s_dpadDownHudItemPane[i] == nullptr) {
+            return false;
+        }
+        s_dpadDownHudItemPane[i]->setBasePosition(J2DBasePosition_4);
+    }
+    return true;
+}
+
+bool change_dpad_down_hud_item_texture(const u8 itemNo, u8& textureCount) {
+    if (!ensure_dpad_down_hud_item_panes()) {
+        return false;
+    }
+
+    const u8 textureItem = hud_texture_item(itemNo);
+    if (s_dpadDownHudLastItem == textureItem) {
+        textureCount = s_dpadDownHudItemPane[1]->isVisible() ? 2 : 1;
+        return true;
+    }
+
+    s_dpadDownHudItemTexPage ^= 1;
+    ResTIMG* primary = dpad_down_hud_item_tex(s_dpadDownHudItemTexPage, 0);
+    ResTIMG* secondary = dpad_down_hud_item_tex(s_dpadDownHudItemTexPage, 1);
+    const s32 readCount = dMeter2Info_readItemTexture(textureItem, primary,
+        s_dpadDownHudItemPane[0], secondary, s_dpadDownHudItemPane[1],
+        nullptr, nullptr, nullptr, nullptr, -1);
+    if (readCount <= 0) {
+        return false;
+    }
+
+    s_dpadDownHudItemPane[0]->changeTexture(primary, 0);
+    if (readCount > 1) {
+        s_dpadDownHudItemPane[1]->changeTexture(secondary, 0);
+        s_dpadDownHudItemPane[1]->show();
+    } else {
+        s_dpadDownHudItemPane[1]->hide();
+    }
+    dMeter2Info_setItemColor(textureItem, s_dpadDownHudItemPane[0],
+        s_dpadDownHudItemPane[1], nullptr, nullptr);
+    s_dpadDownHudLastItem = textureItem;
+    textureCount = static_cast<u8>(readCount);
+    return true;
+}
+
+bool dpad_down_hud_position(dMeter2Draw_c* meter, f32& centerX, f32& centerY, f32& iconSize,
+    u8& alpha) {
+    if (meter == nullptr || meter->mpScreen == nullptr || meter->mpButtonCrossParent == nullptr) {
+        return false;
+    }
+
+    J2DPane* dpadPane = meter->mpScreen->search(MULTI_CHAR('juji_n'));
+    if (dpadPane == nullptr || !dpadPane->isVisible()) {
+        return false;
+    }
+
+    Vec vtx0 = dpadPane->getGlbVtx(0);
+    Vec vtx3 = dpadPane->getGlbVtx(3);
+    const f32 width = std::fabs(vtx3.x - vtx0.x);
+    const f32 height = std::fabs(vtx3.y - vtx0.y);
+    if (width <= 0.0f || height <= 0.0f) {
+        return false;
+    }
+
+    iconSize = std::max(20.0f, std::min(width, height) * 0.22f);
+    centerX = (vtx0.x + vtx3.x) * 0.5f - iconSize * 0.5f;
+    centerY = (vtx0.y + vtx3.y) * 0.5f + height * 0.24f + iconSize * 0.5f;
+    alpha = dpadPane->getAlpha();
+    return alpha != 0;
+}
+
+bool ensure_dpad_down_item_num_textures() {
+    if (s_dpadDownItemNumTex[0] != nullptr && s_dpadDownItemNumTex[1] != nullptr &&
+        s_dpadDownItemNumTex[2] != nullptr)
+    {
+        return true;
+    }
+
+    ResTIMG* timg = static_cast<ResTIMG*>(dComIfGp_getMain2DArchive()->getResource(
+        'TIMG', dMeter2Info_getNumberTextureName(0)));
+    if (timg == nullptr) {
+        return false;
+    }
+
+    for (int i = 0; i < 3; ++i) {
+        if (s_dpadDownItemNumTex[i] == nullptr) {
+            s_dpadDownItemNumTex[i] = JKR_NEW J2DPicture(timg);
+        }
+        if (s_dpadDownItemNumTex[i] == nullptr) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void set_dpad_down_item_num_textures(u8 itemNum, const u8 itemMax) {
+    if (!ensure_dpad_down_item_num_textures()) {
+        return;
+    }
+
+    if (itemNum > itemMax) {
+        itemNum = itemMax;
+    }
+
+    JUtility::TColor black;
+    JUtility::TColor white;
+    if (itemNum == itemMax) {
+        black.set(30, 30, 30, 0);
+        white.set(255, 200, 50, 255);
+    } else if (itemNum == 0) {
+        black.set(30, 30, 30, 0);
+        white.set(180, 180, 180, 255);
+    } else {
+        black.set(0, 0, 0, 0);
+        white.set(255, 255, 255, 255);
+    }
+
+    for (J2DPicture* digit : s_dpadDownItemNumTex) {
+        digit->setBlackWhite(black, white);
+    }
+
+    auto set_digit = [](const int index, const int digit) {
+        ResTIMG* timg = static_cast<ResTIMG*>(dComIfGp_getMain2DArchive()->getResource(
+            'TIMG', dMeter2Info_getNumberTextureName(digit)));
+        if (timg != nullptr) {
+            s_dpadDownItemNumTex[index]->changeTexture(timg, 0);
+        }
+    };
+
+    if (itemNum < 100) {
+        set_digit(0, itemNum / 10);
+        set_digit(1, itemNum % 10);
+        s_dpadDownItemNumTex[2]->hide();
+    } else {
+        set_digit(0, itemNum / 100);
+        itemNum %= 100;
+        set_digit(1, itemNum / 10);
+        set_digit(2, itemNum % 10);
+        s_dpadDownItemNumTex[2]->show();
+    }
+}
+
+void draw_dpad_down_ammo(const u8 itemNo, const f32 centerX, const f32 centerY,
+    const f32 iconSize, const u8 alpha) {
+    u8 itemNum = 0;
+    u8 itemMax = 0;
+    if (!z_item_ammo_values_for_slot(kDpadDownItemSlot, itemNo, itemNum, itemMax) ||
+        itemMax == 0 || !ensure_dpad_down_item_num_textures())
+    {
+        return;
+    }
+
+    set_dpad_down_item_num_textures(itemNum, itemMax);
+    const f32 digitSize = iconSize * 0.45f;
+    const f32 startX = centerX + iconSize * 0.05f;
+    const f32 startY = centerY + iconSize * 0.15f;
+    for (int i = 0; i < 3; ++i) {
+        if (i == 2 && itemNum < 100) {
+            continue;
+        }
+        s_dpadDownItemNumTex[i]->setAlpha(alpha);
+        s_dpadDownItemNumTex[i]->draw(startX + digitSize * i, startY,
+            digitSize, digitSize, false, false, false);
+    }
+}
+
+void draw_dpad_down_oil_meter(const u8 itemNo, const f32 centerX, const f32 centerY,
+    const f32 iconSize, const f32 alphaRate) {
+    if (!is_z_lantern_item(itemNo) || dComIfGs_getMaxOil() == 0) {
+        return;
+    }
+
+    if (s_dpadDownOilMeter == nullptr) {
+        s_dpadDownOilMeter = JKR_NEW dKantera_icon_c();
+    }
+    if (s_dpadDownOilMeter == nullptr) {
+        return;
+    }
+
+    const f32 scale = std::max(0.35f, iconSize / 48.0f) * 0.6f;
+    s_dpadDownOilMeter->setPos(centerX + iconSize * 0.15f, centerY + iconSize * 0.35f);
+    s_dpadDownOilMeter->setScale(scale, scale);
+    s_dpadDownOilMeter->setNowGauge(dComIfGs_getMaxOil(), dComIfGs_getOil());
+    s_dpadDownOilMeter->setAlphaRate(alphaRate);
+    s_dpadDownOilMeter->drawSelf();
+}
+
+void draw_dpad_down_hud_item(dMeter2Draw_c* meter) {
+    if (!dpad_down_item_slot_enabled() || meter == nullptr || daPy_py_c::checkNowWolf())
+    {
+        return;
+    }
+    if (z_item_menu_or_pause_context() && dMeter2Info_getWindowStatus() != 2) {
+        return;
+    }
+
+    const u8 itemNo = resolved_select_item(kDpadDownItemSlot);
+    if (itemNo == dItemNo_NONE_e || itemNo == 0) {
+        return;
+    }
+
+    f32 centerX = 0.0f;
+    f32 centerY = 0.0f;
+    f32 iconSize = 0.0f;
+    u8 alpha = 0;
+    if (!dpad_down_hud_position(meter, centerX, centerY, iconSize, alpha)) {
+        return;
+    }
+
+    u8 textureCount = 0;
+    if (!change_dpad_down_hud_item_texture(itemNo, textureCount)) {
+        return;
+    }
+
+    const f32 alphaRate = static_cast<f32>(alpha) / 255.0f;
+    for (u8 i = 0; i < std::min<u8>(textureCount, 2); ++i) {
+        J2DPicture* picture = s_dpadDownHudItemPane[i];
+        if (picture == nullptr || (i != 0 && !picture->isVisible())) {
+            continue;
+        }
+        picture->setAlpha(alpha);
+        picture->draw(centerX - iconSize * 0.5f, centerY - iconSize * 0.5f,
+            iconSize, iconSize, false, false, false);
+    }
+
+    draw_dpad_down_ammo(itemNo, centerX, centerY, iconSize, alpha);
+    draw_dpad_down_oil_meter(itemNo, centerX, centerY, iconSize, alphaRate);
+}
+
 void update_z_hud_item(dMeter2Draw_c* meter) {
     if (!z_item_slot_enabled() || meter == nullptr || meter->mpItemR == nullptr ||
         meter->mpLightXY[2] == nullptr || meter->mpButtonXY[2] == nullptr ||
@@ -2220,12 +2772,12 @@ u8 combine_select_item(u8 playItem, u8 mixSlot) {
 }
 
 u8 resolved_select_item(int index) {
-    const u8 slot = dComIfGs_getSelectItemIndex(index);
+    const u8 slot = stored_select_slot(index);
     if (slot == dItemNo_NONE_e) {
         return dItemNo_NONE_e;
     }
 
-    return combine_select_item(dComIfGs_getItem(slot, false), dComIfGs_getMixItemIndex(index));
+    return combine_select_item(dComIfGs_getItem(slot, false), stored_mix_slot(index));
 }
 
 void sync_play_select_item(int index) {
@@ -2236,14 +2788,222 @@ void sync_play_select_item(int index) {
     g_dComIfG_gameInfo.play.setSelectItem(index, resolved_select_item(index));
 }
 
+u8 item_proc_slot(const u8 slot) {
+    return is_dawnlight_item_slot(slot) ? kExtraItemProcSlot : slot;
+}
+
+bool dpad_down_item_input_active() {
+    return dpad_down_item_slot_enabled() && (s_dpadDownHeld || s_dpadDownTrig) &&
+           resolved_select_item(kDpadDownItemSlot) != dItemNo_NONE_e;
+}
+
+void remember_active_extra_proc_slot(const u8 slot) {
+    if (is_active_dawnlight_item_slot(slot)) {
+        s_activeExtraProcSlot = slot;
+    }
+}
+
+void refresh_active_extra_proc_slot(daAlink_c* link) {
+    if (link == nullptr || link->mSelectItemId != kExtraItemProcSlot ||
+        link->mEquipItem == dItemNo_NONE_e)
+    {
+        s_activeExtraProcSlot = dItemNo_NONE_e;
+        return;
+    }
+
+    if (is_active_dawnlight_item_slot(s_activeExtraProcSlot) &&
+        link->checkGroupItem(link->mEquipItem, resolved_select_item(s_activeExtraProcSlot)))
+    {
+        return;
+    }
+
+    s_activeExtraProcSlot = dItemNo_NONE_e;
+    for (u8 slot : std::array<u8, 2>{kZItemSlot, kDpadDownItemSlot}) {
+        if (extra_item_slot_enabled(slot) &&
+            link->checkGroupItem(link->mEquipItem, resolved_select_item(slot)))
+        {
+            s_activeExtraProcSlot = slot;
+            return;
+        }
+    }
+}
+
+bool dpad_down_proc_item_context() {
+    if (!dpad_down_item_slot_enabled()) {
+        return false;
+    }
+
+    daAlink_c* link = daAlink_getAlinkActorClass();
+    const u8 item = resolved_select_item(kDpadDownItemSlot);
+    return link != nullptr && item != dItemNo_NONE_e &&
+           link->mSelectItemId == kExtraItemProcSlot &&
+           link->checkGroupItem(link->mEquipItem, item);
+}
+
+bool dpad_down_proc_select_context(const int index) {
+    if (index != kExtraItemProcSlot || !dpad_down_item_slot_enabled() || s_zHudSelectLookup) {
+        return false;
+    }
+    if (s_procSelectOverrideSlot != dItemNo_NONE_e) {
+        return s_procSelectOverrideSlot == kDpadDownItemSlot;
+    }
+    return s_dpadDownProcSelectOverride || s_activeExtraProcSlot == kDpadDownItemSlot ||
+           dpad_down_proc_item_context();
+}
+
+bool dpad_down_proc_stored_select_slot(const int index, u8* slot) {
+    if (slot == nullptr || !dpad_down_proc_select_context(index)) {
+        return false;
+    }
+
+    const u8 storedSlot = stored_select_slot(kDpadDownItemSlot);
+    if (storedSlot == dItemNo_NONE_e) {
+        return false;
+    }
+
+    *slot = storedSlot;
+    return true;
+}
+
+bool extra_select_item_num_values(const int index, s16& itemNum, int* itemMax = nullptr) {
+    if (!dpad_down_proc_select_context(index)) {
+        return false;
+    }
+
+    const u8 itemNo = resolved_select_item(kDpadDownItemSlot);
+    switch (itemNo) {
+    case dItemNo_NORMAL_BOMB_e:
+    case dItemNo_WATER_BOMB_e:
+    case dItemNo_POKE_BOMB_e:
+    case dItemNo_BOMB_ARROW_e: {
+        const u8 bombSlot = stored_select_mix_no_arrow_slot(kDpadDownItemSlot);
+        if (bombSlot < SLOT_15 || bombSlot >= SLOT_18) {
+            itemNum = 0;
+            if (itemMax != nullptr) {
+                *itemMax = 0;
+            }
+            return true;
+        }
+        itemNum = dComIfGs_getBombNum(bombSlot - SLOT_15);
+        if (itemMax != nullptr) {
+            *itemMax = dComIfGs_getBombMax(itemNo);
+        }
+        return true;
+    }
+    case dItemNo_PACHINKO_e:
+        itemNum = dComIfGs_getPachinkoNum();
+        if (itemMax != nullptr) {
+            *itemMax = dComIfGs_getPachinkoMax();
+        }
+        return true;
+    case dItemNo_BEE_CHILD_e: {
+        const u8 bottleSlot = stored_select_slot(kDpadDownItemSlot);
+        if (bottleSlot < SLOT_11 || bottleSlot >= SLOT_15) {
+            itemNum = 0;
+            if (itemMax != nullptr) {
+                *itemMax = 0;
+            }
+            return true;
+        }
+        itemNum = dComIfGs_getBottleNum(bottleSlot - SLOT_11);
+        if (itemMax != nullptr) {
+            *itemMax = dComIfGs_getBottleMax();
+        }
+        return true;
+    }
+    case dItemNo_BOMB_BAG_LV1_e:
+        itemNum = 1;
+        if (itemMax != nullptr) {
+            *itemMax = 1;
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool set_extra_select_item_num(const int index, s16 itemNum) {
+    if (!dpad_down_proc_select_context(index)) {
+        return false;
+    }
+
+    const u8 itemNo = resolved_select_item(kDpadDownItemSlot);
+    switch (itemNo) {
+    case dItemNo_NORMAL_BOMB_e:
+    case dItemNo_WATER_BOMB_e:
+    case dItemNo_POKE_BOMB_e:
+    case dItemNo_BOMB_ARROW_e: {
+        const u8 bombSlot = stored_select_mix_no_arrow_slot(kDpadDownItemSlot);
+        if (bombSlot < SLOT_15 || bombSlot >= SLOT_18) {
+            return true;
+        }
+        itemNum = std::max<s16>(0, std::min<s16>(itemNum, dComIfGs_getBombMax(itemNo)));
+        dComIfGs_setBombNum(bombSlot - SLOT_15, static_cast<u8>(itemNum));
+        return true;
+    }
+    case dItemNo_PACHINKO_e:
+        itemNum = std::max<s16>(0, std::min<s16>(itemNum, dComIfGs_getPachinkoMax()));
+        dComIfGs_setPachinkoNum(static_cast<u8>(itemNum));
+        return true;
+    case dItemNo_BEE_CHILD_e: {
+        const u8 bottleSlot = stored_select_slot(kDpadDownItemSlot);
+        if (bottleSlot < SLOT_11 || bottleSlot >= SLOT_15) {
+            return true;
+        }
+        itemNum = std::max<s16>(0, std::min<s16>(itemNum, dComIfGs_getBottleMax()));
+        dComIfGs_setBottleNum(bottleSlot - SLOT_11, static_cast<u8>(itemNum));
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+bool add_extra_select_item_num(const int index, const s16 itemNum) {
+    if (!dpad_down_proc_select_context(index)) {
+        return false;
+    }
+
+    const u8 itemNo = resolved_select_item(kDpadDownItemSlot);
+    switch (itemNo) {
+    case dItemNo_NORMAL_BOMB_e:
+    case dItemNo_WATER_BOMB_e:
+    case dItemNo_POKE_BOMB_e:
+    case dItemNo_BOMB_ARROW_e: {
+        const u8 bombSlot = stored_select_mix_no_arrow_slot(kDpadDownItemSlot);
+        if (bombSlot < SLOT_15 || bombSlot >= SLOT_18) {
+            return true;
+        }
+        dComIfGp_setItemBombNumCount(bombSlot - SLOT_15, itemNum);
+        return true;
+    }
+    case dItemNo_PACHINKO_e:
+        dComIfGp_setItemPachinkoNumCount(itemNum);
+        return true;
+    case dItemNo_BEE_CHILD_e: {
+        const u8 bottleSlot = stored_select_slot(kDpadDownItemSlot);
+        if (bottleSlot < SLOT_11 || bottleSlot >= SLOT_15) {
+            return true;
+        }
+        dComIfGs_addBottleNum(bottleSlot - SLOT_11, itemNum);
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
 int find_select_button(daAlink_c* link, int itemNo) {
     if (link == nullptr) {
         return kSelectItemNotFound;
     }
 
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
+        if (!logical_item_slot_enabled(i)) {
+            continue;
+        }
         if (link->checkGroupItem(itemNo, resolved_select_item(i))) {
-            return i;
+            return item_proc_slot(i);
         }
     }
     return kSelectItemNotFound;
@@ -2253,13 +3013,63 @@ bool item_needs_z_valid_button(int itemNo) {
     return itemNo == dItemNo_HVY_BOOTS_e || itemNo == dItemNo_SPINNER_e;
 }
 
-bool z_heavy_boots_selected(daAlink_c* link) {
-    return link != nullptr &&
-           link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(kZItemSlot));
+bool select_slot_trigger(daAlink_c* link, const u8 slot) {
+    if (slot == kDpadDownItemSlot) {
+        return s_dpadDownTrig && resolved_select_item(kDpadDownItemSlot) != dItemNo_NONE_e;
+    }
+    if (slot == kZItemSlot && dpad_down_item_input_active()) {
+        return false;
+    }
+    return link != nullptr && link->itemTriggerCheck(1 << slot);
+}
+
+bool select_slot_button(daAlink_c* link, const u8 slot) {
+    if (slot == kDpadDownItemSlot) {
+        return s_dpadDownHeld && resolved_select_item(kDpadDownItemSlot) != dItemNo_NONE_e;
+    }
+    if (slot == kZItemSlot && dpad_down_item_input_active()) {
+        return false;
+    }
+    return link != nullptr && link->itemButtonCheck(1 << slot);
+}
+
+void sync_dpad_down_item_button_state(daAlink_c* link) {
+    if (link == nullptr) {
+        return;
+    }
+
+    sync_play_select_item(kZItemSlot);
+
+    if (!dpad_down_item_input_active()) {
+        return;
+    }
+
+    if (s_dpadDownHeld) {
+        link->mItemButton |= 1 << kExtraItemProcSlot;
+    }
+    if (s_dpadDownTrig) {
+        link->mItemTrigger |= 1 << kExtraItemProcSlot;
+    }
+}
+
+u8 extra_heavy_boots_slot(daAlink_c* link) {
+    if (link == nullptr) {
+        return dItemNo_NONE_e;
+    }
+
+    for (u8 slot : std::array<u8, 2>{kZItemSlot, kDpadDownItemSlot}) {
+        if (!extra_item_slot_enabled(slot)) {
+            continue;
+        }
+        if (link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(slot))) {
+            return slot;
+        }
+    }
+    return dItemNo_NONE_e;
 }
 
 bool z_heavy_boots_held(daAlink_c* link) {
-    return link != nullptr && (link->mItemButton & daAlink_c::BTN_Z) != 0;
+    return select_slot_button(link, s_zHeavyBootsGuardSlot);
 }
 
 bool z_heavy_boots_input_locked(daAlink_c* link) {
@@ -2299,13 +3109,16 @@ void clear_z_heavy_boots_input_lock() {
     s_zHeavyBootsManualToggleOff = false;
     s_zHeavyBootsWaitRelease = false;
     s_zHeavyBootsGuardFrames = 0;
+    s_zHeavyBootsGuardSlot = kZItemSlot;
 }
 
-void lock_z_heavy_boots_input(daAlink_c* link, bool manualToggleOff) {
+void lock_z_heavy_boots_input(daAlink_c* link, bool manualToggleOff,
+    const u8 slot = kZItemSlot) {
     s_zHeavyBootsGuardLink = link;
     s_zHeavyBootsManualToggleOff = manualToggleOff;
     s_zHeavyBootsWaitRelease = true;
     s_zHeavyBootsGuardFrames = manualToggleOff ? 24 : 0;
+    s_zHeavyBootsGuardSlot = slot;
 }
 
 void tick_z_heavy_boots_guard(daAlink_c* link) {
@@ -2338,65 +3151,69 @@ u8 cursor_for_slot(dMenu_Ring_c* ring, u8 slot) {
 }
 
 void sync_ring_fields(dMenu_Ring_c* ring) {
-    ring->mXButtonSlot = cursor_for_slot(ring, dComIfGs_getSelectItemIndex(SELECT_ITEM_X));
-    ring->mYButtonSlot = cursor_for_slot(ring, dComIfGs_getSelectItemIndex(SELECT_ITEM_Y));
-    ring->field_0x6ac = cursor_for_slot(ring, dComIfGs_getSelectItemIndex(kZItemSlot));
+    ring->mXButtonSlot = cursor_for_slot(ring, stored_select_slot(SELECT_ITEM_X));
+    ring->mYButtonSlot = cursor_for_slot(ring, stored_select_slot(SELECT_ITEM_Y));
+    ring->field_0x6ac = cursor_for_slot(ring, stored_select_slot(kZItemSlot));
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        ring->field_0x6b4[i] = dComIfGs_getSelectItemIndex(i);
-        ring->field_0x6b8[i] = dComIfGs_getMixItemIndex(i);
+        ring->field_0x6b4[i] = stored_select_slot(i);
+        ring->field_0x6b8[i] = stored_mix_slot(i);
     }
 }
 
 void store_select_slots(const std::array<u8, kExtendedSelectItemCount>& slots,
     const std::array<u8, kExtendedSelectItemCount>& mixes) {
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        dComIfGs_setMixItemIndex(i, mixes[i]);
-        dComIfGs_setSelectItemIndex(i, slots[i]);
+        set_stored_mix_slot(i, mixes[i]);
+        set_stored_select_slot(i, slots[i]);
         sync_play_select_item(i);
     }
 }
 
-u8 z_animation_slot(dMenu_Ring_c* ring) {
+u8 extra_animation_slot(dMenu_Ring_c* ring, const u8 targetSlot) {
     if (ring == nullptr) {
         return dItemNo_NONE_e;
     }
-    if (ring->field_0x6cd == kZItemSlot) {
+    if (ring->field_0x6cd == targetSlot) {
         return ring->field_0x6cb;
     }
-    return ring->field_0x6b4[kZItemSlot];
+    return ring->field_0x6b4[targetSlot];
 }
 
-u8 z_animation_item(dMenu_Ring_c* ring) {
-    const u8 slot = z_animation_slot(ring);
+u8 extra_animation_item(dMenu_Ring_c* ring, const u8 targetSlot) {
+    const u8 slot = extra_animation_slot(ring, targetSlot);
     if (slot == dItemNo_NONE_e) {
         return dItemNo_NONE_e;
     }
-    return ring->getItem(slot, ring->field_0x6b8[kZItemSlot]);
+    return ring->getItem(slot, ring->field_0x6b8[targetSlot]);
 }
 
-void fix_z_select_item_animation(dMenu_Ring_c* ring) {
-    if (ring == nullptr || ring->field_0x674[kZItemSlot] == 0) {
+void fix_extra_select_item_animation(dMenu_Ring_c* ring, const u8 targetSlot) {
+    if (ring == nullptr || ring->field_0x674[targetSlot] == 0) {
         return;
     }
 
-    const u8 item = z_animation_item(ring);
+    const u8 item = extra_animation_item(ring, targetSlot);
     if (item != dItemNo_NONE_e) {
-        ring->setSelectItem(kZItemSlot, item);
+        ring->setSelectItem(targetSlot, item);
     }
 
-    const u8 cursor = cursor_for_slot(ring, z_animation_slot(ring));
+    const u8 cursor = cursor_for_slot(ring, extra_animation_slot(ring, targetSlot));
     if (cursor != dItemNo_NONE_e) {
-        ring->field_0x518[kZItemSlot] = ring->mItemSlotPosX[cursor];
-        ring->field_0x528[kZItemSlot] = ring->mItemSlotPosY[cursor];
+        ring->field_0x518[targetSlot] = ring->mItemSlotPosX[cursor];
+        ring->field_0x528[targetSlot] = ring->mItemSlotPosY[cursor];
     }
-    ring->field_0x538[kZItemSlot] = g_ringHIO.mSelectItemScale;
+    ring->field_0x538[targetSlot] = g_ringHIO.mSelectItemScale;
 #if TARGET_PC
-    ring->mSelectItemSlideElapsed[kZItemSlot] = 0.0f;
+    ring->mSelectItemSlideElapsed[targetSlot] = 0.0f;
 #endif
 }
 
-bool z_mix_item_on(dMenu_Ring_c* ring) {
-    if (!z_item_slot_enabled() || ring == nullptr || ring->mPlayerIsWolf ||
+void fix_z_select_item_animation(dMenu_Ring_c* ring) {
+    fix_extra_select_item_animation(ring, kZItemSlot);
+}
+
+bool extra_mix_item_on(dMenu_Ring_c* ring, const u8 targetSlot) {
+    if (!extra_item_slot_enabled(targetSlot) || ring == nullptr || ring->mPlayerIsWolf ||
         dComIfGs_getItem(ring->mItemSlots[ring->mCurrentSlot], false) == dItemNo_NONE_e)
     {
         return false;
@@ -2406,20 +3223,20 @@ bool z_mix_item_on(dMenu_Ring_c* ring) {
         return false;
     }
 
-    return (dComIfGs_getSelectItemIndex(kZItemSlot) == SLOT_4 &&
-               dComIfGs_getMixItemIndex(kZItemSlot) == dItemNo_NONE_e) ||
-           dComIfGs_getMixItemIndex(kZItemSlot) == SLOT_4;
+    return (stored_select_slot(targetSlot) == SLOT_4 &&
+               stored_mix_slot(targetSlot) == dItemNo_NONE_e) ||
+           stored_mix_slot(targetSlot) == SLOT_4;
 }
 
-bool z_mix_item_off(dMenu_Ring_c* ring) {
-    return z_item_slot_enabled() && ring != nullptr && !ring->mPlayerIsWolf &&
+bool extra_mix_item_off(dMenu_Ring_c* ring, const u8 targetSlot) {
+    return extra_item_slot_enabled(targetSlot) && ring != nullptr && !ring->mPlayerIsWolf &&
            dComIfGs_getItem(ring->mItemSlots[ring->mCurrentSlot], false) != dItemNo_NONE_e &&
-           dComIfGs_getMixItemIndex(kZItemSlot) == SLOT_4 &&
-           ring->mItemSlots[ring->mCurrentSlot] == dComIfGs_getSelectItemIndex(kZItemSlot);
+           stored_mix_slot(targetSlot) == SLOT_4 &&
+           ring->mItemSlots[ring->mCurrentSlot] == stored_select_slot(targetSlot);
 }
 
-bool set_z_mix_item(dMenu_Ring_c* ring) {
-    if (!z_mix_item_on(ring) && !z_mix_item_off(ring)) {
+bool set_extra_mix_item(dMenu_Ring_c* ring, const u8 targetSlot) {
+    if (!extra_mix_item_on(ring, targetSlot) && !extra_mix_item_off(ring, targetSlot)) {
         return false;
     }
 
@@ -2428,35 +3245,37 @@ bool set_z_mix_item(dMenu_Ring_c* ring) {
     }
 
     std::array<u8, kExtendedSelectItemCount> slots = {
-        dComIfGs_getSelectItemIndex(SELECT_ITEM_X),
-        dComIfGs_getSelectItemIndex(SELECT_ITEM_Y),
-        dComIfGs_getSelectItemIndex(kZItemSlot),
+        stored_select_slot(SELECT_ITEM_X),
+        stored_select_slot(SELECT_ITEM_Y),
+        stored_select_slot(kZItemSlot),
+        stored_select_slot(kDpadDownItemSlot),
     };
     std::array<u8, kExtendedSelectItemCount> mixes = {
-        dComIfGs_getMixItemIndex(SELECT_ITEM_X),
-        dComIfGs_getMixItemIndex(SELECT_ITEM_Y),
-        dComIfGs_getMixItemIndex(kZItemSlot),
+        stored_mix_slot(SELECT_ITEM_X),
+        stored_mix_slot(SELECT_ITEM_Y),
+        stored_mix_slot(kZItemSlot),
+        stored_mix_slot(kDpadDownItemSlot),
     };
 
-    if (z_mix_item_off(ring)) {
+    if (extra_mix_item_off(ring, targetSlot)) {
         Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_COMBINE_OFF, nullptr, 0, 0, 1.0f, 1.0f,
             -1.0f, -1.0f, 0);
-        slots[kZItemSlot] = SLOT_4;
-        mixes[kZItemSlot] = dItemNo_NONE_e;
-        ring->field_0x6cb = dComIfGs_getSelectItemIndex(kZItemSlot);
-        ring->field_0x6cd = kZItemSlot;
+        slots[targetSlot] = SLOT_4;
+        mixes[targetSlot] = dItemNo_NONE_e;
+        ring->field_0x6cb = stored_select_slot(targetSlot);
+        ring->field_0x6cd = targetSlot;
     } else {
         Z2GetAudioMgr()->seStart(Z2SE_SY_ITEM_COMBINE_ON, nullptr, 0, 0, 1.0f, 1.0f,
             -1.0f, -1.0f, 0);
-        slots[kZItemSlot] = ring->mItemSlots[ring->mCurrentSlot];
-        mixes[kZItemSlot] = SLOT_4;
+        slots[targetSlot] = ring->mItemSlots[ring->mCurrentSlot];
+        mixes[targetSlot] = SLOT_4;
         ring->field_0x6cd = dItemNo_NONE_e;
 
         for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-            if (i == kZItemSlot) {
+            if (i == targetSlot || !logical_item_slot_enabled(i)) {
                 continue;
             }
-            if (slots[i] == slots[kZItemSlot]) {
+            if (slots[i] == slots[targetSlot]) {
                 slots[i] = dItemNo_NONE_e;
                 mixes[i] = dItemNo_NONE_e;
             }
@@ -2465,31 +3284,42 @@ bool set_z_mix_item(dMenu_Ring_c* ring) {
 
     store_select_slots(slots, mixes);
     sync_ring_fields(ring);
-    ring->field_0x6ac = cursor_for_slot(ring, slots[kZItemSlot]);
-    ring->field_0x6b3 = kZItemSlot;
-    ring->field_0x674[kZItemSlot] = 1;
+    if (targetSlot == kZItemSlot) {
+        ring->field_0x6ac = cursor_for_slot(ring, slots[kZItemSlot]);
+    }
+    ring->field_0x6b3 = targetSlot;
+    ring->field_0x674[targetSlot] = 1;
     ring->setJumpItem(false);
-    fix_z_select_item_animation(ring);
+    fix_extra_select_item_animation(ring, targetSlot);
     return true;
+}
+
+bool set_any_extra_mix_item(dMenu_Ring_c* ring) {
+    if (z_item_slot_enabled() && set_extra_mix_item(ring, kZItemSlot)) {
+        return true;
+    }
+    return dpad_down_item_slot_enabled() && set_extra_mix_item(ring, kDpadDownItemSlot);
 }
 
 void assign_current_item(dMenu_Ring_c* ring, u8 targetSlot) {
     const u8 selectedSlot = ring->mItemSlots[ring->mCurrentSlot];
     std::array<u8, kExtendedSelectItemCount> slots = {
-        dComIfGs_getSelectItemIndex(SELECT_ITEM_X),
-        dComIfGs_getSelectItemIndex(SELECT_ITEM_Y),
-        dComIfGs_getSelectItemIndex(kZItemSlot),
+        stored_select_slot(SELECT_ITEM_X),
+        stored_select_slot(SELECT_ITEM_Y),
+        stored_select_slot(kZItemSlot),
+        stored_select_slot(kDpadDownItemSlot),
     };
     std::array<u8, kExtendedSelectItemCount> mixes = {
-        dComIfGs_getMixItemIndex(SELECT_ITEM_X),
-        dComIfGs_getMixItemIndex(SELECT_ITEM_Y),
-        dComIfGs_getMixItemIndex(kZItemSlot),
+        stored_mix_slot(SELECT_ITEM_X),
+        stored_mix_slot(SELECT_ITEM_Y),
+        stored_mix_slot(kZItemSlot),
+        stored_mix_slot(kDpadDownItemSlot),
     };
 
     u8 sourceSlot = dItemNo_NONE_e;
     bool selectedWasMixItem = false;
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (i == targetSlot) {
+        if (i == targetSlot || !logical_item_slot_enabled(i)) {
             continue;
         }
         if (slots[i] == selectedSlot) {
@@ -2525,7 +3355,7 @@ void assign_current_item(dMenu_Ring_c* ring, u8 targetSlot) {
     }
 
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (i == targetSlot || i == sourceSlot) {
+        if (i == targetSlot || i == sourceSlot || !logical_item_slot_enabled(i)) {
             continue;
         }
         if (slots[i] == selectedSlot) {
@@ -2541,9 +3371,7 @@ void assign_current_item(dMenu_Ring_c* ring, u8 targetSlot) {
     ring->field_0x6b3 = targetSlot;
     ring->field_0x674[targetSlot] = 1;
     ring->setJumpItem(true);
-    if (targetSlot == kZItemSlot) {
-        fix_z_select_item_animation(ring);
-    }
+    fix_extra_select_item_animation(ring, targetSlot);
 }
 
 bool item_assign_allowed(dMenu_Ring_c* ring) {
@@ -2581,8 +3409,8 @@ void capture_vanilla_assign(dMenu_Ring_c* ring) {
         .ring = ring,
         .targetSlot = targetSlot,
         .selectedSlot = ring->mItemSlots[ring->mCurrentSlot],
-        .oldTargetSlot = dComIfGs_getSelectItemIndex(targetSlot),
-        .oldTargetMix = dComIfGs_getMixItemIndex(targetSlot),
+        .oldTargetSlot = stored_select_slot(targetSlot),
+        .oldTargetMix = stored_mix_slot(targetSlot),
         .active = true,
     };
 }
@@ -2596,12 +3424,14 @@ void rotate_pending_duplicate(dMenu_Ring_c* ring) {
     std::array<u8, kExtendedSelectItemCount> slots = {
         ring->field_0x6b4[SELECT_ITEM_X],
         ring->field_0x6b4[SELECT_ITEM_Y],
-        dComIfGs_getSelectItemIndex(kZItemSlot),
+        stored_select_slot(kZItemSlot),
+        stored_select_slot(kDpadDownItemSlot),
     };
     std::array<u8, kExtendedSelectItemCount> mixes = {
         ring->field_0x6b8[SELECT_ITEM_X],
         ring->field_0x6b8[SELECT_ITEM_Y],
-        dComIfGs_getMixItemIndex(kZItemSlot),
+        stored_mix_slot(kZItemSlot),
+        stored_mix_slot(kDpadDownItemSlot),
     };
 
     const u8 targetSlot = s_pendingAssign.targetSlot;
@@ -2609,7 +3439,7 @@ void rotate_pending_duplicate(dMenu_Ring_c* ring) {
     u8 sourceSlot = dItemNo_NONE_e;
     bool selectedWasMixItem = false;
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (i == targetSlot) {
+        if (i == targetSlot || !logical_item_slot_enabled(i)) {
             continue;
         }
         if (slots[i] == selectedSlot) {
@@ -2640,7 +3470,7 @@ void rotate_pending_duplicate(dMenu_Ring_c* ring) {
     }
 
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (i == targetSlot || i == sourceSlot) {
+        if (i == targetSlot || i == sourceSlot || !logical_item_slot_enabled(i)) {
             continue;
         }
         if (slots[i] == selectedSlot) {
@@ -2656,19 +3486,95 @@ void rotate_pending_duplicate(dMenu_Ring_c* ring) {
     ring->field_0x674[targetSlot] = 1;
     if (sourceSlot != dItemNo_NONE_e) {
         ring->field_0x674[sourceSlot] = 1;
+        if (is_dawnlight_item_slot(sourceSlot)) {
+            fix_extra_select_item_animation(ring, sourceSlot);
+        }
     }
-    fix_z_select_item_animation(ring);
+    if (is_dawnlight_item_slot(targetSlot)) {
+        fix_extra_select_item_animation(ring, targetSlot);
+    }
     s_pendingAssign = {};
 }
 
 HookAction before_get_select_item(ModContext*, void* args, void* retval, void*) {
     const int index = mods::arg<int>(args, 0);
-    if (!z_item_slot_enabled() || index != kZItemSlot) {
+    if (!any_extra_item_slot_enabled() || index != kExtraItemProcSlot) {
         return HOOK_CONTINUE;
     }
 
-    *static_cast<u8*>(retval) = resolved_select_item(index);
+    if (dpad_down_proc_select_context(index)) {
+        *static_cast<u8*>(retval) = resolved_select_item(kDpadDownItemSlot);
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    if (z_item_slot_enabled()) {
+        *static_cast<u8*>(retval) = resolved_select_item(kZItemSlot);
+        return HOOK_SKIP_ORIGINAL;
+    }
+
+    return HOOK_CONTINUE;
+}
+
+HookAction before_get_select_item_num(ModContext*, void* args, void* retval, void*) {
+    s16 itemNum = 0;
+    if (!extra_select_item_num_values(mods::arg<int>(args, 0), itemNum)) {
+        return HOOK_CONTINUE;
+    }
+
+    *static_cast<s16*>(retval) = itemNum;
     return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction before_get_select_item_max_num(ModContext*, void* args, void* retval, void*) {
+    s16 itemNum = 0;
+    int itemMax = 0;
+    if (!extra_select_item_num_values(mods::arg<int>(args, 0), itemNum, &itemMax)) {
+        return HOOK_CONTINUE;
+    }
+
+    *static_cast<int*>(retval) = itemMax;
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction before_set_select_item_num(ModContext*, void* args, void*, void*) {
+    if (!set_extra_select_item_num(mods::arg<int>(args, 0), mods::arg<s16>(args, 1))) {
+        return HOOK_CONTINUE;
+    }
+
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction before_add_select_item_num(ModContext*, void* args, void*, void*) {
+    if (!add_extra_select_item_num(mods::arg<int>(args, 0), mods::arg<s16>(args, 1))) {
+        return HOOK_CONTINUE;
+    }
+
+    return HOOK_SKIP_ORIGINAL;
+}
+
+HookAction before_set_equip_bottle_item(ModContext*, void* args, void*, void*) {
+    s_dpadDownBottleSlotRedirect = false;
+
+    u8 slot = dItemNo_NONE_e;
+    const int index = mods::arg<u8>(args, 1);
+    if (!dpad_down_proc_stored_select_slot(index, &slot) || slot < SLOT_11 || slot >= SLOT_15) {
+        return HOOK_CONTINUE;
+    }
+
+    s_dpadDownBottleOldSelectSlot = dComIfGs_getSelectItemIndex(kExtraItemProcSlot);
+    s_dpadDownBottleSlotRedirect = true;
+    dComIfGs_setSelectItemIndex(kExtraItemProcSlot, slot);
+    return HOOK_CONTINUE;
+}
+
+void after_set_equip_bottle_item(ModContext*, void*, void*, void*) {
+    if (!s_dpadDownBottleSlotRedirect) {
+        return;
+    }
+
+    dComIfGs_setSelectItemIndex(kExtraItemProcSlot, s_dpadDownBottleOldSelectSlot);
+    s_dpadDownBottleOldSelectSlot = dItemNo_NONE_e;
+    s_dpadDownBottleSlotRedirect = false;
 }
 
 void after_set_select_item(ModContext*, void* args, void*, void*) {
@@ -2676,9 +3582,11 @@ void after_set_select_item(ModContext*, void* args, void*, void*) {
 }
 
 void after_pad_read(ModContext*, void*, void*, void*) {
-    if (!z_item_slot_enabled()) {
+    if (!any_extra_item_slot_enabled()) {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
+        s_dpadDownHeld = false;
+        s_dpadDownTrig = false;
         s_touchMidnaTrig = false;
         s_skipTouchMidnaPressed = false;
         s_touchMidnaBlockStartFrames = 0;
@@ -2697,36 +3605,66 @@ void after_pad_read(ModContext*, void*, void*, void*) {
     {
         s_dpadLeftHeld = false;
         s_dpadLeftTrig = false;
+        s_dpadDownHeld = false;
+        s_dpadDownTrig = false;
         s_touchMidnaTrig = false;
         return;
     }
 
-    s_dpadLeftHeld = (pad.mButtonFlags & PAD_BUTTON_LEFT) != 0;
-    s_dpadLeftTrig = (pad.mPressedButtonFlags & PAD_BUTTON_LEFT) != 0;
-    if (s_dpadLeftHeld) {
-        pad.mButtonFlags &= ~PAD_BUTTON_LEFT;
+    if (z_item_slot_enabled()) {
+        s_dpadLeftHeld = (pad.mButtonFlags & PAD_BUTTON_LEFT) != 0;
+        s_dpadLeftTrig = (pad.mPressedButtonFlags & PAD_BUTTON_LEFT) != 0;
+        if (s_dpadLeftHeld) {
+            pad.mButtonFlags &= ~PAD_BUTTON_LEFT;
+        }
+        if (s_dpadLeftTrig) {
+            pad.mPressedButtonFlags &= ~PAD_BUTTON_LEFT;
+        }
+    } else {
+        s_dpadLeftHeld = false;
+        s_dpadLeftTrig = false;
     }
-    if (s_dpadLeftTrig) {
-        pad.mPressedButtonFlags &= ~PAD_BUTTON_LEFT;
+
+    if (dpad_down_item_slot_enabled()) {
+        s_dpadDownHeld = (pad.mButtonFlags & PAD_BUTTON_DOWN) != 0;
+        s_dpadDownTrig = (pad.mPressedButtonFlags & PAD_BUTTON_DOWN) != 0;
+        if (s_dpadDownHeld) {
+            pad.mButtonFlags &= ~PAD_BUTTON_DOWN;
+        }
+        if (s_dpadDownTrig) {
+            pad.mPressedButtonFlags &= ~PAD_BUTTON_DOWN;
+        }
+    } else {
+        s_dpadDownHeld = false;
+        s_dpadDownTrig = false;
     }
 }
 
 void after_ring_create(ModContext*, void* args, void*, void*) {
-    create_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+    auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
+    create_ring_z_prompt(ring);
+    create_ring_dpad_down_prompt(ring);
 }
 
 HookAction before_ring_delete(ModContext*, void* args, void*, void*) {
-    destroy_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+    auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
+    destroy_ring_z_prompt(ring);
+    destroy_ring_dpad_down_prompt(ring);
     return HOOK_CONTINUE;
 }
 
 void after_ring_draw(ModContext*, void* args, void*, void*) {
-    draw_ring_z_prompt(mods::arg<dMenu_Ring_c*>(args, 0));
+    auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
+    draw_ring_z_prompt(ring);
+    draw_ring_dpad_down_prompt(ring);
 }
 
 HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
     auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
-    update_z_hud_item(meter);
+    {
+        ScopedBool blockZProcLookup(s_zHudSelectLookup, true);
+        update_z_hud_item(meter);
+    }
     apply_round_xy_buttons(meter);
     apply_wii_u_hud_layout(meter);
     apply_xy_ammo_layout(meter);
@@ -2736,7 +3674,11 @@ HookAction before_meter_draw(ModContext*, void* args, void*, void*) {
 
 void after_meter_draw(ModContext*, void* args, void*, void*) {
     auto* meter = mods::arg<dMeter2Draw_c*>(args, 0);
-    draw_z_hud_item_meters(meter);
+    {
+        ScopedBool blockZProcLookup(s_zHudSelectLookup, true);
+        draw_z_hud_item_meters(meter);
+    }
+    draw_dpad_down_hud_item(meter);
     restore_xy_ammo_layout(meter);
 }
 
@@ -2798,7 +3740,18 @@ void after_meter_draw_button_cross(ModContext*, void* args, void*, void*) {
 
 void after_meter_move_button_cross(ModContext*, void* args, void*, void*) {
     auto* meter = mods::arg<dMeter2_c*>(args, 0);
-    if (!hardcoded_hud_layout_enabled() || meter == nullptr || meter->mpMeterDraw == nullptr) {
+    if (meter == nullptr || meter->mpMeterDraw == nullptr) {
+        return;
+    }
+
+    if (dpad_down_item_slot_enabled() && dMeter2Info_getWindowStatus() == 2 &&
+        resolved_select_item(kDpadDownItemSlot) != dItemNo_NONE_e)
+    {
+        meter->mpMeterDraw->setAlphaButtonCrossAnimeMax();
+        meter->mpMeterDraw->drawButtonCross(meter->mButtonCrossOFFPosX, meter->field_0x15c);
+    }
+
+    if (!hardcoded_hud_layout_enabled()) {
         return;
     }
 
@@ -2823,29 +3776,42 @@ void after_meter_map_draw(ModContext*, void* args, void*, void*) {
 
 HookAction before_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
     auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
-    if (!z_item_slot_enabled() || ring == nullptr) {
+    if (!any_extra_item_slot_enabled() || ring == nullptr) {
         s_pendingAssign = {};
         return HOOK_CONTINUE;
     }
 
-    if (mDoCPd_c::getTrigR(PAD_1) && set_z_mix_item(ring)) {
+    if (mDoCPd_c::getTrigR(PAD_1) && set_any_extra_mix_item(ring)) {
         return HOOK_SKIP_ORIGINAL;
     }
 
-    if (!mDoCPd_c::getTrigZ(PAD_1)) {
+    u8 targetSlot = dItemNo_NONE_e;
+    if (z_item_slot_enabled() && mDoCPd_c::getTrigZ(PAD_1)) {
+        targetSlot = kZItemSlot;
+    } else if (dpad_down_item_slot_enabled() && mDoCPd_c::getTrigDown(PAD_1)) {
+        targetSlot = kDpadDownItemSlot;
+    }
+
+    if (targetSlot == dItemNo_NONE_e) {
         capture_vanilla_assign(ring);
         return HOOK_CONTINUE;
     }
 
     s_pendingAssign = {};
     if (item_assign_allowed(ring)) {
-        assign_current_item(ring, kZItemSlot);
+        assign_current_item(ring, targetSlot);
         if (ring->mpItemExplain->getStatus() == 0) {
             ring->setStatus(dMenu_Ring_c::STATUS_WAIT);
             ring->stick_wait_init();
         }
     } else {
         Z2GetAudioMgr()->seStart(Z2SE_SYS_ERROR, nullptr, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    }
+
+    if (targetSlot == kDpadDownItemSlot) {
+        interface_of_controller_pad& pad = mDoCPd_c::getCpadInfo(PAD_1);
+        pad.mButtonFlags &= ~PAD_BUTTON_DOWN;
+        pad.mPressedButtonFlags &= ~PAD_BUTTON_DOWN;
     }
 
     return HOOK_SKIP_ORIGINAL;
@@ -2857,7 +3823,9 @@ void after_ring_set_active_cursor(ModContext*, void* args, void*, void*) {
 
 HookAction before_ring_is_mix_item_on(ModContext*, void* args, void* retval, void*) {
     auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
-    if (!z_mix_item_on(ring)) {
+    if (!(z_item_slot_enabled() && extra_mix_item_on(ring, kZItemSlot)) &&
+        !(dpad_down_item_slot_enabled() && extra_mix_item_on(ring, kDpadDownItemSlot)))
+    {
         return HOOK_CONTINUE;
     }
 
@@ -2867,7 +3835,9 @@ HookAction before_ring_is_mix_item_on(ModContext*, void* args, void* retval, voi
 
 HookAction before_ring_is_mix_item_off(ModContext*, void* args, void* retval, void*) {
     auto* ring = mods::arg<dMenu_Ring_c*>(args, 0);
-    if (!z_mix_item_off(ring)) {
+    if (!(z_item_slot_enabled() && extra_mix_item_off(ring, kZItemSlot)) &&
+        !(dpad_down_item_slot_enabled() && extra_mix_item_off(ring, kDpadDownItemSlot)))
+    {
         return HOOK_CONTINUE;
     }
 
@@ -2887,20 +3857,27 @@ HookAction before_midna_talk_trigger(ModContext*, void* args, void* retval, void
 
 HookAction before_check_item_button_change(ModContext*, void* args, void*, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
-    if (!z_item_slot_enabled() || link == nullptr) {
+    if (!any_extra_item_slot_enabled() || link == nullptr) {
         return HOOK_CONTINUE;
     }
+
+    sync_dpad_down_item_button_state(link);
+    refresh_active_extra_proc_slot(link);
 
     if (link->mProcID != daAlink_c::PROC_CANOE_PADDLE_PUT &&
         link->mEquipItem != dItemNo_NONE_e &&
         !link->checkEquipAnime())
     {
         for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
+            if (!logical_item_slot_enabled(i)) {
+                continue;
+            }
             const u8 next = (i + 1) % kExtendedSelectItemCount;
             if (link->mEquipItem == resolved_select_item(i) &&
-                (link->mEquipItem != resolved_select_item(next) || link->mSelectItemId != next))
+                (link->mEquipItem != resolved_select_item(next) ||
+                    link->mSelectItemId != item_proc_slot(next)))
             {
-                link->mSelectItemId = i;
+                link->mSelectItemId = item_proc_slot(i);
             }
         }
     }
@@ -2909,9 +3886,13 @@ HookAction before_check_item_button_change(ModContext*, void* args, void*, void*
 
 HookAction before_check_item_change_from_button(ModContext*, void* args, void* retval, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
-    if (!z_item_slot_enabled() || link == nullptr) {
+    if (!any_extra_item_slot_enabled() || link == nullptr) {
         return HOOK_CONTINUE;
     }
+
+    sync_dpad_down_item_button_state(link);
+    const bool dpadDownItemTrigger =
+        s_dpadDownTrig && resolved_select_item(kDpadDownItemSlot) != dItemNo_NONE_e;
 
     BOOL result = FALSE;
     if (link->checkModeFlg(4) &&
@@ -2929,7 +3910,8 @@ HookAction before_check_item_change_from_button(ModContext*, void* args, void* r
             !link->checkCanoeRide() &&
             (!link->checkModeFlg(0x40000) || link->checkEquipHeavyBoots()) &&
             link->mEquipItem != 0x103 &&
-            link->swordTrigger())
+            link->swordTrigger() &&
+            !dpadDownItemTrigger)
         {
             if (!link->checkEndResetFlg1(daPy_py_c::ERFLG1_SWORD_TRIGGER_NON)) {
                 link->swordEquip(TRUE);
@@ -2938,22 +3920,38 @@ HookAction before_check_item_change_from_button(ModContext*, void* args, void* r
                    !link->checkStageName("F_SP103") &&
                    !link->checkCanoeSlider() &&
                    !link->checkFisingRodLure() &&
-                   link->swordTrigger())
+                   link->swordTrigger() &&
+                   !dpadDownItemTrigger)
         {
             link->itemEquip(0x105);
         } else {
             for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-                const int procType = link->checkNewItemChange(i);
-                if (procType != 0 && link->itemTriggerCheck(1 << i)) {
-                    if (i == kZItemSlot &&
+                if (!logical_item_slot_enabled(i)) {
+                    continue;
+                }
+                if (!select_slot_trigger(link, i)) {
+                    continue;
+                }
+
+                const u8 procSlot = item_proc_slot(i);
+                ScopedBool dpadDownProcOverride(s_dpadDownProcSelectOverride,
+                    i == kDpadDownItemSlot);
+                ScopedU8 procLookupSlot(s_procSelectOverrideSlot,
+                    is_dawnlight_item_slot(i) ? i : dItemNo_NONE_e);
+                const int procType = link->checkNewItemChange(procSlot);
+                if (procType != 0 && select_slot_trigger(link, i)) {
+                    if (is_dawnlight_item_slot(i) &&
                         link->checkGroupItem(dItemNo_HVY_BOOTS_e, resolved_select_item(i)))
                     {
                         if (z_heavy_boots_input_locked(link)) {
                             continue;
                         }
-                        lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots());
+                        lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots(), i);
                     }
-                    result = link->changeItemTriggerKeepProc(i, procType);
+                    result = link->changeItemTriggerKeepProc(procSlot, procType);
+                    if (result != FALSE) {
+                        remember_active_extra_proc_slot(i);
+                    }
                     *static_cast<BOOL*>(retval) = result;
                     return HOOK_SKIP_ORIGINAL;
                 }
@@ -2976,8 +3974,11 @@ HookAction before_check_item_change_from_button(ModContext*, void* args, void* r
                        link->checkNoResetFlg2(daPy_py_c::FLG2_UNK_1))
             {
                 for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
+                    if (!logical_item_slot_enabled(i)) {
+                        continue;
+                    }
                     if (resolved_select_item(i) == dItemNo_KANTERA_e) {
-                        link->mSelectItemId = i;
+                        link->mSelectItemId = item_proc_slot(i);
                     }
                 }
                 link->itemEquip(dItemNo_KANTERA_e);
@@ -3008,23 +4009,36 @@ HookAction before_check_item_change_from_button(ModContext*, void* args, void* r
 HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     const int itemNo = mods::arg<int>(args, 1);
-    if (!z_item_slot_enabled() || link == nullptr) {
+    if (!any_extra_item_slot_enabled() || link == nullptr) {
         return HOOK_CONTINUE;
     }
 
+    sync_dpad_down_item_button_state(link);
+
     for (u8 i = 0; i < kExtendedSelectItemCount; ++i) {
-        if (!link->checkGroupItem(itemNo, resolved_select_item(i)) || !link->itemTriggerCheck(1 << i)) {
+        if (!logical_item_slot_enabled(i)) {
+            continue;
+        }
+        if (!link->checkGroupItem(itemNo, resolved_select_item(i)) ||
+            !select_slot_trigger(link, i))
+        {
             continue;
         }
 
         if (itemNo == dItemNo_HVY_BOOTS_e) {
-            if (i == kZItemSlot) {
+            const u8 procSlot = item_proc_slot(i);
+            ScopedBool dpadDownProcOverride(s_dpadDownProcSelectOverride,
+                i == kDpadDownItemSlot);
+            ScopedU8 procLookupSlot(s_procSelectOverrideSlot,
+                is_dawnlight_item_slot(i) ? i : dItemNo_NONE_e);
+            if (is_dawnlight_item_slot(i)) {
                 if (link->checkEquipHeavyBoots()) {
                     if (!z_heavy_boots_input_locked(link) &&
-                        link->checkNewItemChange(i) == kItemProcBootsEquip)
+                        link->checkNewItemChange(procSlot) == kItemProcBootsEquip)
                     {
-                        lock_z_heavy_boots_input(link, true);
-                        link->changeItemTriggerKeepProc(i, kItemProcBootsEquip);
+                        lock_z_heavy_boots_input(link, true, i);
+                        link->changeItemTriggerKeepProc(procSlot, kItemProcBootsEquip);
+                        remember_active_extra_proc_slot(i);
                     }
                     *static_cast<int*>(retval) = 0;
                     return HOOK_SKIP_ORIGINAL;
@@ -3033,10 +4047,11 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
                     *static_cast<int*>(retval) = 0;
                     return HOOK_SKIP_ORIGINAL;
                 }
-                lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots());
+                lock_z_heavy_boots_input(link, link->checkEquipHeavyBoots(), i);
             }
         } else {
-            link->mSelectItemId = i;
+            link->mSelectItemId = item_proc_slot(i);
+            remember_active_extra_proc_slot(i);
         }
 
         *static_cast<int*>(retval) = 1;
@@ -3050,11 +4065,21 @@ HookAction before_check_set_item_trigger(ModContext*, void* args, void* retval, 
 HookAction before_check_item_set_button(ModContext*, void* args, void* retval, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     const int itemNo = mods::arg<int>(args, 1);
-    if (!z_item_slot_enabled() || link == nullptr || !item_needs_z_valid_button(itemNo)) {
+    if (!any_extra_item_slot_enabled() || link == nullptr || !item_needs_z_valid_button(itemNo)) {
         return HOOK_CONTINUE;
     }
 
-    if (!link->checkGroupItem(itemNo, resolved_select_item(kZItemSlot))) {
+    bool heldByExtraSlot = false;
+    for (u8 slot : std::array<u8, 2>{kZItemSlot, kDpadDownItemSlot}) {
+        if (!extra_item_slot_enabled(slot)) {
+            continue;
+        }
+        if (link->checkGroupItem(itemNo, resolved_select_item(slot))) {
+            heldByExtraSlot = true;
+            break;
+        }
+    }
+    if (!heldByExtraSlot) {
         return HOOK_CONTINUE;
     }
 
@@ -3065,8 +4090,9 @@ HookAction before_check_item_set_button(ModContext*, void* args, void* retval, v
 HookAction before_set_heavy_boots(ModContext*, void* args, void* retval, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
     const int enable = mods::arg<int>(args, 1);
-    if (!z_item_slot_enabled() || link == nullptr || !link->checkEquipHeavyBoots() ||
-        link->checkNotHeavyBootsStage() || !z_heavy_boots_selected(link))
+    const u8 bootsSlot = extra_heavy_boots_slot(link);
+    if (!any_extra_item_slot_enabled() || link == nullptr || !link->checkEquipHeavyBoots() ||
+        link->checkNotHeavyBootsStage() || bootsSlot == dItemNo_NONE_e)
     {
         return HOOK_CONTINUE;
     }
@@ -3096,13 +4122,13 @@ HookAction before_set_heavy_boots(ModContext*, void* args, void* retval, void*) 
 
 void after_player_execute(ModContext*, void* args, void*, void*) {
     auto* link = mods::arg<daAlink_c*>(args, 0);
-    if (!z_item_slot_enabled() || link == nullptr || link->checkWolf()) {
+    if (!any_extra_item_slot_enabled() || link == nullptr || link->checkWolf()) {
         return;
     }
 
     tick_z_heavy_boots_guard(link);
     sync_play_select_item(kZItemSlot);
-    if (resolved_select_item(kZItemSlot) != dItemNo_NONE_e) {
+    if (z_item_slot_enabled() && resolved_select_item(kZItemSlot) != dItemNo_NONE_e) {
         dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
     }
 }
@@ -3253,10 +4279,32 @@ ModResult add_hook(ModResult result, ModError* error) {
 
 }  // namespace
 
+bool item_slots_proc_select_item_index(const int index, u8* slot) {
+    return dpad_down_proc_stored_select_slot(index, slot);
+}
+
 ModResult install_item_slot_hooks(ModError* error) {
     ModResult result = mods::hook_add_pre<GetSelectItemHook>(svc_hook, before_get_select_item);
     if (result == MOD_OK) {
         result = mods::hook_add_post<SetSelectItemHook>(svc_hook, after_set_select_item);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<GetSelectItemNumHook>(svc_hook, before_get_select_item_num);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<GetSelectItemMaxNumHook>(svc_hook, before_get_select_item_max_num);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<SetSelectItemNumHook>(svc_hook, before_set_select_item_num);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<AddSelectItemNumHook>(svc_hook, before_add_select_item_num);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_pre<SetEquipBottleItemInHook>(svc_hook, before_set_equip_bottle_item);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<SetEquipBottleItemInHook>(svc_hook, after_set_equip_bottle_item);
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PadReadHook>(svc_hook, after_pad_read);

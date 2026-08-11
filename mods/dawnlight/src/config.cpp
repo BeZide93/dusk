@@ -34,6 +34,7 @@ ConfigVarHandle s_cinemaZoomPercent = 0;
 ConfigVarHandle s_manualShielding = 0;
 ConfigVarHandle s_rJump = 0;
 ConfigVarHandle s_zItemSlot = 0;
+ConfigVarHandle s_dpadDownItemSlot = 0;
 ConfigVarHandle s_hudLayout = 0;
 ConfigVarHandle s_legacyWiiUHud = 0;
 ConfigVarHandle s_roundXYButtons = 0;
@@ -718,6 +719,7 @@ ModResult register_config(ModError* error) {
         register_bool("manual-shielding", true, s_manualShielding) != MOD_OK ||
         register_bool("r-jump", true, s_rJump) != MOD_OK ||
         register_bool("z-item-slot", true, s_zItemSlot) != MOD_OK ||
+        register_bool("dpad-down-item-slot", true, s_dpadDownItemSlot) != MOD_OK ||
         register_int("hud-layout", static_cast<int64_t>(HudLayout::GameCube), s_hudLayout) !=
             MOD_OK ||
         register_bool("wii-u-hud", false, s_legacyWiiUHud) != MOD_OK ||
@@ -830,6 +832,10 @@ bool r_jump_enabled() {
 
 bool z_item_slot_enabled() {
     return get_bool(s_zItemSlot, true);
+}
+
+bool dpad_down_item_slot_enabled() {
+    return get_bool(s_dpadDownItemSlot, true);
 }
 
 HudLayout hud_layout() {
@@ -999,6 +1005,10 @@ ConfigVarHandle r_jump_config_var() {
 
 ConfigVarHandle z_item_slot_config_var() {
     return s_zItemSlot;
+}
+
+ConfigVarHandle dpad_down_item_slot_config_var() {
+    return s_dpadDownItemSlot;
 }
 
 ConfigVarHandle hud_layout_config_var() {

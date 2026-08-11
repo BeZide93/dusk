@@ -348,7 +348,13 @@ ModResult build_controls_tab(
         return MOD_ERROR;
     }
     if (add_toggle(ctx, left, "Z Item Slot", z_item_slot_config_var(),
-            "Enables the third selectable item slot and moves Midna from Z to D-Pad Down.")
+            "Adds an item slot on Z and moves Midna off the Z button.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+    if (add_toggle(ctx, left, "D-Pad Down Item Slot", dpad_down_item_slot_config_var(),
+            "Adds an additional item slot on D-Pad Down.")
         != MOD_OK)
     {
         return MOD_ERROR;
