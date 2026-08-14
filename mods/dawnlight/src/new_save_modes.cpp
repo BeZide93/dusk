@@ -136,6 +136,29 @@ constexpr int kDirectFinalBarrierOnSwitch = 15;
 constexpr int kDirectFinalBarrierOffSwitch = 31;
 constexpr s16 kDirectFinalBarrierAngleX =
     static_cast<s16>((kDirectFinalBarrierOffSwitch << 8) | kDirectFinalBarrierOnSwitch);
+constexpr int kBossRushHazardIntervalFrames = 600;
+constexpr int kBossRushHazardProjectileCount = 3;
+constexpr f32 kBossRushHazardSpawnRadius = 1300.0f;
+constexpr f32 kDirectFinalHazardSpawnRadius = 700.0f;
+constexpr f32 kBossRushHazardSpawnHeight = 160.0f;
+constexpr f32 kBossRushHazardAimHeight = 80.0f;
+constexpr f32 kBossRushHazardProjectileSpeed = 35.0f;
+constexpr f32 kBossRushHazardHitRadius = 90.0f;
+constexpr f32 kBossRushHazardImpactScale = 0.75f;
+constexpr int kBossRushHazardLifetimeFrames = 180;
+constexpr int kBossRushHazardDamage = 4;
+constexpr int kBossRushHazardHitCooldownFrames = 60;
+constexpr int kBossRushHazardGuardCooldownFrames = 20;
+constexpr int kBossRushTriangleInitialDelayFrames = 300;
+constexpr int kBossRushTriangleIntervalFrames = 600;
+constexpr int kBossRushTriangleDurationFrames = 210;
+constexpr int kBossRushTriangleStrikeFrame = 100;
+constexpr int kBossRushTriangleDamageStartFrame = 105;
+constexpr int kBossRushTriangleDamageEndFrame = 135;
+constexpr f32 kBossRushTriangleGroundOffset = 5.0f;
+constexpr f32 kBossRushTriangleSize = 8.0f;
+constexpr f32 kBossRushTriangleDegreesPerRadian = 57.295f;
+constexpr f32 kBossRushTrianglePi = 3.1415927f;
 
 #if VERSION == VERSION_GCN_PAL
 constexpr size_t kNameSceneFileSelectOffset = 0x43C;
@@ -174,6 +197,106 @@ char const sMidnaNoText[] = "No";
 char const sMidnaEmptyText[] = "";
 bool sMidnaHubWarpMenuOffered = false;
 bool sHubPortalMidnaPromptOffered = false;
+int sBossRushHazardTimer = kBossRushHazardIntervalFrames;
+int sBossRushHazardHitCooldown = 0;
+u32 sBossRushHazardWave = 0;
+int sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
+u32 sBossRushTriangleWave = 0;
+
+struct BossRushElectricOrb {
+    bool active = false;
+    cXyz pos;
+    cXyz velocity;
+    int timer = 0;
+    u32 emitterKeys[3] = {};
+};
+
+BossRushElectricOrb sBossRushElectricOrbs[kBossRushHazardProjectileCount];
+
+struct BossRushTriangleHazard {
+    bool active = false;
+    bool impactSpawned = false;
+    bool damageApplied = false;
+    cXyz pos;
+    s16 rotY = 0;
+    int frame = 0;
+};
+
+BossRushTriangleHazard sBossRushTriangleHazard;
+
+using CreateActor7Fn =
+    fpc_ProcID (*)(s16, u32, const cXyz*, int, const csXyz*, const cXyz*, s8);
+using CreateActor8Fn =
+    fpc_ProcID (*)(s16, u32, const cXyz*, int, const csXyz*, const cXyz*, s8, u32);
+
+CreateActor7Fn sCreateActor7 = nullptr;
+CreateActor8Fn sCreateActor8 = nullptr;
+bool sCreateActorResolveAttempted = false;
+
+void resolve_create_actor() {
+    if (sCreateActorResolveAttempted) {
+        return;
+    }
+    sCreateActorResolveAttempted = true;
+
+    void* symbol = nullptr;
+#if defined(_WIN32)
+    if (svc_hook->resolve(
+            mod_ctx, "?fopAcM_create@@YAIFIPEBUcXyz@@HPEBVcsXyz@@0CI@Z", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor8 = reinterpret_cast<CreateActor8Fn>(symbol);
+        return;
+    }
+    if (svc_hook->resolve(
+            mod_ctx, "?fopAcM_create@@YAIFIPEBUcXyz@@HPEBVcsXyz@@0C@Z", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor7 = reinterpret_cast<CreateActor7Fn>(symbol);
+        return;
+    }
+#elif defined(__ANDROID__)
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_a", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor7 = reinterpret_cast<CreateActor7Fn>(symbol);
+        return;
+    }
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_aj", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor8 = reinterpret_cast<CreateActor8Fn>(symbol);
+        return;
+    }
+#else
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_aj", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor8 = reinterpret_cast<CreateActor8Fn>(symbol);
+        return;
+    }
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_a", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor7 = reinterpret_cast<CreateActor7Fn>(symbol);
+    }
+#endif
+}
+
+fpc_ProcID create_actor(s16 procName, u32 parameters, const cXyz* pos, int roomNo,
+    const csXyz* angle, const cXyz* scale, s8 argument) {
+    resolve_create_actor();
+
+    if (sCreateActor8 != nullptr) {
+        return sCreateActor8(procName, parameters, pos, roomNo, angle, scale, argument, 0);
+    }
+
+    if (sCreateActor7 != nullptr) {
+        return sCreateActor7(procName, parameters, pos, roomNo, angle, scale, argument);
+    }
+
+    return fpcM_ERROR_PROCESS_ID_e;
+}
 
 u8* reserve_bytes(dSv_save_c* save) {
     return save == nullptr ? nullptr : reinterpret_cast<u8*>(save) + kReserveOffset;
@@ -380,8 +503,11 @@ void spawn_hub_actors() {
     csXyz barrierAngle(kDirectFinalBarrierAngleX, 0, 0);
     dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, kBossRushReturnRoom);
     dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, kBossRushReturnRoom);
-    sHubBarrierId =
-        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, &barrierAngle, NULL, -1);
+    sHubBarrierId = create_actor(
+        fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, &barrierAngle, NULL, -1);
+    if (sHubBarrierId == fpcM_ERROR_PROCESS_ID_e) {
+        return;
+    }
 
     for (u8 i = 0; i < kBossRushCenterPortalIndex; i++) {
         s16 angle = static_cast<s16>((0x10000 * i) / kBossRushCenterPortalIndex);
@@ -916,7 +1042,7 @@ void create_beast_ganon_if_needed(const BossRushEntry& entry) {
     cXyz bossPos(-7.0f, 0.0f, -1045.0f);
     csXyz bossAngle(0, -0x8000, 0);
     sDirectFinalBossId =
-        fopAcM_create(fpcNm_B_MGN_e, 0xFF, &bossPos, entry.room, &bossAngle, NULL, -1);
+        create_actor(fpcNm_B_MGN_e, 0xFF, &bossPos, entry.room, &bossAngle, NULL, -1);
 }
 
 void create_final_ganondorf_if_needed(const BossRushEntry& entry) {
@@ -927,7 +1053,7 @@ void create_final_ganondorf_if_needed(const BossRushEntry& entry) {
     cXyz bossPos(-600.0f, kBossRushHubY, 0.0f);
     csXyz bossAngle(0, kGanondorfFacingAngle, 0);
     sDirectFinalBossId =
-        fopAcM_create(fpcNm_B_GND_e, 0, &bossPos, entry.room, &bossAngle, NULL, -1);
+        create_actor(fpcNm_B_GND_e, 0, &bossPos, entry.room, &bossAngle, NULL, -1);
 }
 
 bool direct_final_barrier_active() {
@@ -976,8 +1102,9 @@ void create_direct_final_barrier_if_needed(b_gnd_class* ganondorf) {
     fopAc_ac_c* actor = static_cast<fopAc_ac_c*>(ganondorf);
     cXyz barrierPos(0.0f, kBossRushHubY, 0.0f);
     csXyz barrierAngle(kDirectFinalBarrierAngleX, 0, 0);
-    sDirectFinalBarrierId =
-        fopAcM_create(fpcNm_OBJ_GB_e, 0xF0069600, &barrierPos, fopAcM_GetRoomNo(actor), &barrierAngle, NULL, -1);
+    sDirectFinalBarrierId = create_actor(
+        fpcNm_OBJ_GB_e, 0xF0069600, &barrierPos, fopAcM_GetRoomNo(actor), &barrierAngle, NULL,
+        -1);
     dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, fopAcM_GetRoomNo(actor));
     dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, fopAcM_GetRoomNo(actor));
 }
@@ -1446,12 +1573,315 @@ bool restore_bossrush_hub_load_state() {
     return true;
 }
 
+bool bossrush_hazards_can_run() {
+    if (!bossrush_hardmode_hazards_enabled() || !is_boss_rush(dComIfGs_getSaveData()) ||
+        boss_rush_state() == kBossRushStateHub || dComIfGs_getLife() == 0 ||
+        sSavePromptId != fpcM_ERROR_PROCESS_ID_e || sAdvancePending || fopOvlpM_IsPeek() ||
+        dComIfGp_isEnableNextStage() || dMeter2Info_getGameOverType() != 0 ||
+        dComIfGp_getGameoverStatus() != 0 || ui_document_visible())
+    {
+        return false;
+    }
+
+    const u8 index = boss_rush_index();
+    if (index >= kBossRushEntryCount) {
+        return false;
+    }
+
+    const BossRushEntry& entry = kBossRushEntries[index];
+    if (!is_current_direct_boss_stage(entry)) {
+        return false;
+    }
+
+    if (entry.clearMode == BossRushEntry::FinalGanondorf) {
+        b_gnd_class* ganondorf = static_cast<b_gnd_class*>(fopAcM_SearchByName(fpcNm_B_GND_e));
+        return sDirectFinalGanondorfStarted && ganondorf != NULL && !ganondorf->mDrawHorse &&
+               ganondorf->mActionMode >= kGanondorfActionWait &&
+               ganondorf->mActionMode < kGanondorfActionEnd;
+    }
+
+    return !dComIfGp_event_runCheck();
+}
+
+f32 bossrush_hazard_spawn_radius() {
+    const u8 index = boss_rush_index();
+    if (index < kBossRushEntryCount &&
+        kBossRushEntries[index].clearMode == BossRushEntry::FinalGanondorf &&
+        is_current_direct_boss_stage(kBossRushEntries[index]))
+    {
+        return kDirectFinalHazardSpawnRadius;
+    }
+
+    return kBossRushHazardSpawnRadius;
+}
+
+s16 bossrush_hazard_ring_angle(u32 wave, int slot) {
+    return static_cast<s16>(
+        static_cast<s16>(wave * 0x2345) + (0x10000 / kBossRushHazardProjectileCount) * slot);
+}
+
+cXyz bossrush_hazard_ring_position(daPy_py_c* player, f32 yOffset, u32 wave, int slot) {
+    const s16 angle = bossrush_hazard_ring_angle(wave, slot);
+    const f32 spawnRadius = bossrush_hazard_spawn_radius();
+    return cXyz(
+        player->current.pos.x + cM_ssin(angle) * spawnRadius,
+        player->current.pos.y + yOffset,
+        player->current.pos.z + cM_scos(angle) * spawnRadius);
+}
+
+void stop_bossrush_electric_orb(BossRushElectricOrb& orb) {
+    for (u32& emitterKey : orb.emitterKeys) {
+        if (emitterKey == 0) {
+            continue;
+        }
+
+        JPABaseEmitter* emitter = dComIfGp_particle_getEmitter(emitterKey);
+        if (emitter != NULL) {
+            emitter->deleteAllParticle();
+            dComIfGp_particle_levelEmitterOnEventMove(emitterKey);
+        }
+
+        emitterKey = 0;
+    }
+
+    orb.active = false;
+    orb.timer = 0;
+}
+
+void reset_bossrush_triangle_hazard() {
+    sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
+    sBossRushTriangleHazard = BossRushTriangleHazard();
+}
+
+void spawn_bossrush_electric_impact(const cXyz& pos) {
+    static constexpr u16 kImpactEffects[] = {0x8915, 0x8916, 0x8917};
+    const cXyz scale(
+        kBossRushHazardImpactScale, kBossRushHazardImpactScale, kBossRushHazardImpactScale);
+
+    for (u16 effect : kImpactEffects) {
+        dComIfGp_particle_set(effect, &pos, NULL, &scale);
+    }
+}
+
+void reset_bossrush_hazards() {
+    sBossRushHazardTimer = kBossRushHazardIntervalFrames;
+    sBossRushHazardHitCooldown = 0;
+    reset_bossrush_triangle_hazard();
+
+    for (BossRushElectricOrb& orb : sBossRushElectricOrbs) {
+        stop_bossrush_electric_orb(orb);
+    }
+}
+
+void apply_bossrush_electric_hit() {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    daAlink_c* alink = daAlink_getAlinkActorClass();
+    if (player == nullptr || alink == nullptr || sBossRushHazardHitCooldown > 0) {
+        return;
+    }
+
+    if (player->checkPlayerGuard()) {
+        dComIfGp_getVibration().StartShock(VIBMODE_S_POWER3, 0x1F, cXyz(0.0f, 1.0f, 0.0f));
+        sBossRushHazardHitCooldown = kBossRushHazardGuardCooldownFrames;
+        return;
+    }
+
+    dComIfGp_getVibration().StartShock(VIBMODE_S_POWER4, 0x1F, cXyz(0.0f, 1.0f, 0.0f));
+    alink->setDamagePointNormal(kBossRushHazardDamage);
+    sBossRushHazardHitCooldown = kBossRushHazardHitCooldownFrames;
+}
+
+void spawn_bossrush_hazard_projectile(int slot, const cXyz& spawn, const cXyz& target) {
+    if (slot < 0 || slot >= kBossRushHazardProjectileCount) {
+        return;
+    }
+
+    cXyz delta = target - spawn;
+    const f32 distance = delta.abs();
+    if (distance < 1.0f) {
+        return;
+    }
+
+    BossRushElectricOrb& orb = sBossRushElectricOrbs[slot];
+    stop_bossrush_electric_orb(orb);
+    orb.active = true;
+    orb.pos = spawn;
+    orb.velocity = delta * (kBossRushHazardProjectileSpeed / distance);
+    orb.timer = kBossRushHazardLifetimeFrames;
+}
+
+void spawn_bossrush_hazard_wave() {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == nullptr) {
+        return;
+    }
+
+    const cXyz target(
+        player->current.pos.x,
+        player->current.pos.y + kBossRushHazardAimHeight,
+        player->current.pos.z);
+
+    for (int i = 0; i < kBossRushHazardProjectileCount; ++i) {
+        cXyz spawn =
+            bossrush_hazard_ring_position(player, kBossRushHazardSpawnHeight, sBossRushHazardWave, i);
+        spawn_bossrush_hazard_projectile(i, spawn, target);
+    }
+
+    ++sBossRushHazardWave;
+}
+
+void spawn_bossrush_triangle_effect(const BossRushTriangleHazard& triangle) {
+    static constexpr u16 kTriangleEffects[] = {0x8945, 0x8946, 0x8947, 0x8948, 0x8949};
+    csXyz rot(0, static_cast<s16>(triangle.rotY + 0x8000), 0);
+    const cXyz scale(kBossRushTriangleSize, kBossRushTriangleSize, kBossRushTriangleSize);
+
+    for (u16 effect : kTriangleEffects) {
+        dComIfGp_particle_set(effect, &triangle.pos, &rot, &scale);
+    }
+}
+
+void spawn_bossrush_triangle_hazard() {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == nullptr) {
+        return;
+    }
+
+    sBossRushTriangleHazard.active = true;
+    sBossRushTriangleHazard.impactSpawned = false;
+    sBossRushTriangleHazard.damageApplied = false;
+    sBossRushTriangleHazard.frame = 0;
+    sBossRushTriangleHazard.pos = cXyz(
+        player->current.pos.x,
+        player->current.pos.y + kBossRushTriangleGroundOffset,
+        player->current.pos.z);
+    sBossRushTriangleHazard.rotY = bossrush_hazard_ring_angle(sBossRushTriangleWave, 0);
+
+    spawn_bossrush_triangle_effect(sBossRushTriangleHazard);
+    ++sBossRushTriangleWave;
+}
+
+bool player_in_bossrush_triangle(const BossRushTriangleHazard& triangle) {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == nullptr) {
+        return false;
+    }
+
+    cXyz rel = player->current.pos - triangle.pos;
+    rel.y = 0.0f;
+    const f32 sinY = cM_ssin(static_cast<s16>(-triangle.rotY));
+    const f32 cosY = cM_scos(static_cast<s16>(-triangle.rotY));
+    const f32 localX = rel.x * cosY + rel.z * sinY;
+    const f32 localZ = -rel.x * sinY + rel.z * cosY;
+    f32 angleDeg = std::fabs(kBossRushTriangleDegreesPerRadian * cM_atan2f(localX, localZ));
+
+    if (angleDeg >= 60.0f && angleDeg <= 120.0f) {
+        angleDeg = 120.0f - angleDeg;
+    } else if (angleDeg >= 120.0f && angleDeg <= 180.0f) {
+        angleDeg -= 120.0f;
+    }
+
+    const f32 edgeScale = 1.0f / cM_fcos(kBossRushTrianglePi * (angleDeg / 180.0f));
+    const f32 radius = edgeScale * (50.0f * kBossRushTriangleSize);
+    return std::sqrt(localX * localX + localZ * localZ) < radius;
+}
+
+void update_bossrush_triangle_hazard() {
+    if (sBossRushTriangleHazard.active) {
+        ++sBossRushTriangleHazard.frame;
+
+        if (!sBossRushTriangleHazard.impactSpawned &&
+            sBossRushTriangleHazard.frame >= kBossRushTriangleStrikeFrame)
+        {
+            spawn_bossrush_triangle_effect(sBossRushTriangleHazard);
+            sBossRushTriangleHazard.impactSpawned = true;
+        }
+
+        if (!sBossRushTriangleHazard.damageApplied &&
+            sBossRushTriangleHazard.frame >= kBossRushTriangleDamageStartFrame &&
+            sBossRushTriangleHazard.frame <= kBossRushTriangleDamageEndFrame &&
+            player_in_bossrush_triangle(sBossRushTriangleHazard))
+        {
+            apply_bossrush_electric_hit();
+            sBossRushTriangleHazard.damageApplied = true;
+        }
+
+        if (sBossRushTriangleHazard.frame >= kBossRushTriangleDurationFrames) {
+            sBossRushTriangleHazard = BossRushTriangleHazard();
+        }
+    }
+
+    if (sBossRushTriangleTimer > 0) {
+        --sBossRushTriangleTimer;
+        return;
+    }
+
+    spawn_bossrush_triangle_hazard();
+    sBossRushTriangleTimer = kBossRushTriangleIntervalFrames;
+}
+
+void update_bossrush_electric_orbs() {
+    daPy_py_c* player = daPy_getPlayerActorClass();
+    if (player == nullptr) {
+        return;
+    }
+
+    static constexpr u16 kFlightEffects[] = {0x8918, 0x8919, 0x891A};
+    const cXyz playerTarget(
+        player->current.pos.x,
+        player->current.pos.y + kBossRushHazardAimHeight,
+        player->current.pos.z);
+
+    for (BossRushElectricOrb& orb : sBossRushElectricOrbs) {
+        if (!orb.active) {
+            continue;
+        }
+
+        orb.pos += orb.velocity;
+        for (size_t i = 0; i < std::size(kFlightEffects); ++i) {
+            orb.emitterKeys[i] =
+                dComIfGp_particle_set(orb.emitterKeys[i], kFlightEffects[i], &orb.pos, NULL, NULL);
+        }
+
+        --orb.timer;
+        if (orb.pos.abs(playerTarget) <= kBossRushHazardHitRadius) {
+            spawn_bossrush_electric_impact(orb.pos);
+            apply_bossrush_electric_hit();
+            stop_bossrush_electric_orb(orb);
+        } else if (orb.timer <= 0) {
+            stop_bossrush_electric_orb(orb);
+        }
+    }
+}
+
+void update_bossrush_hazards() {
+    if (!bossrush_hazards_can_run()) {
+        reset_bossrush_hazards();
+        return;
+    }
+
+    if (sBossRushHazardHitCooldown > 0) {
+        --sBossRushHazardHitCooldown;
+    }
+
+    update_bossrush_electric_orbs();
+    update_bossrush_triangle_hazard();
+
+    if (sBossRushHazardTimer > 0) {
+        --sBossRushHazardTimer;
+        return;
+    }
+
+    spawn_bossrush_hazard_wave();
+    sBossRushHazardTimer = kBossRushHazardIntervalFrames;
+}
+
 void update_bossrush() {
     if (!is_boss_rush(dComIfGs_getSaveData())) {
         sAdvancePending = false;
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
         reset_direct_final_boss_state();
+        reset_bossrush_hazards();
         return;
     }
 
@@ -1460,6 +1890,7 @@ void update_bossrush() {
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
         clear_hub_confirm_state();
+        reset_bossrush_hazards();
         return;
     }
 
@@ -1469,12 +1900,14 @@ void update_bossrush() {
 
     if (boss_rush_state() == kBossRushStateHub) {
         reset_direct_final_boss_state();
+        reset_bossrush_hazards();
         update_bossrush_hub();
         return;
     }
 
     reset_hub_runtime_when_away();
     ensure_direct_final_boss_started();
+    update_bossrush_hazards();
 
     if (dComIfGs_getLife() == 0 && !dComIfGp_isEnableNextStage()) {
         set_boss_rush_state(kBossRushStateHub);

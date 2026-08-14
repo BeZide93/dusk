@@ -508,6 +508,14 @@ ModResult build_gameplay_tab(
         return MOD_ERROR;
     }
 
+    if (add_section(ctx, left, "Boss Rush Hardmode") != MOD_OK) return MOD_ERROR;
+    if (add_toggle(ctx, left, "Arena Hazards", bossrush_hardmode_hazards_config_var(),
+            "Spawns three damaging projectiles every 10 seconds during active Boss Rush fights.")
+        != MOD_OK)
+    {
+        return MOD_ERROR;
+    }
+
     if (add_section(ctx, left, "Enemy Scaling") != MOD_OK) return MOD_ERROR;
     if (add_number(ctx, left, "HP Scaling", health_scale_config_var(), 1, 9999, 10, "%",
             "Scales enemy health when enemies spawn. New Game Plus can raise the effective value "
