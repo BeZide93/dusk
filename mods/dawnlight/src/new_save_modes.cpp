@@ -17,6 +17,7 @@ class JPABaseEmitter;
 #include "d/actor/d_a_obj_bosswarp.h"
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
+#include "d/d_debug_viewer.h"
 #include "d/d_file_select.h"
 #include "d/d_gameover.h"
 #include "d/d_item.h"
@@ -58,6 +59,7 @@ DEFINE_HOOK(&dMsgScrnBase_c::setString, MsgScrnBaseSetStringHook);
 DEFINE_HOOK(&dMsgScrnTalk_c::setSelectString, MsgScrnTalkSetSelectStringHook);
 DEFINE_HOOK(&dMeter2_c::_execute, MeterExecuteHook);
 DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
+DEFINE_HOOK_SYMBOL("dScnPly_Draw", int(void*), PlaySceneDrawHook);
 DEFINE_HOOK_SYMBOL("daB_GND_Execute", int(b_gnd_class*), GanondorfExecuteHook);
 DEFINE_HOOK_SYMBOL("daObj_Gb_Execute", int(obj_gb_class*), GanondorfBarrierExecuteHook);
 
@@ -151,14 +153,13 @@ constexpr int kBossRushHazardHitCooldownFrames = 60;
 constexpr int kBossRushHazardGuardCooldownFrames = 20;
 constexpr int kBossRushTriangleInitialDelayFrames = 300;
 constexpr int kBossRushTriangleIntervalFrames = 600;
-constexpr int kBossRushTriangleDurationFrames = 210;
-constexpr int kBossRushTriangleStrikeFrame = 100;
-constexpr int kBossRushTriangleDamageStartFrame = 105;
-constexpr int kBossRushTriangleDamageEndFrame = 135;
+constexpr int kBossRushTriangleDurationFrames = 90;
+constexpr int kBossRushTriangleStrikeFrame = 60;
+constexpr int kBossRushTriangleDamageStartFrame = 60;
+constexpr int kBossRushTriangleDamageEndFrame = 90;
 constexpr f32 kBossRushTriangleGroundOffset = 5.0f;
 constexpr f32 kBossRushTriangleSize = 8.0f;
-constexpr f32 kBossRushTriangleDegreesPerRadian = 57.295f;
-constexpr f32 kBossRushTrianglePi = 3.1415927f;
+constexpr f32 kBossRushTriangleSqrt3Half = 0.8660254f;
 
 #if VERSION == VERSION_GCN_PAL
 constexpr size_t kNameSceneFileSelectOffset = 0x43C;
@@ -1648,9 +1649,13 @@ void stop_bossrush_electric_orb(BossRushElectricOrb& orb) {
     orb.timer = 0;
 }
 
+void stop_bossrush_triangle_hazard(BossRushTriangleHazard& triangle) {
+    triangle = BossRushTriangleHazard();
+}
+
 void reset_bossrush_triangle_hazard() {
     sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
-    sBossRushTriangleHazard = BossRushTriangleHazard();
+    stop_bossrush_triangle_hazard(sBossRushTriangleHazard);
 }
 
 void spawn_bossrush_electric_impact(const cXyz& pos) {
@@ -1740,6 +1745,45 @@ void spawn_bossrush_triangle_effect(const BossRushTriangleHazard& triangle) {
     }
 }
 
+void make_bossrush_triangle_points(const BossRushTriangleHazard& triangle, cXyz* points) {
+    const f32 inRadius = 50.0f * kBossRushTriangleSize;
+    const f32 circumRadius = inRadius * 2.0f;
+    const cXyz localPoints[] = {
+        cXyz(-kBossRushTriangleSqrt3Half * circumRadius, 0.0f, inRadius),
+        cXyz(kBossRushTriangleSqrt3Half * circumRadius, 0.0f, inRadius),
+        cXyz(0.0f, 0.0f, -circumRadius),
+    };
+
+    const f32 sinY = cM_ssin(triangle.rotY);
+    const f32 cosY = cM_scos(triangle.rotY);
+    for (int i = 0; i < 3; ++i) {
+        points[i].x = triangle.pos.x + localPoints[i].x * cosY - localPoints[i].z * sinY;
+        points[i].y = triangle.pos.y;
+        points[i].z = triangle.pos.z + localPoints[i].x * sinY + localPoints[i].z * cosY;
+    }
+}
+
+f32 bossrush_triangle_edge(const cXyz& a, const cXyz& b, const cXyz& p) {
+    return (p.x - a.x) * (b.z - a.z) - (p.z - a.z) * (b.x - a.x);
+}
+
+void draw_bossrush_triangle_warning() {
+    if (!sBossRushTriangleHazard.active ||
+        sBossRushTriangleHazard.frame >= kBossRushTriangleStrikeFrame)
+    {
+        return;
+    }
+
+    cXyz points[3];
+    make_bossrush_triangle_points(sBossRushTriangleHazard, points);
+    const f32 progress =
+        static_cast<f32>(sBossRushTriangleHazard.frame) /
+        static_cast<f32>(kBossRushTriangleStrikeFrame);
+    const u8 alpha = static_cast<u8>(0x50 + (0x40 * std::clamp(progress, 0.0f, 1.0f)));
+    const GXColor color = {0xFF, 0xD8, 0x34, alpha};
+    dDbVw_drawTriangleXlu(points, color, TRUE);
+}
+
 void spawn_bossrush_triangle_hazard() {
     daPy_py_c* player = daPy_getPlayerActorClass();
     if (player == nullptr) {
@@ -1756,7 +1800,6 @@ void spawn_bossrush_triangle_hazard() {
         player->current.pos.z);
     sBossRushTriangleHazard.rotY = bossrush_hazard_ring_angle(sBossRushTriangleWave, 0);
 
-    spawn_bossrush_triangle_effect(sBossRushTriangleHazard);
     ++sBossRushTriangleWave;
 }
 
@@ -1766,23 +1809,15 @@ bool player_in_bossrush_triangle(const BossRushTriangleHazard& triangle) {
         return false;
     }
 
-    cXyz rel = player->current.pos - triangle.pos;
-    rel.y = 0.0f;
-    const f32 sinY = cM_ssin(static_cast<s16>(-triangle.rotY));
-    const f32 cosY = cM_scos(static_cast<s16>(-triangle.rotY));
-    const f32 localX = rel.x * cosY + rel.z * sinY;
-    const f32 localZ = -rel.x * sinY + rel.z * cosY;
-    f32 angleDeg = std::fabs(kBossRushTriangleDegreesPerRadian * cM_atan2f(localX, localZ));
-
-    if (angleDeg >= 60.0f && angleDeg <= 120.0f) {
-        angleDeg = 120.0f - angleDeg;
-    } else if (angleDeg >= 120.0f && angleDeg <= 180.0f) {
-        angleDeg -= 120.0f;
-    }
-
-    const f32 edgeScale = 1.0f / cM_fcos(kBossRushTrianglePi * (angleDeg / 180.0f));
-    const f32 radius = edgeScale * (50.0f * kBossRushTriangleSize);
-    return std::sqrt(localX * localX + localZ * localZ) < radius;
+    cXyz points[3];
+    make_bossrush_triangle_points(triangle, points);
+    cXyz playerPos(player->current.pos.x, 0.0f, player->current.pos.z);
+    const f32 e0 = bossrush_triangle_edge(points[0], points[1], playerPos);
+    const f32 e1 = bossrush_triangle_edge(points[1], points[2], playerPos);
+    const f32 e2 = bossrush_triangle_edge(points[2], points[0], playerPos);
+    const bool hasNegative = e0 < 0.0f || e1 < 0.0f || e2 < 0.0f;
+    const bool hasPositive = e0 > 0.0f || e1 > 0.0f || e2 > 0.0f;
+    return !(hasNegative && hasPositive);
 }
 
 void update_bossrush_triangle_hazard() {
@@ -1806,7 +1841,7 @@ void update_bossrush_triangle_hazard() {
         }
 
         if (sBossRushTriangleHazard.frame >= kBossRushTriangleDurationFrames) {
-            sBossRushTriangleHazard = BossRushTriangleHazard();
+            stop_bossrush_triangle_hazard(sBossRushTriangleHazard);
         }
     }
 
@@ -2287,6 +2322,11 @@ void on_play_scene_update_post(ModContext*, void*, void*, void*) {
     update_bossrush();
 }
 
+HookAction on_play_scene_draw_pre(ModContext*, void*, void*, void*) {
+    draw_bossrush_triangle_warning();
+    return HOOK_CONTINUE;
+}
+
 HookAction on_ganondorf_execute_pre(ModContext*, void* args, void* retval, void*) {
     if (!is_direct_final_ganondorf_active()) {
         return HOOK_CONTINUE;
@@ -2381,6 +2421,11 @@ ModResult install_new_save_mode_hooks(ModError* error) {
     result = mods::hook_add_post<PlaySceneUpdateHook>(svc_hook, on_play_scene_update_post);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight Boss Rush update hook");
+    }
+
+    result = mods::hook_add_pre<PlaySceneDrawHook>(svc_hook, on_play_scene_draw_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Boss Rush draw hook");
     }
 
     result = mods::hook_add_pre<GanondorfExecuteHook>(svc_hook, on_ganondorf_execute_pre);
