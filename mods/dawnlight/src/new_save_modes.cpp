@@ -1875,6 +1875,15 @@ void update_bossrush_hazards() {
     sBossRushHazardTimer = kBossRushHazardIntervalFrames;
 }
 
+bool bossrush_should_return_to_hub_after_death() {
+    if (dComIfGp_isEnableNextStage()) {
+        return false;
+    }
+
+    daAlink_c* player = daAlink_getAlinkActorClass();
+    return player != nullptr && player->checkDeadHP();
+}
+
 void update_bossrush() {
     if (!is_boss_rush(dComIfGs_getSaveData())) {
         sAdvancePending = false;
@@ -1909,7 +1918,7 @@ void update_bossrush() {
     ensure_direct_final_boss_started();
     update_bossrush_hazards();
 
-    if (dComIfGs_getLife() == 0 && !dComIfGp_isEnableNextStage()) {
+    if (bossrush_should_return_to_hub_after_death()) {
         set_boss_rush_state(kBossRushStateHub);
         set_boss_rush_index(0);
         set_bossrush_return_place();
