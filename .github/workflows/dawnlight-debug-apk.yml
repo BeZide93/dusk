@@ -1,0 +1,80 @@
+name: Dawnlight Debug APK
+
+on:
+  workflow_dispatch:
+
+env:
+  ANDROID_NDK_VERSION: "29.0.14206865"
+
+jobs:
+  build-android-debug:
+    name: Build Android Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get -y install ninja-build
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.1.0" \
+            "ndk;${ANDROID_NDK_VERSION}"
+
+      - name: Install Rust Android target
+        run: |
+          rustup toolchain install stable
+          rustup target add aarch64-linux-android
+
+      - name: Configure CMake
+        run: |
+          cmake --preset x-android-ci-arm64 \
+            -DCMAKE_C_COMPILER_LAUNCHER= \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=
+
+      - name: Build native library
+        run: |
+          cmake --build \
+            --preset x-android-ci-arm64 \
+            --target dusklight
+
+      - name: Build bundled mods
+        run: |
+          cmake --build \
+            --preset x-android-ci-arm64 \
+            --target dusklight_mods
+
+      - name: Build Debug APK
+        working-directory: platforms/android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleDebug --rerun-tasks
+
+      - name: Verify APK
+        run: |
+          test -f platforms/android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
+          ls -lh platforms/android/app/build/outputs/apk/debug/
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: dawnlight-debug-apk
+          path: platforms/android/app/build/outputs/apk/debug/app-arm64-v8a-debug.apk
