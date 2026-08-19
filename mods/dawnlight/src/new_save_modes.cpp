@@ -1678,6 +1678,13 @@ void play_bossrush_hazard_sound(JAISoundID soundId, const cXyz& pos) {
     }
 }
 
+void play_bossrush_hazard_level_sound(JAISoundID soundId, const cXyz& pos) {
+    Z2AudioMgr* audioMgr = Z2GetAudioMgr();
+    if (audioMgr != NULL) {
+        audioMgr->seStartLevel(soundId, &pos, 0, 0, 1.0f, 1.0f, -1.0f, -1.0f, 0);
+    }
+}
+
 void spawn_bossrush_electric_impact(const cXyz& pos) {
     static constexpr u16 kImpactEffects[] = {0x8915, 0x8916, 0x8917};
     const cXyz scale(
@@ -1734,7 +1741,7 @@ void spawn_bossrush_hazard_projectile(int slot, const cXyz& spawn, const cXyz& t
     orb.velocity = delta * (kBossRushHazardProjectileSpeed / distance);
     orb.timer = kBossRushHazardLifetimeFrames;
 
-    play_bossrush_hazard_sound(Z2SE_EN_HZE_ATK_C_BALL, orb.pos);
+    play_bossrush_hazard_sound(Z2SE_EN_ZAN_FIRE_OUT, orb.pos);
 }
 
 void spawn_bossrush_hazard_wave() {
@@ -1897,6 +1904,7 @@ void update_bossrush_electric_orbs() {
         }
 
         orb.pos += orb.velocity;
+        play_bossrush_hazard_level_sound(Z2SE_EN_ZAN_FIRE, orb.pos);
         for (size_t i = 0; i < std::size(kFlightEffects); ++i) {
             orb.emitterKeys[i] =
                 dComIfGp_particle_set(orb.emitterKeys[i], kFlightEffects[i], &orb.pos, NULL, NULL);
@@ -1904,7 +1912,7 @@ void update_bossrush_electric_orbs() {
 
         --orb.timer;
         if (orb.pos.abs(playerTarget) <= kBossRushHazardHitRadius) {
-            play_bossrush_hazard_sound(Z2SE_EN_HZE_ATK_C_BALL_HIT, orb.pos);
+            play_bossrush_hazard_sound(Z2SE_EN_ZAN_FIRE_BURST, orb.pos);
             spawn_bossrush_electric_impact(orb.pos);
             apply_bossrush_electric_hit();
             stop_bossrush_electric_orb(orb);
