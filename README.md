@@ -31,6 +31,14 @@ aiming, boss, and HUD features for Twilight Princess.
 
 ## Installation
 
+Dusklight currently supports all commercial discs except for Wii's Korean release.
+
+> [!NOTE]
+> Dusklight is based on the [Twilight Princess decompilation](https://github.com/zeldaret/tp),
+> which is currently only matching for GameCube. As a result, even when playing
+> Dusklight with a Wii disc, you will be presented with the GameCube version's HUD
+> and certain other specificities.
+
 1. Download `dawnlight_mod.dusk` from the Releases page.
 2. Move the file into your Dusklight mods directory:
 
