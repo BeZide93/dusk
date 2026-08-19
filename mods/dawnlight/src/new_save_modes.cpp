@@ -1576,6 +1576,18 @@ bool restore_bossrush_hub_load_state() {
     }
 
     const u8 index = boss_rush_index();
+    if (boss_rush_state() == kBossRushStateRun && index < kBossRushEntryCount &&
+        kBossRushEntries[index].runSequence)
+    {
+        sAdvancePending = false;
+        sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+        reset_direct_final_boss_state();
+        reset_hub_actor_ids();
+        clear_hub_confirm_state();
+        set_bossrush_next_stage();
+        return true;
+    }
+
     if (index < kBossRushEntryCount &&
         kBossRushEntries[index].clearMode == BossRushEntry::FinalGanondorf)
     {
