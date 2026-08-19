@@ -59,10 +59,17 @@ DEFINE_HOOK(&dMsgObject_c::selectProc, MsgObjectSelectProcHook);
 DEFINE_HOOK(&dMsgScrnBase_c::setString, MsgScrnBaseSetStringHook);
 DEFINE_HOOK(&dMsgScrnTalk_c::setSelectString, MsgScrnTalkSetSelectStringHook);
 DEFINE_HOOK(&dMeter2_c::_execute, MeterExecuteHook);
+#if (defined(__linux__) && !defined(__ANDROID__)) || defined(__APPLE__)
+DEFINE_HOOK_SYMBOL("_ZL15dScnPly_ExecuteP9dScnPly_c", int(void*), PlaySceneUpdateHook);
+DEFINE_HOOK_SYMBOL("_ZL12dScnPly_DrawP9dScnPly_c", int(void*), PlaySceneDrawHook);
+DEFINE_HOOK_SYMBOL("_ZL15daB_GND_ExecuteP11b_gnd_class", int(b_gnd_class*), GanondorfExecuteHook);
+DEFINE_HOOK_SYMBOL("_ZL16daObj_Gb_ExecuteP12obj_gb_class", int(obj_gb_class*), GanondorfBarrierExecuteHook);
+#else
 DEFINE_HOOK_SYMBOL("dScnPly_Execute", int(void*), PlaySceneUpdateHook);
 DEFINE_HOOK_SYMBOL("dScnPly_Draw", int(void*), PlaySceneDrawHook);
 DEFINE_HOOK_SYMBOL("daB_GND_Execute", int(b_gnd_class*), GanondorfExecuteHook);
 DEFINE_HOOK_SYMBOL("daObj_Gb_Execute", int(obj_gb_class*), GanondorfBarrierExecuteHook);
+#endif
 
 constexpr size_t kReserveOffset = 0x8F0;
 constexpr size_t kIntroSkipOffset = 16;

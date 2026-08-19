@@ -102,6 +102,7 @@ DEFINE_HOOK(&daAlink_c::checkSetItemTrigger, CheckSetItemTriggerHook);
 DEFINE_HOOK(&daAlink_c::checkItemSetButton, CheckItemSetButtonHook);
 DEFINE_HOOK(&daAlink_c::setHeavyBoots, SetHeavyBootsHook);
 DEFINE_HOOK(&daAlink_c::execute, PlayerExecuteHook);
+#if defined(__ANDROID__)
 DEFINE_HOOK_SYMBOL("_ZN4dusk2ui13TouchControls21sync_action_bar_stateEv",
     void(dusk::ui::TouchControls*), TouchSyncActionBarHook);
 DEFINE_HOOK_SYMBOL("_ZN4dusk2ui13TouchControls19set_control_pressedENS0_7ControlEb",
@@ -114,6 +115,7 @@ DEFINE_HOOK_SYMBOL("_ZN4dusk2ui17midna_icon_sourceEv", std::string(), MidnaIconS
 DEFINE_HOOK_SYMBOL("_ZN4dusk2ui19midna_icon_revisionEv", uint64_t(), MidnaIconRevisionHook);
 DEFINE_HOOK_SYMBOL("_ZN4dusk2ui25update_midna_icon_textureEP7J2DPane",
     void(J2DPane*), UpdateMidnaIconTextureHook);
+#endif
 
 struct PendingAssign {
     dMenu_Ring_c* ring = nullptr;
@@ -936,6 +938,7 @@ bool skip_touch_can_be_midna() {
            dComIfGp_getLinkPlayer() != nullptr;
 }
 
+#if defined(__ANDROID__)
 std::string true_midna_icon_source() {
     if (MidnaIconSourceHook::g_orig == nullptr) {
         return {};
@@ -1041,6 +1044,12 @@ void refresh_midna_touch_icon_texture(J2DPane* midnaPane) {
     UpdateMidnaIconTextureHook::g_orig(midnaPane);
     restore_pane_render_state(states, count);
 }
+#else
+void set_skip_touch_hidden(Rml::Element*, bool) {}
+void sync_skip_touch_midna_button(Rml::Element*) {}
+void restore_skip_touch_button(Rml::Element*) {}
+void refresh_midna_touch_icon_texture(J2DPane*) {}
+#endif
 
 u8 hud_layout_item(u8 itemNo) {
     return itemNo == dItemNo_HAWK_ARROW_e ? dItemNo_BOW_e : hud_texture_item(itemNo);

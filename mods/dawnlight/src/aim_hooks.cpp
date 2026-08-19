@@ -42,6 +42,9 @@ DEFINE_HOOK(&dCamera_c::nextType, CameraNextTypeHook);
 #if defined(__ANDROID__)
 #define DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL "_ZN4dusk2ui13TouchControls16sync_touch_stateEv"
 #define DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL "_ZN4dusk2ui13TouchControls17handle_touch_downERN3Rml5EventE"
+#elif defined(__linux__) || defined(__APPLE__)
+#define DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL "_ZN4dusk2ui13TouchControls16sync_touch_stateEv"
+#define DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL "_ZN4dusk2ui13TouchControls17handle_touch_downERN3Rml5EventE"
 #else
 #define DAWNLIGHT_TOUCH_SYNC_STATE_SYMBOL "dusk::ui::TouchControls::sync_touch_state"
 #define DAWNLIGHT_TOUCH_HANDLE_DOWN_SYMBOL "dusk::ui::TouchControls::handle_touch_down"
@@ -70,6 +73,28 @@ constexpr const char* kRmlSetClassSymbol =
     "_ZN3Rml7Element8SetClassERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEEb";
 constexpr const char* kRmlSetPropertySymbol =
     "_ZN3Rml7Element11SetPropertyERKNSt6__ndk112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEES9_";
+#elif defined(__linux__)
+constexpr const char* kTouchEventIdSymbol = "_ZN4dusk2ui14touch_event_idERKN3Rml5EventE";
+constexpr const char* kTouchEventPositionSymbol =
+    "_ZN4dusk2ui20touch_event_positionERKN3Rml5EventE";
+constexpr const char* kTouchDpScaleSymbol = "_ZN4dusk2ui14touch_dp_scaleEPN3Rml7ContextE";
+constexpr const char* kRmlContextSymbol = "_ZN6aurora5rmlui11get_contextEv";
+constexpr const char* kRmlContextDimensionsSymbol = "_ZNK3Rml7Context13GetDimensionsEv";
+constexpr const char* kRmlSetClassSymbol =
+    "_ZN3Rml7Element8SetClassERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEb";
+constexpr const char* kRmlSetPropertySymbol =
+    "_ZN3Rml7Element11SetPropertyERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEES8_";
+#elif defined(__APPLE__)
+constexpr const char* kTouchEventIdSymbol = "_ZN4dusk2ui14touch_event_idERKN3Rml5EventE";
+constexpr const char* kTouchEventPositionSymbol =
+    "_ZN4dusk2ui20touch_event_positionERKN3Rml5EventE";
+constexpr const char* kTouchDpScaleSymbol = "_ZN4dusk2ui14touch_dp_scaleEPN3Rml7ContextE";
+constexpr const char* kRmlContextSymbol = "_ZN6aurora5rmlui11get_contextEv";
+constexpr const char* kRmlContextDimensionsSymbol = "_ZNK3Rml7Context13GetDimensionsEv";
+constexpr const char* kRmlSetClassSymbol =
+    "_ZN3Rml7Element8SetClassERKNSt3__112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEEb";
+constexpr const char* kRmlSetPropertySymbol =
+    "_ZN3Rml7Element11SetPropertyERKNSt3__112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEES9_";
 #else
 constexpr const char* kTouchEventIdSymbol = "dusk::ui::touch_event_id";
 constexpr const char* kTouchEventPositionSymbol = "dusk::ui::touch_event_position";
@@ -195,10 +220,7 @@ ModResult resolve_touch_aim_symbols() {
     if (result == MOD_OK) {
         result = resolve_required_symbol(kRmlContextDimensionsSymbol, s_rmlContextDimensions);
     }
-    if (result == MOD_OK) {
-        result = resolve_required_symbol(kRmlSetClassSymbol, s_rmlSetClass);
-    }
-
+    resolve_optional_symbol(kRmlSetClassSymbol, s_rmlSetClass);
     resolve_optional_symbol(kRmlSetPropertySymbol, s_rmlSetProperty);
     return result;
 }
@@ -785,16 +807,35 @@ ModResult add_aim_hooks(ModError* error, ModResult result) {
         result = mods::hook_add_post<CameraNextTypeHook>(svc_hook, after_camera_next_type);
     }
     if (result == MOD_OK) {
-        result = resolve_touch_aim_symbols();
+        ModResult touchResult = resolve_touch_aim_symbols();
+#if defined(__ANDROID__)
+        result = touchResult;
+#else
+        if (touchResult != MOD_OK) {
+            s_touchEventId = nullptr;
+            s_touchEventPosition = nullptr;
+            s_touchDpScale = nullptr;
+            s_rmlContext = nullptr;
+            s_rmlContextDimensions = nullptr;
+            s_rmlSetClass = nullptr;
+            s_rmlSetProperty = nullptr;
+        }
+#endif
     }
     if (result == MOD_OK) {
-        result = mods::hook_add_pre<TouchSyncStateHook>(svc_hook, before_touch_sync_state);
+        if (s_touchEventId != nullptr) {
+            result = mods::hook_add_pre<TouchSyncStateHook>(svc_hook, before_touch_sync_state);
+        }
     }
     if (result == MOD_OK) {
-        result = mods::hook_add_post<TouchSyncStateHook>(svc_hook, after_touch_sync_state);
+        if (s_touchEventId != nullptr) {
+            result = mods::hook_add_post<TouchSyncStateHook>(svc_hook, after_touch_sync_state);
+        }
     }
     if (result == MOD_OK) {
-        result = mods::hook_add_pre<TouchHandleDownHook>(svc_hook, before_touch_handle_down);
+        if (s_touchEventId != nullptr) {
+            result = mods::hook_add_pre<TouchHandleDownHook>(svc_hook, before_touch_handle_down);
+        }
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<PlayerExecuteHook>(svc_hook, after_player_execute);
