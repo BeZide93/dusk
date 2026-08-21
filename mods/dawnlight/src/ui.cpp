@@ -23,7 +23,6 @@ constexpr const char* kAimModeOptions[] = {
 constexpr const char* kNewSaveModeOptions[] = {
     "Vanilla",
     "Intro Skip",
-    "Boss Rush",
 };
 
 constexpr const char* kHudLayoutOptions[] = {
@@ -501,8 +500,7 @@ ModResult build_gameplay_tab(
     if (add_select(ctx, left, "New Save Mode", new_save_mode_config_var(),
             kNewSaveModeOptions, std::size(kNewSaveModeOptions),
             "Changes how newly created empty save slots are initialized. Vanilla keeps upstream "
-            "behavior, Intro Skip starts after the Faron intro setup, and Boss Rush starts "
-            "Dawnlight's boss sequence.")
+            "behavior, and Intro Skip starts after the Faron intro setup.")
         != MOD_OK)
     {
         return MOD_ERROR;
@@ -607,8 +605,8 @@ ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModErro
     }
     if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Z and D-Pad Down item slots") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Intro Skip and Boss Rush new-save modes") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Boss Rush hub and portal prompts") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Intro Skip new-save mode") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Boss Rush prelaunch mode, hub, and portal prompts") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "HUD Layout Editor") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Save compatibility and item integrity fixes") != MOD_OK) return MOD_ERROR;
     return MOD_OK;

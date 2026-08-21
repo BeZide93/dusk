@@ -16,7 +16,6 @@ enum class AimMode : int {
 enum class NewSaveMode : int {
     Vanilla = 0,
     IntroSkip = 1,
-    BossRush = 2,
 };
 
 enum class HudLayout : int {

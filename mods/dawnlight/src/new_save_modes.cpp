@@ -123,6 +123,7 @@ constexpr BossRushEntry kBossRushEntries[] = {
 
 constexpr size_t kBossRushEntryCount = std::size(kBossRushEntries);
 constexpr const char* kBossRushRunName = "Boss Rush";
+constexpr const char* kBossRushGameModeId = "bossrush";
 constexpr s8 kBossRushReturnRoom = 0;
 constexpr char kBossRushReturnStage[] = "D_MN09C";
 constexpr s16 kBossRushReturnPoint = 0;
@@ -132,6 +133,8 @@ constexpr u8 kBossRushStateRun = 1;
 constexpr u8 kBossRushStateReplay = 2;
 constexpr u8 kBossRushCenterPortalIndex = static_cast<u8>(kBossRushEntryCount);
 constexpr u8 kBossRushHubPortalCount = kBossRushCenterPortalIndex + 1;
+constexpr u8 kBossRushHubPortalCreateBatch = 1;
+constexpr u8 kBossRushHubWarpSceneListNo = 0;
 constexpr f32 kBossRushHubY = 1100.0f;
 constexpr f32 kBossRushHubPortalRadius = 1450.0f;
 constexpr f32 kBossRushHubTriggerRadius = 150.0f;
@@ -197,6 +200,7 @@ bool sDirectFinalSceneTransitionStarted = false;
 bool sHubActorIdsInitialized = false;
 bool sHubActorsSpawned = false;
 bool sHubPortalsArmed = false;
+u8 sHubNextPortalToSpawn = 0;
 UiDialogHandle sHubConfirmDialog = 0;
 int sPendingHubPortal = -1;
 int sDismissedHubPortal = -1;
@@ -214,6 +218,8 @@ int sBossRushHazardHitCooldown = 0;
 u32 sBossRushHazardWave = 0;
 int sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
 u32 sBossRushTriangleWave = 0;
+bool sBossRushGameModeActive = false;
+bool sBossRushHooksInstalled = false;
 
 struct BossRushElectricOrb {
     bool active = false;
@@ -310,6 +316,14 @@ fpc_ProcID create_actor(s16 procName, u32 parameters, const cXyz* pos, int roomN
     return fpcM_ERROR_PROCESS_ID_e;
 }
 
+bool is_bossrush_game_mode_active() {
+    return sBossRushGameModeActive;
+}
+
+bool can_update_bossrush_gameplay() {
+    return dComIfGp_getPlayer(0) != nullptr && dComIfGp_getStageStagInfo() != nullptr;
+}
+
 u8* reserve_bytes(dSv_save_c* save) {
     return save == nullptr ? nullptr : reinterpret_cast<u8*>(save) + kReserveOffset;
 }
@@ -400,6 +414,24 @@ cXyz hub_center() {
     return cXyz(0.0f, kBossRushHubY, 0.0f);
 }
 
+cXyz hub_portal_position(u8 portal) {
+    cXyz pos = hub_center();
+    if (portal < kBossRushCenterPortalIndex) {
+        const s16 angle = static_cast<s16>((0x10000 * portal) / kBossRushCenterPortalIndex);
+        pos.x += angle_sin(angle) * kBossRushHubPortalRadius;
+        pos.z += angle_cos(angle) * kBossRushHubPortalRadius;
+    }
+    return pos;
+}
+
+csXyz hub_portal_rotation(u8 portal) {
+    if (portal >= kBossRushCenterPortalIndex) {
+        return csXyz(0, 0, 0);
+    }
+    const s16 angle = static_cast<s16>((0x10000 * portal) / kBossRushCenterPortalIndex);
+    return csXyz(0, angle, 0);
+}
+
 bool is_boss_hub_stage_name() {
     return std::strcmp(dComIfGp_getStartStageName(), kBossRushReturnStage) == 0 &&
            dComIfGp_getStartStageRoomNo() == kBossRushReturnRoom;
@@ -448,6 +480,7 @@ void reset_hub_actor_ids() {
     sHubActorIdsInitialized = true;
     sHubActorsSpawned = false;
     sHubPortalsArmed = false;
+    sHubNextPortalToSpawn = 0;
     sHubConfirmDialog = 0;
     sPendingHubPortal = -1;
     sDismissedHubPortal = -1;
@@ -514,27 +547,39 @@ void spawn_hub_actors() {
 
     cXyz center = hub_center();
     csXyz barrierAngle(kDirectFinalBarrierAngleX, 0, 0);
-    dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, kBossRushReturnRoom);
-    dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, kBossRushReturnRoom);
-    sHubBarrierId = create_actor(
-        fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, &barrierAngle, NULL, -1);
-    if (sHubBarrierId == fpcM_ERROR_PROCESS_ID_e) {
+    if (sHubBarrierId == fpcM_ERROR_PROCESS_ID_e ||
+        fopAcM_SearchByID(sHubBarrierId) == NULL)
+    {
+        dComIfGs_onOneZoneSwitch(kDirectFinalBarrierOnSwitch, kBossRushReturnRoom);
+        dComIfGs_offOneZoneSwitch(kDirectFinalBarrierOffSwitch, kBossRushReturnRoom);
+        sHubBarrierId = create_actor(
+            fpcNm_OBJ_GB_e, 0xF0069600, &center, kBossRushReturnRoom, &barrierAngle, NULL, -1);
+        if (sHubBarrierId == fpcM_ERROR_PROCESS_ID_e) {
+            return;
+        }
+    }
+
+    u8 portalsCreated = 0;
+    while (sHubNextPortalToSpawn < kBossRushHubPortalCount &&
+           portalsCreated < kBossRushHubPortalCreateBatch)
+    {
+        const u8 portal = sHubNextPortalToSpawn;
+        cXyz pos = hub_portal_position(portal);
+        csXyz rot = hub_portal_rotation(portal);
+        const fpc_ProcID portalId = fopAcM_createWarpHole(
+            &pos, &rot, kBossRushReturnRoom, kBossRushHubWarpSceneListNo, 0, 0xff);
+        if (portalId == fpcM_ERROR_PROCESS_ID_e) {
+            return;
+        }
+        sHubPortalIds[portal] = portalId;
+        sHubNextPortalToSpawn++;
+        portalsCreated++;
+    }
+
+    if (sHubNextPortalToSpawn < kBossRushHubPortalCount) {
+        arm_ganondorf_barrier(hub_barrier_actor());
         return;
     }
-
-    for (u8 i = 0; i < kBossRushCenterPortalIndex; i++) {
-        s16 angle = static_cast<s16>((0x10000 * i) / kBossRushCenterPortalIndex);
-        cXyz pos(
-            center.x + (angle_sin(angle) * kBossRushHubPortalRadius),
-            center.y,
-            center.z + (angle_cos(angle) * kBossRushHubPortalRadius));
-        csXyz rot(0, angle, 0);
-        sHubPortalIds[i] = fopAcM_createWarpHole(&pos, &rot, kBossRushReturnRoom, i, 0, 0xff);
-    }
-
-    csXyz centerRot(0, 0, 0);
-    sHubPortalIds[kBossRushCenterPortalIndex] = fopAcM_createWarpHole(
-        &center, &centerRot, kBossRushReturnRoom, kBossRushCenterPortalIndex, 0, 0xff);
 
     arm_ganondorf_barrier(hub_barrier_actor());
     sHubActorsSpawned = true;
@@ -546,15 +591,8 @@ int touched_hub_portal() {
         return -1;
     }
 
-    cXyz center = hub_center();
     for (u8 i = 0; i < kBossRushHubPortalCount; i++) {
-        cXyz pos = center;
-        if (i < kBossRushCenterPortalIndex) {
-            s16 angle = static_cast<s16>((0x10000 * i) / kBossRushCenterPortalIndex);
-            pos.x += angle_sin(angle) * kBossRushHubPortalRadius;
-            pos.z += angle_cos(angle) * kBossRushHubPortalRadius;
-        }
-
+        cXyz pos = hub_portal_position(i);
         f32 distXZ = player->current.pos.absXZ(pos);
         f32 distY = player->current.pos.y - pos.y;
         if (distXZ < kBossRushHubTriggerRadius && distY < 200.0f && distY > -100.0f) {
@@ -2059,6 +2097,10 @@ dFile_select_c* name_scene_file_select(void* nameScene) {
 }
 
 void apply_selected_new_save_mode() {
+    if (is_bossrush_game_mode_active()) {
+        return;
+    }
+
     dSv_save_c* save = dComIfGs_getSaveData();
     clear_dawnlight_new_save_markers(save);
 
@@ -2066,10 +2108,6 @@ void apply_selected_new_save_mode() {
     case NewSaveMode::IntroSkip:
         apply_intro_skip_preset(save);
         svc_log->info(mod_ctx, "Dawnlight New Save Mode: Intro Skip applied");
-        break;
-    case NewSaveMode::BossRush:
-        apply_boss_rush_preset(save);
-        svc_log->info(mod_ctx, "Dawnlight New Save Mode: Boss Rush applied");
         break;
     case NewSaveMode::Vanilla:
     default:
@@ -2188,12 +2226,18 @@ void after_midna_select_proc(ModContext*, void* args, void*, void*) {
 
 HookAction on_name_scene_change_pre(ModContext*, void* args, void*, void*) {
     dSv_save_c* save = dComIfGs_getSaveData();
-    if (!is_boss_rush(save) && !is_intro_skipped(save)) {
+    const bool bossRushActive = is_bossrush_game_mode_active() && is_boss_rush(save);
+    const bool introSkipActive = is_intro_skipped(save);
+    if (!bossRushActive && !introSkipActive) {
         return HOOK_CONTINUE;
     }
 
-    prepare_intro_skip_start();
-    prepare_bossrush_start();
+    if (introSkipActive) {
+        prepare_intro_skip_start();
+    }
+    if (bossRushActive) {
+        prepare_bossrush_start();
+    }
 
     auto* fileSelect = name_scene_file_select(mods::arg<void*>(args, 0));
     if (fileSelect != nullptr && fileSelect->mSelectNum < 3) {
@@ -2234,7 +2278,8 @@ HookAction on_set_next_stage_pre(ModContext*, void* args, void*, void*) {
     const s8 layer = mods::arg<s8>(args, 3);
 
     dSv_save_c* save = dComIfGs_getSaveData();
-    if (is_boss_rush(save) && is_vanilla_new_file_stage(stage, point, room, layer)) {
+    if (is_bossrush_game_mode_active() && is_boss_rush(save) &&
+        is_vanilla_new_file_stage(stage, point, room, layer)) {
         prepare_bossrush_start();
         set_next_stage_args(args, kBossRushReturnStage, kBossRushReturnPoint, kBossRushReturnRoom,
             kBossRushReturnLayer);
@@ -2248,14 +2293,18 @@ HookAction on_set_next_stage_pre(ModContext*, void* args, void*, void*) {
 
 HookAction on_bosswarp_execute_pre(ModContext*, void* args, void* retval, void*) {
     auto* warp = mods::arg<daObjBossWarp_c*>(args, 0);
-    if (warp == nullptr || !is_boss_rush(dComIfGs_getSaveData()) ||
+    if (warp == nullptr || !is_bossrush_game_mode_active() ||
+        !is_boss_rush(dComIfGs_getSaveData()) ||
         boss_rush_state() != kBossRushStateHub || !is_boss_hub_stage_name())
     {
         return HOOK_CONTINUE;
     }
 
+    const bool needsAppear = warp->scale.y < 0.99f;
     warp->scale.y = 1.0f;
-    warp->set_appear();
+    if (needsAppear) {
+        warp->set_appear();
+    }
     warp->setBaseMtx();
     if (retval != nullptr) {
         *static_cast<int*>(retval) = 1;
@@ -2325,7 +2374,8 @@ bool complete_bossrush_final_sequence() {
 }
 
 bool should_handle_final_scene_change(int exitId, s8 roomNo) {
-    if (!is_boss_rush(dComIfGs_getSaveData()) || boss_rush_state() == kBossRushStateHub) {
+    if (!is_bossrush_game_mode_active() || !is_boss_rush(dComIfGs_getSaveData()) ||
+        boss_rush_state() == kBossRushStateHub) {
         return false;
     }
 
@@ -2372,16 +2422,20 @@ HookAction on_stage_change_pre(ModContext*, void* args, void* retval, void*) {
 }
 
 void on_play_scene_update_post(ModContext*, void*, void*, void*) {
-    update_bossrush();
+    if (is_bossrush_game_mode_active() && can_update_bossrush_gameplay()) {
+        update_bossrush();
+    }
 }
 
 HookAction on_play_scene_draw_pre(ModContext*, void*, void*, void*) {
-    draw_bossrush_triangle_warning();
+    if (is_bossrush_game_mode_active()) {
+        draw_bossrush_triangle_warning();
+    }
     return HOOK_CONTINUE;
 }
 
 HookAction on_ganondorf_execute_pre(ModContext*, void* args, void* retval, void*) {
-    if (!is_direct_final_ganondorf_active()) {
+    if (!is_bossrush_game_mode_active() || !is_direct_final_ganondorf_active()) {
         return HOOK_CONTINUE;
     }
 
@@ -2409,7 +2463,7 @@ HookAction on_ganondorf_execute_pre(ModContext*, void* args, void* retval, void*
 }
 
 HookAction on_ganondorf_barrier_execute_pre(ModContext*, void* args, void*, void*) {
-    if (!is_direct_final_ganondorf_active()) {
+    if (!is_bossrush_game_mode_active() || !is_direct_final_ganondorf_active()) {
         return HOOK_CONTINUE;
     }
 
@@ -2417,31 +2471,27 @@ HookAction on_ganondorf_barrier_execute_pre(ModContext*, void* args, void*, void
     return HOOK_CONTINUE;
 }
 
-}  // namespace
+void reset_bossrush_runtime_state(bool deleteActors) {
+    sAdvancePending = false;
+    sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+    sMidnaHubWarpMenuOffered = false;
+    sHubPortalMidnaPromptOffered = false;
+    clear_hub_confirm_state();
+    if (deleteActors) {
+        delete_hub_actors();
+    } else {
+        reset_hub_actor_ids();
+    }
+    reset_direct_final_boss_state();
+    reset_bossrush_hazards();
+}
 
-ModResult install_new_save_mode_hooks(ModError* error) {
-    ModResult result =
-        mods::hook_add_post<FileSelectNameInput2Hook>(svc_hook, on_file_select_name_input2_post);
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight new-save apply hook");
+ModResult install_bossrush_runtime_hooks(ModError* error) {
+    if (sBossRushHooksInstalled) {
+        return MOD_OK;
     }
 
-    result = mods::hook_add_pre<NameSceneChangeGameSceneHook>(svc_hook, on_name_scene_change_pre);
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight new-save start pre-hook");
-    }
-
-    result = mods::hook_add_post<NameSceneChangeGameSceneHook>(svc_hook, on_name_scene_change_post);
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight new-save start hook");
-    }
-
-    result = mods::hook_add_pre<SetNextStageHook>(svc_hook, on_set_next_stage_pre);
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to install Dawnlight new-save stage hook");
-    }
-
-    result = mods::hook_add_pre<StageChangeSceneHook>(svc_hook, on_stage_change_pre);
+    ModResult result = mods::hook_add_pre<StageChangeSceneHook>(svc_hook, on_stage_change_pre);
     if (result != MOD_OK) {
         return mods::set_error(error, result, "failed to install Dawnlight Boss Rush scene hook");
     }
@@ -2492,7 +2542,198 @@ ModResult install_new_save_mode_hooks(ModError* error) {
         return mods::set_error(error, result, "failed to install Dawnlight Ganondorf barrier hook");
     }
 
+    sBossRushHooksInstalled = true;
     return MOD_OK;
+}
+
+template <class Entry>
+ModResult uninstall_bossrush_hook(ModError* error, const char* message) {
+    const ModResult result = mods::hook_uninstall<Entry>(svc_hook);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, message);
+    }
+    return MOD_OK;
+}
+
+ModResult uninstall_bossrush_runtime_hooks(ModError* error) {
+    if (!sBossRushHooksInstalled) {
+        return MOD_OK;
+    }
+
+    if (const ModResult result = uninstall_bossrush_hook<StageChangeSceneHook>(
+            error, "failed to uninstall Dawnlight Boss Rush scene hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<BossWarpExecuteHook>(
+            error, "failed to uninstall Dawnlight bossrush portal hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<MsgScrnTalkSetSelectStringHook>(
+            error, "failed to uninstall Dawnlight Midna hub option talk hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<MsgScrnBaseSetStringHook>(
+            error, "failed to uninstall Dawnlight Midna hub prompt text hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<MsgObjectSelectProcHook>(
+            error, "failed to uninstall Dawnlight Midna hub warp hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<MeterExecuteHook>(
+            error, "failed to uninstall Dawnlight Midna hub prompt meter hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<PlaySceneUpdateHook>(
+            error, "failed to uninstall Dawnlight Boss Rush update hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<PlaySceneDrawHook>(
+            error, "failed to uninstall Dawnlight Boss Rush draw hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<GanondorfExecuteHook>(
+            error, "failed to uninstall Dawnlight Ganondorf direct-start hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+    if (const ModResult result = uninstall_bossrush_hook<GanondorfBarrierExecuteHook>(
+            error, "failed to uninstall Dawnlight Ganondorf barrier hook");
+        result != MOD_OK)
+    {
+        return result;
+    }
+
+    sBossRushHooksInstalled = false;
+    return MOD_OK;
+}
+
+ModResult on_bossrush_game_mode_activated(void*, ModError* error) {
+    sBossRushGameModeActive = true;
+    reset_bossrush_runtime_state(false);
+    const ModResult result = install_bossrush_runtime_hooks(error);
+    if (result != MOD_OK) {
+        sBossRushGameModeActive = false;
+    }
+    return result;
+}
+
+ModResult on_bossrush_game_mode_deactivated(void*, ModError* error) {
+    sBossRushGameModeActive = false;
+    reset_bossrush_runtime_state(true);
+    return uninstall_bossrush_runtime_hooks(error);
+}
+
+ModResult on_bossrush_game_mode_play(void*, ModError*) {
+    reset_bossrush_runtime_state(false);
+    return MOD_OK;
+}
+
+ModResult on_bossrush_save_loaded(void*, ModError*) {
+    dSv_save_c* save = dComIfGs_getSaveData();
+    if (is_boss_rush(save)) {
+        prepare_bossrush_start();
+        reset_bossrush_runtime_state(false);
+    }
+    return MOD_OK;
+}
+
+ModResult on_bossrush_new_save(void*, ModError*) {
+    apply_boss_rush_preset(dComIfGs_getSaveData());
+    svc_log->info(mod_ctx, "Dawnlight Game Mode: Boss Rush new save applied");
+    return MOD_OK;
+}
+
+ModResult on_bossrush_game_reset(void*, ModError*) {
+    if (is_boss_rush(dComIfGs_getSaveData())) {
+        set_bossrush_return_place();
+    }
+    reset_bossrush_runtime_state(true);
+    return MOD_OK;
+}
+
+ModResult on_bossrush_tick(void*, ModError*) {
+    return MOD_OK;
+}
+
+}  // namespace
+
+ModResult register_new_save_modes(ModError* error) {
+    ModResult result =
+        mods::hook_add_post<FileSelectNameInput2Hook>(svc_hook, on_file_select_name_input2_post);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight new-save apply hook");
+    }
+
+    result = mods::hook_add_pre<NameSceneChangeGameSceneHook>(svc_hook, on_name_scene_change_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight new-save start pre-hook");
+    }
+
+    result = mods::hook_add_post<NameSceneChangeGameSceneHook>(svc_hook, on_name_scene_change_post);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight new-save start hook");
+    }
+
+    result = mods::hook_add_pre<SetNextStageHook>(svc_hook, on_set_next_stage_pre);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight new-save stage hook");
+    }
+
+    const GameModeDesc bossRushMode = {
+        .struct_size = sizeof(GameModeDesc),
+        .game_mode_id = kBossRushGameModeId,
+        .full_name = "Boss Rush",
+        .save_name = "gczelda2-bossrush",
+        .user_data = nullptr,
+        .on_activated = on_bossrush_game_mode_activated,
+        .on_deactivated = on_bossrush_game_mode_deactivated,
+        .on_play = on_bossrush_game_mode_play,
+        .on_save_loaded = on_bossrush_save_loaded,
+        .on_new_save = on_bossrush_new_save,
+        .on_new_save_select = nullptr,
+        .on_game_reset = on_bossrush_game_reset,
+        .on_tick = on_bossrush_tick,
+    };
+    result = svc_game_mode->register_game_mode(mod_ctx, &bossRushMode);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to register Dawnlight Boss Rush game mode");
+    }
+
+    return MOD_OK;
+}
+
+void shutdown_new_save_modes() {
+    if (svc_game_mode != nullptr) {
+        ModResult result = svc_game_mode->unregister_game_mode(mod_ctx, kBossRushGameModeId);
+        if (result != MOD_OK) {
+            svc_log->warn(mod_ctx, "Dawnlight Boss Rush: failed to unregister game mode");
+        }
+    }
+
+    ModError error = MOD_ERROR_INIT;
+    ModResult result = uninstall_bossrush_runtime_hooks(&error);
+    if (result != MOD_OK) {
+        svc_log->warn(mod_ctx, "Dawnlight Boss Rush: failed to uninstall runtime hooks");
+    }
+    sBossRushGameModeActive = false;
 }
 
 }  // namespace dawnlight

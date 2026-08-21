@@ -229,6 +229,11 @@ void reset_z_prompt_visual_state() {
     s_zPromptVisualState = ZPromptVisualState();
 }
 
+void clear_z_prompt_custom_visuals() {
+    reset_z_prompt_visual_state();
+    s_zPromptCustomVisualsActive = false;
+}
+
 struct J2DPictureTexCoordAccess : J2DPicture {
     static JGeometry::TVec2<s16>* coords(J2DPicture* picture) {
         return reinterpret_cast<J2DPictureTexCoordAccess*>(picture)->field_0x10a;
@@ -562,6 +567,14 @@ void restore_z_prompt_visuals(dMeterButton_c* meter) {
         return;
     }
 
+    if (meter->mpButtonScreen == nullptr ||
+        prompt_picture(meter, 'zbtn') != s_zPromptVisualState.icon ||
+        prompt_picture(meter, MULTI_CHAR('z_btnl')) != s_zPromptVisualState.overlay)
+    {
+        clear_z_prompt_custom_visuals();
+        return;
+    }
+
     if (s_zPromptVisualState.icon != nullptr) {
         for (u8 i = 0; i < s_zPromptVisualState.textureCount; ++i) {
             if (s_zPromptVisualState.textures[i] != nullptr) {
@@ -647,8 +660,7 @@ void restore_z_prompt_visuals(dMeterButton_c* meter) {
         }
     }
 
-    reset_z_prompt_visual_state();
-    s_zPromptCustomVisualsActive = false;
+    clear_z_prompt_custom_visuals();
 }
 
 void apply_z_prompt_visuals(dMeterButton_c* meter) {

@@ -807,7 +807,7 @@ NewSaveMode new_save_mode() {
     if (s_newSaveMode != 0) {
         svc_config->get_int(mod_ctx, s_newSaveMode, &value);
     }
-    return static_cast<NewSaveMode>(std::clamp<int64_t>(value, 0, 2));
+    return static_cast<NewSaveMode>(std::clamp<int64_t>(value, 0, 1));
 }
 
 AimMode aim_mode() {
