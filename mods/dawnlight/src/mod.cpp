@@ -5,20 +5,16 @@
 
 #include "mods/service.hpp"
 #include "mods/svc/config.h"
-#include "mods/svc/flow.h"
 #include "mods/svc/hook.h"
 #include "mods/svc/host.h"
 #include "mods/svc/log.h"
-#include "mods/svc/message.h"
 #include "mods/svc/ui.h"
 
 DEFINE_MOD();
 IMPORT_SERVICE(ConfigService, svc_config);
-IMPORT_SERVICE(FlowService, svc_flow);
 IMPORT_SERVICE(HookService, svc_hook);
 IMPORT_SERVICE(HostService, svc_host);
 IMPORT_SERVICE(LogService, svc_log);
-IMPORT_SERVICE(MessageService, svc_message);
 IMPORT_SERVICE(UiService, svc_ui);
 
 namespace dawnlight {
@@ -31,7 +27,6 @@ ModResult install_manual_shield_hooks(ModError* error);
 ModResult install_new_save_mode_hooks(ModError* error);
 ModResult register_ui(ModError* error);
 void shutdown_item_slot_hooks();
-void shutdown_new_save_mode_hooks();
 }
 
 extern "C" {
@@ -79,7 +74,6 @@ MOD_EXPORT ModResult mod_update(ModError*) {
 
 MOD_EXPORT ModResult mod_shutdown(ModError*) {
     dawnlight::shutdown_update_check();
-    dawnlight::shutdown_new_save_mode_hooks();
     dawnlight::shutdown_item_slot_hooks();
     svc_log->info(mod_ctx, "Dawnlight portable feature pack stopped");
     return MOD_OK;

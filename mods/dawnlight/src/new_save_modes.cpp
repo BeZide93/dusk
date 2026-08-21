@@ -37,17 +37,12 @@ class JPABaseEmitter;
 #include "f_pc/f_pc_name.h"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
-#include "mods/svc/flow.hpp"
 #include "mods/svc/hook.h"
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <string_view>
-#include <utility>
-#include <vector>
 
 namespace dawnlight {
 namespace {
@@ -60,6 +55,9 @@ DEFINE_HOOK(
     SetNextStageHook);
 DEFINE_HOOK(&dStage_changeScene, StageChangeSceneHook);
 DEFINE_HOOK(&daObjBossWarp_c::execute, BossWarpExecuteHook);
+DEFINE_HOOK(&dMsgObject_c::selectProc, MsgObjectSelectProcHook);
+DEFINE_HOOK(&dMsgScrnBase_c::setString, MsgScrnBaseSetStringHook);
+DEFINE_HOOK(&dMsgScrnTalk_c::setSelectString, MsgScrnTalkSetSelectStringHook);
 DEFINE_HOOK(&dMeter2_c::_execute, MeterExecuteHook);
 #if (defined(__linux__) && !defined(__ANDROID__)) || defined(__APPLE__)
 DEFINE_HOOK_SYMBOL("_ZL15dScnPly_ExecuteP9dScnPly_c", int(void*), PlaySceneUpdateHook);
@@ -205,57 +203,17 @@ int sDismissedHubPortal = -1;
 char sHubConfirmTitle[64] = {};
 char sHubConfirmBody[128] = {};
 char sHubMidnaPromptText[64] = {};
+char const sMidnaHubWarpOptionText[] = "Garden of Twilight";
+char const sMidnaYesText[] = "Yes";
+char const sMidnaNoText[] = "No";
+char const sMidnaEmptyText[] = "";
+bool sMidnaHubWarpMenuOffered = false;
+bool sHubPortalMidnaPromptOffered = false;
 int sBossRushHazardTimer = kBossRushHazardIntervalFrames;
 int sBossRushHazardHitCooldown = 0;
 u32 sBossRushHazardWave = 0;
 int sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
 u32 sBossRushTriangleWave = 0;
-
-constexpr uint16_t kMidnaMessageGroup = 0;
-constexpr uint16_t kMidnaSpeaker = 21;
-constexpr uint16_t kMidnaPromptHumanNode = 0x018c;
-constexpr uint16_t kMidnaPromptWolfNode = 0x018d;
-constexpr uint16_t kMidnaHumanBranch = 0x0190;
-constexpr uint16_t kMidnaWolfBranch = 0x0193;
-constexpr uint16_t kMidnaMenuPromptEntry = 3003;
-constexpr uint16_t kMidnaMenuPromptId = 2042;
-
-enum MidnaContextResult : uint16_t {
-    kMidnaContextPortal = 0,
-    kMidnaContextGarden = 1,
-    kMidnaContextVanilla = 2,
-};
-
-enum MidnaAction : uint8_t {
-    kMidnaActionStartPortal = 1,
-    kMidnaActionDismissPortal = 2,
-    kMidnaActionGardenWarp = 3,
-};
-
-constexpr std::array kAllMessageLanguages{
-    MESSAGE_LANGUAGE_ENGLISH,
-    MESSAGE_LANGUAGE_GERMAN,
-    MESSAGE_LANGUAGE_FRENCH,
-    MESSAGE_LANGUAGE_SPANISH,
-    MESSAGE_LANGUAGE_ITALIAN,
-    MESSAGE_LANGUAGE_JAPANESE,
-};
-
-constexpr mods::flow::MessageStyle kMidnaPromptStyle =
-    mods::flow::MessageStyle{}
-        .speaker(kMidnaSpeaker)
-        .box_kind(MESSAGE_BOX_MIDNA)
-        .draw_type(MESSAGE_DRAW_INSTANT)
-        .talk_anim(31)
-        .face_anim(31);
-
-mods::flow::Query sMidnaContextQuery;
-mods::flow::Event sMidnaActionEvent;
-mods::flow::Graph sMidnaGraph;
-std::vector<mods::flow::RegisteredMessage> sMidnaMessages;
-std::vector<mods::flow::MessageOverride> sMidnaMessageOverrides;
-std::array<std::vector<uint8_t>, 2> sMidnaSelectionText;
-std::vector<uint8_t> sMidnaPromptText;
 
 struct BossRushElectricOrb {
     bool active = false;
@@ -1365,6 +1323,26 @@ void set_hub_portal_midna_meter_prompt() {
     dMeter2Info_onUseButton(METER2_USEBUTTON_Z);
 }
 
+bool is_midna_menu_message() {
+    dMsgObject_c* msg = dMsgObject_getMsgObjectClass();
+    if (msg == NULL || msg->mpRenProc == NULL || msg->getFukiKind() != 13) {
+        return false;
+    }
+
+    auto* ref = const_cast<jmessage_tReference*>(
+        static_cast<const jmessage_tReference*>(msg->mpRenProc->getReference()));
+    if (ref == NULL || ref->getSelectNum() < 2) {
+        return false;
+    }
+
+    const u16 msgId = ref->getMsgID();
+    return msgId == 0x7d3 || msgId == 0x7f6;
+}
+
+bool is_midna_actor(fopAc_ac_c* actor) {
+    return actor != NULL && fopAcM_GetName(actor) == fpcNm_MIDNA_e;
+}
+
 void reset_bossrush_warp_audio() {
     Z2SeqMgr* seqMgr = Z2GetSeqMgr();
     if (seqMgr == NULL) {
@@ -1450,6 +1428,7 @@ void start_bossrush_entry(int portal) {
 void clear_hub_confirm_state() {
     sHubConfirmDialog = 0;
     sPendingHubPortal = -1;
+    sHubPortalMidnaPromptOffered = false;
 }
 
 void on_hub_confirm_yes(ModContext*, UiDialogHandle, void*) {
@@ -1537,226 +1516,6 @@ void resolve_hub_midna_prompt(bool accepted) {
     {
         start_bossrush_entry(portal);
     }
-}
-
-mods::flow::MessageBuilder midna_prompt_message(std::string_view text) {
-    return mods::flow::MessageBuilder{kMidnaPromptStyle}.text(text).await_choice();
-}
-
-mods::flow::MessageBuilder midna_selection_message(bool wolf, MidnaContextResult context) {
-    if (context == kMidnaContextPortal) {
-        return mods::flow::MessageBuilder{}.speaker(kMidnaSpeaker).options("Yes", "No");
-    }
-
-    const char* transform = wolf ? "Transform into human" : "Transform into wolf";
-    if (context == kMidnaContextGarden) {
-        return mods::flow::MessageBuilder{}.speaker(kMidnaSpeaker).options(
-            transform, "Talk to Midna", "Garden of Twilight");
-    }
-
-    return mods::flow::MessageBuilder{}.speaker(kMidnaSpeaker).options(transform, "Talk to Midna");
-}
-
-mods::flow::RegisteredMessage register_midna_message(
-    const mods::flow::MessageBuilder& builder) {
-    std::vector<mods::flow::MessageVariant> variants;
-    variants.reserve(kAllMessageLanguages.size());
-    for (const MessageLanguage language : kAllMessageLanguages) {
-        variants.push_back(builder.build(language));
-    }
-    return mods::flow::register_message(kMidnaMessageGroup, variants);
-}
-
-ModResult add_midna_message(const mods::flow::MessageBuilder& builder, MessageId& outId) {
-    auto message = register_midna_message(builder);
-    if (!message) {
-        return message.result();
-    }
-
-    outId = message.id();
-    sMidnaMessages.push_back(std::move(message));
-    return MOD_OK;
-}
-
-uint16_t midna_context_query(ModContext*, const FlowQueryContext* query, void*) {
-    if (query == nullptr || query->result_count < 3) {
-        return kMidnaContextVanilla;
-    }
-
-    if (has_hub_portal_midna_prompt()) {
-        return kMidnaContextPortal;
-    }
-
-    if (can_offer_midna_hub_warp()) {
-        return kMidnaContextGarden;
-    }
-
-    return kMidnaContextVanilla;
-}
-
-void midna_action_event(ModContext*, const FlowEventContext* event, void*) {
-    if (event == nullptr) {
-        return;
-    }
-
-    const auto action = static_cast<MidnaAction>(event->parameters[3]);
-    const int portal = has_hub_portal_midna_prompt() ? sPendingHubPortal : event->parameters[2];
-
-    switch (action) {
-    case kMidnaActionStartPortal:
-        if (portal >= 0 && portal < static_cast<int>(kBossRushHubPortalCount)) {
-            sPendingHubPortal = portal;
-            resolve_hub_midna_prompt(true);
-        }
-        break;
-    case kMidnaActionDismissPortal:
-        if (portal >= 0 && portal < static_cast<int>(kBossRushHubPortalCount)) {
-            sDismissedHubPortal = portal;
-        }
-        clear_hub_confirm_state();
-        sHubPortalsArmed = false;
-        close_midna_custom_dialog(daPy_py_c::getMidnaActor());
-        break;
-    case kMidnaActionGardenWarp:
-        if (can_offer_midna_hub_warp()) {
-            warp_to_bossrush_hub_from_midna(daPy_py_c::getMidnaActor());
-        }
-        break;
-    }
-}
-
-bool midna_prompt_override(
-    ModContext*, const MessageOverrideContext* message, MessageTextData* outText, void*) {
-    if (message == nullptr || outText == nullptr || !has_hub_portal_midna_prompt()) {
-        return false;
-    }
-
-    sMidnaPromptText =
-        midna_prompt_message(sHubMidnaPromptText)
-            .build(static_cast<MessageLanguage>(message->language))
-            .text();
-    outText->text = sMidnaPromptText.data();
-    outText->text_size = sMidnaPromptText.size();
-    return true;
-}
-
-bool midna_selection_override(
-    ModContext*, const MessageOverrideContext* message, MessageTextData* outText, void* userData) {
-    if (message == nullptr || outText == nullptr) {
-        return false;
-    }
-
-    const bool wolf = userData != nullptr;
-    const auto context = static_cast<MidnaContextResult>(
-        has_hub_portal_midna_prompt() ? kMidnaContextPortal :
-        can_offer_midna_hub_warp()   ? kMidnaContextGarden :
-                                       kMidnaContextVanilla);
-    std::vector<uint8_t>& text = sMidnaSelectionText[wolf ? 1 : 0];
-    text = midna_selection_message(wolf, context)
-               .build(static_cast<MessageLanguage>(message->language))
-               .text();
-    outText->text = text.data();
-    outText->text_size = text.size();
-    return true;
-}
-
-ModResult add_midna_override(MessageId messageId, MessageOverrideFn fn, void* userData) {
-    for (const MessageLanguage language : kAllMessageLanguages) {
-        auto override = mods::flow::override_message_fn(
-            kMidnaMessageGroup, messageId, language, fn, userData);
-        if (!override) {
-            return override.result();
-        }
-        sMidnaMessageOverrides.push_back(std::move(override));
-    }
-    return MOD_OK;
-}
-
-ModResult install_midna_flow(ModError* error) {
-    MessageId humanSelectionId = 0;
-    MessageId wolfSelectionId = 0;
-
-    ModResult result =
-        add_midna_message(midna_selection_message(false, kMidnaContextVanilla), humanSelectionId);
-    if (result == MOD_OK) {
-        result =
-            add_midna_message(midna_selection_message(true, kMidnaContextVanilla), wolfSelectionId);
-    }
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to register Dawnlight Midna menu messages");
-    }
-
-    result = add_midna_override(kMidnaMenuPromptId, midna_prompt_override, nullptr);
-    if (result == MOD_OK) {
-        result = add_midna_override(humanSelectionId, midna_selection_override, nullptr);
-    }
-    if (result == MOD_OK) {
-        result = add_midna_override(wolfSelectionId, midna_selection_override, reinterpret_cast<void*>(1));
-    }
-    if (result != MOD_OK) {
-        return mods::set_error(error, result, "failed to register Dawnlight Midna message overrides");
-    }
-
-    sMidnaContextQuery =
-        mods::flow::register_query("Dawnlight Midna context", midna_context_query);
-    sMidnaActionEvent =
-        mods::flow::register_event("Dawnlight Midna action", midna_action_event);
-    if (!sMidnaContextQuery || !sMidnaActionEvent) {
-        const ModResult callbackResult =
-            !sMidnaContextQuery ? sMidnaContextQuery.result() : sMidnaActionEvent.result();
-        return mods::set_error(error, callbackResult, "failed to register Dawnlight Midna flow callbacks");
-    }
-
-    mods::flow::GraphBuilder graph{kMidnaMessageGroup};
-
-    const auto portalYes =
-        graph.add_event(sMidnaActionEvent.id(), {0, 0, 0, kMidnaActionStartPortal})
-            .next(mods::flow::kEnd);
-    const auto portalNo =
-        graph.add_event(sMidnaActionEvent.id(), {0, 0, 0, kMidnaActionDismissPortal})
-            .next(mods::flow::kEnd);
-    const auto portalSelectBranch =
-        graph.add_branch(FLOW_QUERY_SELECT_2_CANCEL, 0)
-            .results({portalYes, portalNo, portalNo});
-    const auto humanGardenWarp =
-        graph.add_event(sMidnaActionEvent.id(), {0, 0, 0, kMidnaActionGardenWarp})
-            .next(mods::flow::kEnd);
-    const auto wolfGardenWarp =
-        graph.add_event(sMidnaActionEvent.id(), {0, 0, 0, kMidnaActionGardenWarp})
-            .next(mods::flow::kEnd);
-    const auto humanGardenBranch =
-        graph.add_branch(FLOW_QUERY_SELECT_3_CANCEL, 0)
-            .results({kMidnaHumanBranch, kMidnaHumanBranch, humanGardenWarp, mods::flow::kEnd});
-    const auto wolfGardenBranch =
-        graph.add_branch(FLOW_QUERY_SELECT_3_CANCEL, 0)
-            .results({kMidnaWolfBranch, kMidnaWolfBranch, wolfGardenWarp, mods::flow::kEnd});
-    const auto humanVanillaBranch =
-        graph.add_branch(FLOW_QUERY_SELECT_2_CANCEL, 0)
-            .results({kMidnaHumanBranch, kMidnaHumanBranch, mods::flow::kEnd});
-    const auto wolfVanillaBranch =
-        graph.add_branch(FLOW_QUERY_SELECT_2_CANCEL, 0)
-            .results({kMidnaWolfBranch, kMidnaWolfBranch, mods::flow::kEnd});
-
-    const auto humanContextBranch =
-        graph.add_branch(sMidnaContextQuery.id(), 0)
-            .results({portalSelectBranch, humanGardenBranch, humanVanillaBranch});
-    const auto wolfContextBranch =
-        graph.add_branch(sMidnaContextQuery.id(), 0)
-            .results({portalSelectBranch, wolfGardenBranch, wolfVanillaBranch});
-    const auto humanSelection = graph.add_message(humanSelectionId).next(humanContextBranch);
-    const auto wolfSelection = graph.add_message(wolfSelectionId).next(wolfContextBranch);
-
-    graph.patch_node(
-        kMidnaPromptHumanNode, mods::flow::message(0, kMidnaMenuPromptEntry, humanSelection));
-    graph.patch_node(
-        kMidnaPromptWolfNode, mods::flow::message(0, kMidnaMenuPromptEntry, wolfSelection));
-
-    sMidnaGraph = graph.commit();
-    if (!sMidnaGraph) {
-        return mods::set_error(error, sMidnaGraph.result(), "failed to install Dawnlight Midna flow graph");
-    }
-
-    return MOD_OK;
 }
 
 void update_bossrush_hub() {
@@ -2351,9 +2110,80 @@ void prepare_bossrush_start() {
     save->getPlayer().getPlayerReturnPlace().set(kBossRushReturnStage, kBossRushReturnRoom, 0);
 }
 
+HookAction before_midna_select_string(ModContext*, void* args, void*, void*) {
+    if (!is_midna_menu_message()) {
+        return HOOK_CONTINUE;
+    }
+
+    if (has_hub_portal_midna_prompt()) {
+        sHubPortalMidnaPromptOffered = true;
+        mods::arg_ref<char DUSK_CONST*>(args, 1) = sMidnaEmptyText;
+        mods::arg_ref<char DUSK_CONST*>(args, 2) = sMidnaYesText;
+        mods::arg_ref<char DUSK_CONST*>(args, 3) = sMidnaNoText;
+        return HOOK_CONTINUE;
+    }
+
+    if (!can_offer_midna_hub_warp()) {
+        return HOOK_CONTINUE;
+    }
+
+    sMidnaHubWarpMenuOffered = true;
+    mods::arg_ref<char DUSK_CONST*>(args, 3) = sMidnaHubWarpOptionText;
+    return HOOK_CONTINUE;
+}
+
+HookAction before_midna_text_string(ModContext*, void* args, void*, void*) {
+    if (!has_hub_portal_midna_prompt() || !is_midna_menu_message()) {
+        return HOOK_CONTINUE;
+    }
+
+    sHubPortalMidnaPromptOffered = true;
+    mods::arg_ref<char DUSK_CONST*>(args, 1) = sHubMidnaPromptText;
+    mods::arg_ref<char DUSK_CONST*>(args, 2) = sHubMidnaPromptText;
+    return HOOK_CONTINUE;
+}
+
 HookAction before_meter_execute(ModContext*, void*, void*, void*) {
     set_hub_portal_midna_meter_prompt();
     return HOOK_CONTINUE;
+}
+
+void after_midna_select_proc(ModContext*, void* args, void*, void*) {
+    auto* msg = mods::arg<dMsgObject_c*>(args, 0);
+    if (msg != nullptr && sHubPortalMidnaPromptOffered && has_hub_portal_midna_prompt() &&
+        is_midna_menu_message())
+    {
+        if (msg->getSelectPushFlag() != 1) {
+            if (msg->getSelectPushFlag() == 2) {
+                resolve_hub_midna_prompt(false);
+            }
+            return;
+        }
+
+        resolve_hub_midna_prompt(msg->getSelectCursorPosLocal() == 0);
+        return;
+    }
+
+    if (msg == nullptr || !sMidnaHubWarpMenuOffered || !can_offer_midna_hub_warp() ||
+        !is_midna_menu_message())
+    {
+        return;
+    }
+
+    if (msg->getSelectPushFlag() != 1) {
+        if (msg->getSelectPushFlag() == 2) {
+            sMidnaHubWarpMenuOffered = false;
+        }
+        return;
+    }
+
+    if (msg->getSelectCursorPosLocal() != 1) {
+        sMidnaHubWarpMenuOffered = false;
+        return;
+    }
+
+    sMidnaHubWarpMenuOffered = false;
+    warp_to_bossrush_hub_from_midna(daPy_py_c::getMidnaActor());
 }
 
 HookAction on_name_scene_change_pre(ModContext*, void* args, void*, void*) {
@@ -2621,9 +2451,19 @@ ModResult install_new_save_mode_hooks(ModError* error) {
         return mods::set_error(error, result, "failed to install Dawnlight bossrush portal hook");
     }
 
-    result = install_midna_flow(error);
+    result = mods::hook_add_pre<MsgScrnTalkSetSelectStringHook>(svc_hook, before_midna_select_string);
     if (result != MOD_OK) {
-        return result;
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub option talk hook");
+    }
+
+    result = mods::hook_add_pre<MsgScrnBaseSetStringHook>(svc_hook, before_midna_text_string);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub prompt text hook");
+    }
+
+    result = mods::hook_add_post<MsgObjectSelectProcHook>(svc_hook, after_midna_select_proc);
+    if (result != MOD_OK) {
+        return mods::set_error(error, result, "failed to install Dawnlight Midna hub warp hook");
     }
 
     result = mods::hook_add_pre<MeterExecuteHook>(svc_hook, before_meter_execute);
@@ -2653,16 +2493,6 @@ ModResult install_new_save_mode_hooks(ModError* error) {
     }
 
     return MOD_OK;
-}
-
-void shutdown_new_save_mode_hooks() {
-    sMidnaGraph.reset();
-    sMidnaMessageOverrides.clear();
-    sMidnaMessages.clear();
-    for (auto& text : sMidnaSelectionText) {
-        text.clear();
-    }
-    sMidnaPromptText.clear();
 }
 
 }  // namespace dawnlight
