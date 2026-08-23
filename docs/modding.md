@@ -496,6 +496,49 @@ controls are only available inside window tabs.
 and calls the group's build callback with that pane, which is useful for organizing related controls without adding
 more tabs.
 
+**Lists:** `pane_add_list` adds a scrollable virtualized list of items that can be efficiently updated and filtered.
+Keys must be unique and remain stable across replacements.
+
+```cpp
+UiListHandle locationList = 0;
+
+void replace_locations(std::string_view query) {
+    std::vector<UiListItem> items;
+    for (uint64_t i = 0; i < locations.size(); ++i) {
+        if (matches(locations[i], query)) {
+            UiListItem item = UI_LIST_ITEM_INIT;
+            item.key = i;
+            item.label = locations[i].c_str();
+            items.push_back(item);
+        }
+    }
+    svc_ui->list_set_items(mod_ctx, locationList, items.data(), items.size());
+}
+
+void set_filter(ModContext*, void*, const UiControlValue* value) {
+    replace_locations(value->string_value);
+}
+
+bool location_selected(ModContext*, UiListHandle, uint64_t key, void*) {
+    return selected_locations.contains(key);
+}
+
+UiControlDesc filter = UI_CONTROL_DESC_INIT;
+filter.kind = UI_CONTROL_STRING;
+filter.label = "Filter";
+filter.get = get_filter;
+filter.set = set_filter;
+filter.string_set_mode = UI_STRING_SET_ON_CHANGE; /* invoke `set` while typing */
+svc_ui->pane_add_control(mod_ctx, pane, &filter, nullptr);
+
+UiListDesc list = UI_LIST_DESC_INIT;
+/* items may be passed as a part of list creation, or set afterwards */
+list.on_pressed = location_pressed;
+list.is_selected = location_selected;
+svc_ui->pane_add_list(mod_ctx, pane, &list, &locationList);
+replace_locations(""); /* calls `list_set_items` */
+```
+
 **Windows:** `window_push` pushes a tabbed two-pane window onto the document stack and shows it. Each tab's `build`
 receives the window handle plus fresh left and right pane handles on every activation. The optional per-tab `update`
 runs each frame while that tab is active. `on_closed` fires when the window is destroyed. `desc.rcss` optionally styles
@@ -516,10 +559,36 @@ svc_ui->window_push(mod_ctx, &desc, &window);
 ```
 
 **Dialogs:** `dialog_push` shows a modal dialog. `variant` picks the style, `icon` optionally overrides the variant's
-default icon, and actions become buttons. After an action's `on_pressed` returns, the dialog closes unless the action
-sets `keep_open`. A `keep_open` action can close it later (or immediately) with `dialog_close`. Cancel fires
-`on_dismiss` if present and always closes. `dialog_set_body`, `dialog_set_icon`, and `dialog_add_action` mutate a live
-dialog.
+default icon, and actions become buttons. The optional `build` callback allows you to add controls to a pane between
+the body and actions. It uses the same text, progress, and control builders as panels.
+
+```cpp
+ModResult build_dialog(ModContext*, UiElementHandle pane, void*, ModError*) {
+    UiControlDesc input = UI_CONTROL_DESC_INIT;
+    input.kind = UI_CONTROL_STRING;
+    input.label = "Name";
+    input.get = get_name;
+    input.set = set_name;
+    return svc_ui->pane_add_control(mod_ctx, pane, &input, nullptr);
+}
+
+UiDialogAction action = UI_DIALOG_ACTION_INIT;
+action.label = "Save";
+action.on_pressed = save;
+action.is_disabled = is_save_disabled;
+
+UiDialogDesc dialog = UI_DIALOG_DESC_INIT;
+dialog.title = "New Preset";
+dialog.body_rml = "Choose a name for the preset.";
+dialog.actions = &action;
+dialog.action_count = 1;
+dialog.build = build_dialog;
+svc_ui->dialog_push(mod_ctx, &dialog, nullptr);
+```
+
+After an action's `on_pressed`, the dialog closes unless the action sets `keep_open`. It can then be closed later
+(or immediately) with `dialog_close`. Cancel fires `on_dismiss` and always closes. `dialog_set_body` and 
+`dialog_set_icon` mutate a live dialog.
 
 **Toasts:** `push_toast` enqueues a notification. Titles and bodies accept RML. The optional `type` is applied as an
 RCSS class; `warning` uses the built-in warning appearance, and mods can define their own types. A duration of 0 uses

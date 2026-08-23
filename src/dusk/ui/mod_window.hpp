@@ -29,6 +29,7 @@ struct ModControlSpec {
     std::function<void(int)> setInt;
     std::function<Rml::String()> getString;
     std::function<void(Rml::String)> setString;
+    std::function<bool()> isSelected;
     std::function<bool()> isDisabled;
     std::function<bool()> isModified;
     int min = 0;
@@ -38,6 +39,7 @@ struct ModControlSpec {
     Rml::String suffix;
     std::vector<Rml::String> options;
     int maxLength = -1;
+    bool stringSetOnChange = false;
     std::vector<Rml::String> colorPresets;
     bool colorAlpha = false;
 };
