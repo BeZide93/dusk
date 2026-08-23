@@ -11,6 +11,7 @@
 #include "mods/svc/host.h"
 #include "mods/svc/log.h"
 #include "mods/svc/message.h"
+#include "mods/svc/texture.h"
 #include "mods/svc/ui.h"
 
 DEFINE_MOD();
@@ -21,6 +22,7 @@ IMPORT_SERVICE(HookService, svc_hook);
 IMPORT_SERVICE(HostService, svc_host);
 IMPORT_SERVICE(LogService, svc_log);
 IMPORT_SERVICE(MessageService, svc_message);
+IMPORT_SERVICE(TextureService, svc_texture);
 IMPORT_SERVICE(UiService, svc_ui);
 
 namespace dawnlight {

@@ -215,6 +215,8 @@ constexpr int kBossRushTriangleDamageEndFrame = 90;
 constexpr f32 kBossRushTriangleGroundOffset = 5.0f;
 constexpr f32 kBossRushTriangleSize = 8.0f;
 constexpr f32 kBossRushTriangleSqrt3Half = 0.8660254f;
+constexpr const char* kBossRushTitleLogoTexturePath =
+    "res/tex1_608x100_0c1c70378fb8cb46_6.png";
 
 #if VERSION == VERSION_GCN_PAL
 constexpr size_t kNameSceneFileSelectOffset = 0x43C;
@@ -300,6 +302,7 @@ int sBossRushTriangleTimer = kBossRushTriangleInitialDelayFrames;
 u32 sBossRushTriangleWave = 0;
 bool sBossRushGameModeActive = false;
 bool sBossRushHooksInstalled = false;
+TextureReplacementHandle sBossRushTitleLogoTexture = 0;
 
 struct BossRushElectricOrb {
     bool active = false;
@@ -3470,14 +3473,53 @@ ModResult uninstall_bossrush_runtime_hooks(ModError* error) {
     return MOD_OK;
 }
 
+ModResult register_bossrush_title_logo(ModError* error) {
+    if (sBossRushTitleLogoTexture != 0) {
+        return MOD_OK;
+    }
+
+    const ModResult result = svc_texture->register_file(
+        mod_ctx, kBossRushTitleLogoTexturePath, &sBossRushTitleLogoTexture);
+    if (result != MOD_OK) {
+        sBossRushTitleLogoTexture = 0;
+        return mods::set_error(error, result, "failed to register Dawnlight Boss Rush title texture");
+    }
+
+    return MOD_OK;
+}
+
+void unregister_bossrush_title_logo() {
+    if (sBossRushTitleLogoTexture == 0) {
+        return;
+    }
+
+    const TextureReplacementHandle handle = sBossRushTitleLogoTexture;
+    sBossRushTitleLogoTexture = 0;
+    const ModResult result = svc_texture->unregister(mod_ctx, handle);
+    if (result != MOD_OK) {
+        svc_log->warn(mod_ctx, "Dawnlight Boss Rush: failed to unregister title texture");
+    }
+}
+
 ModResult on_bossrush_game_mode_activated(void*, ModError* error) {
-    return activate_bossrush_runtime(error, true);
+    ModResult result = register_bossrush_title_logo(error);
+    if (result != MOD_OK) {
+        return result;
+    }
+
+    result = activate_bossrush_runtime(error, true);
+    if (result != MOD_OK) {
+        unregister_bossrush_title_logo();
+    }
+    return result;
 }
 
 ModResult on_bossrush_game_mode_deactivated(void*, ModError* error) {
     sBossRushGameModeActive = false;
     reset_bossrush_runtime_state(true);
-    return uninstall_bossrush_runtime_hooks(error);
+    const ModResult result = uninstall_bossrush_runtime_hooks(error);
+    unregister_bossrush_title_logo();
+    return result;
 }
 
 ModResult on_bossrush_game_mode_play(void*, ModError* error) {
@@ -3571,6 +3613,7 @@ void shutdown_new_save_modes() {
     if (result != MOD_OK) {
         svc_log->warn(mod_ctx, "Dawnlight Boss Rush: failed to uninstall runtime hooks");
     }
+    unregister_bossrush_title_logo();
     sBossRushGameModeActive = false;
 }
 
