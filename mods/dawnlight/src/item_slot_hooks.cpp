@@ -174,6 +174,7 @@ std::string s_skipTouchMidnaSource;
 bool s_zPromptAsDpadLeftThisFrame = false;
 bool s_zPromptCustomVisualsActive = false;
 bool s_applyZPromptDpadIcon = false;
+bool s_hideZPromptAfterExecute = false;
 bool s_dpadDownProcSelectOverride = false;
 u8 s_procSelectOverrideSlot = dItemNo_NONE_e;
 u8 s_activeExtraProcSlot = dItemNo_NONE_e;
@@ -376,6 +377,12 @@ void set_prompt_pane_visible(dMeterButton_c* meter, u64 tag, bool visible) {
     } else {
         pane->hide();
     }
+}
+
+void hide_z_prompt_panes(dMeterButton_c* meter) {
+    set_prompt_pane_visible(meter, MULTI_CHAR('zbtn_n'), false);
+    set_prompt_pane_visible(meter, 'zbtn', false);
+    set_prompt_pane_visible(meter, MULTI_CHAR('z_btnl'), false);
 }
 
 bool pane_tree_contains(J2DPane* root, J2DPane* pane) {
@@ -4173,6 +4180,7 @@ HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
     s_zPromptAsDpadLeftThisFrame = false;
     auto* meter = mods::arg<dMeterButton_c*>(args, 0);
     s_applyZPromptDpadIcon = false;
+    s_hideZPromptAfterExecute = false;
 
     if (!replacePrompt) {
         restore_z_prompt_visuals(meter);
@@ -4181,6 +4189,8 @@ HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
 
     bool& drawZ = mods::arg_ref<bool>(args, 5);
     if (!drawZ) {
+        restore_z_prompt_visuals(meter);
+        s_hideZPromptAfterExecute = true;
         return HOOK_CONTINUE;
     }
 
@@ -4189,11 +4199,25 @@ HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
 }
 
 void after_meter_button_execute(ModContext*, void* args, void*, void*) {
+    auto* meter = mods::arg<dMeterButton_c*>(args, 0);
+    if (s_hideZPromptAfterExecute) {
+        restore_z_prompt_visuals(meter);
+        hide_z_prompt_panes(meter);
+        s_hideZPromptAfterExecute = false;
+    }
+
     if (!s_applyZPromptDpadIcon) {
         return;
     }
 
-    apply_z_prompt_visuals(mods::arg<dMeterButton_c*>(args, 0));
+    if (meter == nullptr || !meter->isButtonShowBit(dMeterButton_c::BUTTON_Z_e)) {
+        restore_z_prompt_visuals(meter);
+        hide_z_prompt_panes(meter);
+        s_applyZPromptDpadIcon = false;
+        return;
+    }
+
+    apply_z_prompt_visuals(meter);
     s_applyZPromptDpadIcon = false;
 }
 
