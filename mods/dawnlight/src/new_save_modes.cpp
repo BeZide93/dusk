@@ -119,6 +119,12 @@ enum class MidnaRootFlowMode {
     Portal,
 };
 
+enum class PendingMidnaFlowAction {
+    None,
+    GardenWarp,
+    HubPortal,
+};
+
 struct BossRushEntry {
     const char* stage;
     s16 point;
@@ -240,6 +246,9 @@ u8 sHubNextPortalToSpawn = 0;
 int sPendingHubPortal = -1;
 int sDismissedHubPortal = -1;
 MidnaRootFlowMode sMidnaRootFlowMode = MidnaRootFlowMode::None;
+PendingMidnaFlowAction sPendingMidnaFlowAction = PendingMidnaFlowAction::None;
+int sPendingMidnaFlowPortal = -1;
+u8 sPendingMidnaFlowDelay = 0;
 mods::flow::Event sMidnaGardenEvent;
 mods::flow::Event sHubPromptEvent;
 struct MidnaGroupMessages {
@@ -1409,15 +1418,27 @@ bool ui_document_visible() {
     return svc_ui->is_any_document_visible(mod_ctx, &visible) == MOD_OK && visible;
 }
 
+bool has_pending_midna_flow_action() {
+    return sPendingMidnaFlowAction != PendingMidnaFlowAction::None;
+}
+
+void clear_pending_midna_flow_action() {
+    sPendingMidnaFlowAction = PendingMidnaFlowAction::None;
+    sPendingMidnaFlowPortal = -1;
+    sPendingMidnaFlowDelay = 0;
+}
+
 bool can_offer_midna_hub_warp() {
     return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() != kBossRushStateHub &&
            !is_boss_hub_stage_name() && !fopOvlpM_IsPeek() && !dComIfGp_isEnableNextStage() &&
-           dMeter2Info_getGameOverType() == 0 && dComIfGp_getGameoverStatus() == 0;
+           dMeter2Info_getGameOverType() == 0 && dComIfGp_getGameoverStatus() == 0 &&
+           !has_pending_midna_flow_action();
 }
 
 bool has_hub_portal_midna_prompt() {
     return is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() == kBossRushStateHub &&
-           is_boss_hub_stage_name() && sPendingHubPortal >= 0 &&
+           is_boss_hub_stage_name() && !has_pending_midna_flow_action() &&
+           sPendingHubPortal >= 0 &&
            sPendingHubPortal < static_cast<int>(kBossRushHubPortalCount);
 }
 
@@ -1426,7 +1447,8 @@ void refresh_midna_root_flow_mode();
 
 void set_hub_portal_midna_meter_prompt() {
     if (!is_boss_rush(dComIfGs_getSaveData()) || boss_rush_state() != kBossRushStateHub ||
-        !is_boss_hub_stage_name())
+        !is_boss_hub_stage_name() || has_pending_midna_flow_action() ||
+        dComIfGp_isEnableNextStage() || fopOvlpM_IsPeek())
     {
         return;
     }
@@ -1530,8 +1552,18 @@ void clear_hub_confirm_state() {
     sPendingHubPortal = -1;
 }
 
+void schedule_midna_flow_action(PendingMidnaFlowAction action, int portal = -1) {
+    sPendingMidnaFlowAction = action;
+    sPendingMidnaFlowPortal = portal;
+    sPendingMidnaFlowDelay = 2;
+    clear_hub_confirm_state();
+    sHubPortalsArmed = false;
+}
+
 void set_hub_midna_prompt_portal(int portal) {
-    if (portal < 0 || portal >= static_cast<int>(kBossRushHubPortalCount)) {
+    if (has_pending_midna_flow_action() || portal < 0 ||
+        portal >= static_cast<int>(kBossRushHubPortalCount))
+    {
         clear_hub_confirm_state();
         return;
     }
@@ -1543,18 +1575,43 @@ void resolve_hub_midna_prompt(bool accepted) {
     const int portal = sPendingHubPortal;
     clear_hub_confirm_state();
     sHubPortalsArmed = false;
-    close_midna_custom_dialog(daPy_py_c::getMidnaActor());
 
     if (!accepted) {
         sDismissedHubPortal = portal;
         return;
     }
 
-    if (portal >= 0 && is_boss_rush(dComIfGs_getSaveData()) &&
-        boss_rush_state() == kBossRushStateHub && is_boss_hub_stage_name())
+    if (portal >= 0 && portal < static_cast<int>(kBossRushHubPortalCount)) {
+        sDismissedHubPortal = portal;
+        schedule_midna_flow_action(PendingMidnaFlowAction::HubPortal, portal);
+    }
+}
+
+bool process_pending_midna_flow_action() {
+    if (!has_pending_midna_flow_action()) {
+        return false;
+    }
+
+    refresh_midna_root_flow_mode();
+    if (sPendingMidnaFlowDelay > 0) {
+        --sPendingMidnaFlowDelay;
+        return true;
+    }
+
+    const PendingMidnaFlowAction action = sPendingMidnaFlowAction;
+    const int portal = sPendingMidnaFlowPortal;
+    clear_pending_midna_flow_action();
+
+    if (action == PendingMidnaFlowAction::GardenWarp) {
+        warp_to_bossrush_hub_from_midna(daPy_py_c::getMidnaActor());
+    } else if (action == PendingMidnaFlowAction::HubPortal && portal >= 0 &&
+               is_boss_rush(dComIfGs_getSaveData()) && boss_rush_state() == kBossRushStateHub &&
+               is_boss_hub_stage_name())
     {
         start_bossrush_entry(portal);
     }
+
+    return true;
 }
 
 mods::flow::RegisteredMessage register_midna_message(const mods::flow::MessageBuilder& builder) {
@@ -2122,7 +2179,7 @@ private:
 };
 
 void midna_garden_event(ModContext*, const FlowEventContext*, void*) {
-    warp_to_bossrush_hub_from_midna(daPy_py_c::getMidnaActor());
+    schedule_midna_flow_action(PendingMidnaFlowAction::GardenWarp);
 }
 
 void hub_prompt_event(ModContext*, const FlowEventContext* event, void*) {
@@ -2132,6 +2189,7 @@ void hub_prompt_event(ModContext*, const FlowEventContext* event, void*) {
 void shutdown_midna_flow() {
     sMidnaRootFlowGraph.reset();
     sMidnaRootFlowMode = MidnaRootFlowMode::None;
+    clear_pending_midna_flow_action();
     sMidnaRootFlowGraphTopologyVersion = 0;
     sMidnaRootFlowGraphTransformOption = MidnaTransformOption::Unknown;
     sMidnaFlowTopology = {};
@@ -2331,6 +2389,13 @@ ModResult set_midna_root_flow_mode(MidnaRootFlowMode mode, ModError* error) {
 void refresh_midna_root_flow_mode() {
     ModError error = MOD_ERROR_INIT;
     discover_midna_flow_topology();
+    if (has_pending_midna_flow_action() || dComIfGp_isEnableNextStage() || fopOvlpM_IsPeek()) {
+        if (set_midna_root_flow_mode(MidnaRootFlowMode::None, &error) != MOD_OK) {
+            svc_log->warn(mod_ctx, "Dawnlight Midna: failed to suspend active flow");
+        }
+        return;
+    }
+
     MidnaRootFlowMode mode = MidnaRootFlowMode::Menu;
     if (has_hub_portal_midna_prompt()) {
         mode = MidnaRootFlowMode::Portal;
@@ -2377,6 +2442,11 @@ ModResult install_midna_flow(ModError* error) {
 void update_bossrush_hub() {
     sAdvancePending = false;
     sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
+
+    if (has_pending_midna_flow_action()) {
+        refresh_midna_root_flow_mode();
+        return;
+    }
 
     if (is_reset_to_opening_transition()) {
         reset_hub_actor_ids();
@@ -2840,6 +2910,7 @@ bool bossrush_should_return_to_hub_after_death() {
 
 void update_bossrush() {
     if (!is_boss_rush(dComIfGs_getSaveData())) {
+        clear_pending_midna_flow_action();
         sAdvancePending = false;
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
@@ -2853,7 +2924,12 @@ void update_bossrush() {
         sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
         reset_hub_actor_ids();
         clear_hub_confirm_state();
+        clear_pending_midna_flow_action();
         reset_bossrush_hazards();
+        return;
+    }
+
+    if (process_pending_midna_flow_action()) {
         return;
     }
 
@@ -3270,6 +3346,7 @@ void reset_bossrush_runtime_state(bool deleteActors) {
     sAdvancePending = false;
     sSavePromptId = fpcM_ERROR_PROCESS_ID_e;
     clear_hub_confirm_state();
+    clear_pending_midna_flow_action();
     if (deleteActors) {
         delete_hub_actors();
     } else {
