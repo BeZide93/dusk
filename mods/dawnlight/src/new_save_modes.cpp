@@ -15,7 +15,11 @@ class JPABaseEmitter;
 #include "d/d_drawlist.h"
 #include "d/actor/d_a_mant.h"
 #include "d/actor/d_a_obj_gb.h"
+#include "d/d_msg_flow.h"
+#include "f_op/f_op_actor_mng.h"
+#define private public
 #include "d/actor/d_a_obj_bosswarp.h"
+#undef private
 #include "d/actor/d_a_player.h"
 #include "d/d_com_inf_game.h"
 #include "d/d_debug_viewer.h"
@@ -29,7 +33,6 @@ class JPABaseEmitter;
 #include "d/d_s_name.h"
 #include "d/d_save.h"
 #include "d/d_stage.h"
-#include "f_op/f_op_actor_mng.h"
 #include "f_op/f_op_overlap_mng.h"
 #include "f_pc/f_pc_name.h"
 #include "mods/hook.hpp"
@@ -81,6 +84,7 @@ constexpr size_t kBossRushLoopOffset = 41;
 constexpr size_t kBossRushStateOffset = 42;
 constexpr char kIntroSkipMagic[] = "DUSKSKP1";
 constexpr char kBossRushMagic[] = "DUSKBR1";
+constexpr char kBossRushDefeatedMagic[] = "DUSKBRD1";
 
 constexpr char kIntroSkipStage[] = "F_SP108";
 constexpr s8 kIntroSkipRoom = 0;
@@ -164,6 +168,10 @@ constexpr BossRushEntry kBossRushEntries[] = {
 };
 
 constexpr size_t kBossRushEntryCount = std::size(kBossRushEntries);
+constexpr size_t kBossRushDefeatedMagicOffset = kBossRushStateOffset + 1;
+constexpr size_t kBossRushDefeatedMaskOffset =
+    kBossRushDefeatedMagicOffset + sizeof(kBossRushDefeatedMagic) - 1;
+constexpr size_t kBossRushDefeatedMaskSize = (kBossRushEntryCount + 7) / 8;
 constexpr const char* kBossRushRunName = "Boss Rush";
 constexpr const char* kBossRushGameModeId = "bossrush";
 constexpr s8 kBossRushReturnRoom = 0;
@@ -180,6 +188,7 @@ constexpr u8 kBossRushHubWarpSceneListNo = 0;
 constexpr f32 kBossRushHubY = 1100.0f;
 constexpr f32 kBossRushHubPortalRadius = 1450.0f;
 constexpr f32 kBossRushHubTriggerRadius = 150.0f;
+constexpr f32 kBossRushRedPortalBrkFrameFraction = 0.2f;
 constexpr s16 kGanondorfFacingAngle = 0x37FE;
 constexpr s8 kFinalPuppetRoom = 50;
 constexpr s8 kFinalBeastRoom = 51;
@@ -217,6 +226,8 @@ constexpr f32 kBossRushTriangleSize = 8.0f;
 constexpr f32 kBossRushTriangleSqrt3Half = 0.8660254f;
 constexpr const char* kBossRushTitleLogoTexturePath =
     "res/tex1_608x100_0c1c70378fb8cb46_6.png";
+static_assert(kBossRushDefeatedMaskOffset + kBossRushDefeatedMaskSize <= 64,
+    "Boss Rush defeated portal state must stay before Dawnlight item slot state");
 
 #if VERSION == VERSION_GCN_PAL
 constexpr size_t kNameSceneFileSelectOffset = 0x43C;
@@ -444,7 +455,90 @@ void set_boss_rush(dSv_save_c* save, bool enabled) {
         if (reserve != nullptr) {
             reserve[kBossRushIndexOffset] = 0;
             reserve[kBossRushLoopOffset] = 0;
+            reserve[kBossRushStateOffset] = kBossRushStateHub;
+            std::memset(reserve + kBossRushDefeatedMagicOffset, 0,
+                sizeof(kBossRushDefeatedMagic) - 1 + kBossRushDefeatedMaskSize);
         }
+    }
+}
+
+bool bossrush_defeated_state_initialized(const dSv_save_c* save) {
+    const u8* reserve = reserve_bytes(save);
+    return reserve != nullptr &&
+           std::memcmp(reserve + kBossRushDefeatedMagicOffset, kBossRushDefeatedMagic,
+               sizeof(kBossRushDefeatedMagic) - 1) == 0;
+}
+
+void initialize_bossrush_defeated_state(dSv_save_c* save) {
+    u8* reserve = reserve_bytes(save);
+    if (reserve == nullptr || !is_boss_rush(save)) {
+        return;
+    }
+
+    std::memcpy(reserve + kBossRushDefeatedMagicOffset, kBossRushDefeatedMagic,
+        sizeof(kBossRushDefeatedMagic) - 1);
+    std::memset(reserve + kBossRushDefeatedMaskOffset, 0, kBossRushDefeatedMaskSize);
+}
+
+u8* bossrush_defeated_mask(dSv_save_c* save, bool create) {
+    if (save == nullptr || !is_boss_rush(save)) {
+        return nullptr;
+    }
+
+    if (!bossrush_defeated_state_initialized(save)) {
+        if (!create) {
+            return nullptr;
+        }
+        initialize_bossrush_defeated_state(save);
+    }
+
+    u8* reserve = reserve_bytes(save);
+    return reserve == nullptr ? nullptr : reserve + kBossRushDefeatedMaskOffset;
+}
+
+const u8* bossrush_defeated_mask(const dSv_save_c* save) {
+    if (save == nullptr || !is_boss_rush(save) || !bossrush_defeated_state_initialized(save)) {
+        return nullptr;
+    }
+
+    const u8* reserve = reserve_bytes(save);
+    return reserve == nullptr ? nullptr : reserve + kBossRushDefeatedMaskOffset;
+}
+
+bool bossrush_portal_defeated(u8 index) {
+    if (index >= kBossRushEntryCount) {
+        return false;
+    }
+
+    const u8* mask = bossrush_defeated_mask(dComIfGs_getSaveData());
+    return mask != nullptr && (mask[index / 8] & (1 << (index % 8))) != 0;
+}
+
+void mark_bossrush_portal_defeated(u8 index) {
+    if (index >= kBossRushEntryCount) {
+        return;
+    }
+
+    u8* mask = bossrush_defeated_mask(dComIfGs_getSaveData(), true);
+    if (mask != nullptr) {
+        mask[index / 8] |= static_cast<u8>(1 << (index % 8));
+    }
+}
+
+int bossrush_entry_index(const BossRushEntry& entry) {
+    const BossRushEntry* begin = kBossRushEntries;
+    const BossRushEntry* end = begin + kBossRushEntryCount;
+    const BossRushEntry* ptr = &entry;
+    if (ptr < begin || ptr >= end) {
+        return -1;
+    }
+    return static_cast<int>(ptr - begin);
+}
+
+void mark_bossrush_entry_defeated(const BossRushEntry& entry) {
+    const int index = bossrush_entry_index(entry);
+    if (index >= 0) {
+        mark_bossrush_portal_defeated(static_cast<u8>(index));
     }
 }
 
@@ -683,6 +777,51 @@ int touched_hub_portal() {
     }
 
     return -1;
+}
+
+int hub_portal_index_for_warp(daObjBossWarp_c* warp) {
+    if (warp == NULL) {
+        return -1;
+    }
+
+    const fpc_ProcID id = fopAcM_GetID(static_cast<fopAc_ac_c*>(warp));
+    for (u8 i = 0; i < kBossRushHubPortalCount; ++i) {
+        if (sHubPortalIds[i] == id) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+bool is_red_hub_portal_warp(daObjBossWarp_c* warp) {
+    const int portal = hub_portal_index_for_warp(warp);
+    return portal >= 0 && portal < static_cast<int>(kBossRushEntryCount) &&
+           bossrush_portal_defeated(static_cast<u8>(portal));
+}
+
+void set_hub_portal_blue_state(daObjBossWarp_c* warp, bool needsAppear) {
+    if (needsAppear) {
+        warp->set_appear();
+        return;
+    }
+
+    warp->mpBrkAnm->setFrame(warp->mpBrkAnm->getEndFrame());
+    warp->mpBrkAnm->setPlaySpeed(0.0f);
+    warp->mpBtkAnm[1]->setFrame(warp->mpBtkAnm[1]->getEndFrame());
+    warp->mpBtkAnm[1]->setPlaySpeed(0.0f);
+}
+
+void set_hub_portal_red_state(daObjBossWarp_c* warp) {
+    warp->appear(0);
+
+    const f32 startFrame = warp->mpBrkAnm->getStartFrame();
+    const f32 endFrame = warp->mpBrkAnm->getEndFrame();
+    const f32 redFrame =
+        startFrame + (endFrame - startFrame) * kBossRushRedPortalBrkFrameFraction;
+    warp->mpBrkAnm->setFrame(std::clamp(redFrame, startFrame, endFrame));
+    warp->mpBrkAnm->setPlaySpeed(0.0f);
+    warp->mpBtkAnm[1]->setFrame(warp->mpBtkAnm[1]->getEndFrame());
+    warp->mpBtkAnm[1]->setPlaySpeed(0.0f);
 }
 
 void reset_hub_runtime_when_away() {
@@ -1092,6 +1231,7 @@ void apply_boss_rush_preset(dSv_save_c* save) {
         reserve[kBossRushLoopOffset] = 0;
         reserve[kBossRushStateOffset] = kBossRushStateHub;
     }
+    initialize_bossrush_defeated_state(save);
 
     dComIfGs_setMaxLife(25);
     dComIfGs_setLife(20);
@@ -2976,6 +3116,7 @@ void update_bossrush() {
 
     const BossRushEntry& entry = kBossRushEntries[boss_rush_index()];
     if (is_current_stage(entry) && boss_is_cleared(entry)) {
+        mark_bossrush_entry_defeated(entry);
         if (boss_rush_state() == kBossRushStateReplay) {
             clear_boss_flags(entry);
             set_boss_rush_state(kBossRushStateHub);
@@ -3176,8 +3317,10 @@ HookAction on_bosswarp_execute_pre(ModContext*, void* args, void* retval, void*)
 
     const bool needsAppear = warp->scale.y < 0.99f;
     warp->scale.y = 1.0f;
-    if (needsAppear) {
-        warp->set_appear();
+    if (is_red_hub_portal_warp(warp)) {
+        set_hub_portal_red_state(warp);
+    } else {
+        set_hub_portal_blue_state(warp, needsAppear);
     }
     warp->setBaseMtx();
     if (retval != nullptr) {
@@ -3191,6 +3334,7 @@ bool redirect_replay_to_hub(const BossRushEntry& entry) {
         return false;
     }
 
+    mark_bossrush_entry_defeated(entry);
     clear_boss_flags(entry);
     set_boss_rush_state(kBossRushStateHub);
     set_boss_rush_index(0);
@@ -3236,6 +3380,7 @@ bool complete_bossrush_final_sequence() {
         return redirect_replay_to_hub(kBossRushEntries[boss_rush_index()]);
     }
 
+    mark_bossrush_entry_defeated(kBossRushEntries[boss_rush_index()]);
     if (sAdvancePending) {
         return true;
     }
