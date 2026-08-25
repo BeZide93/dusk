@@ -40,6 +40,8 @@ def main() -> None:
     parser.add_argument("--symgen", default="symgen", help="path to the symgen executable")
     args = parser.parse_args()
 
+    # Collect entries: non-lib content must be identical everywhere; lib/<platform>/ trees
+    # must come from exactly one input each.
     content_hashes: dict[str, tuple[str, Path]] = {}
     platform_sources: dict[str, Path] = {}
     archives: list[zipfile.ZipFile] = []
@@ -76,6 +78,7 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory() as tmp:
         stage = Path(tmp)
+        # Non-lib content from the first input (verified identical), lib/ from each source.
         archives[0].extractall(stage, members=[n for n in entry_names(archives[0])
                                                if not n.startswith("lib/")])
         for archive in archives:

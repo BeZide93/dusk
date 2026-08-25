@@ -6,376 +6,107 @@ on:
     tags:
       - 'v*'
 
-permissions:
-  actions: read
-  contents: write
-
 env:
-  SYMGEN_VERSION: v1.3.3
+  SYMGEN_VERSION: v1.2.4
 
 jobs:
-  resolve-sdk:
-    name: Resolve Host SDK
-    runs-on: ubuntu-latest
-    outputs:
-      run_id: ${{ steps.resolve.outputs.run_id }}
-      head_sha: ${{ steps.resolve.outputs.head_sha }}
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Find compatible host build
-        id: resolve
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          while IFS=$'\t' read -r run_id head_sha; do
-            if git merge-base --is-ancestor "$head_sha" "$GITHUB_SHA" 2>/dev/null; then
-              echo "Using host SDK from Build run $run_id ($head_sha)"
-              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-              echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          done < <(
-            gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow build.yml \
-              --status success \
-              --limit 100 \
-              --json databaseId,headSha \
-              --jq '.[] | [.databaseId, .headSha] | @tsv'
-          )
-
-          echo "No successful compatible Build workflow run found" >&2
-          exit 1
-
-  build-linux:
-    name: Build Linux (${{ matrix.platform }})
-    runs-on: ${{ matrix.runner }}
+  build:
+    name: Build ${{matrix.platform}}
+    runs-on: ${{matrix.runner}}
     strategy:
       fail-fast: false
       matrix:
         include:
           - platform: linux-x86_64
-            runner: ubuntu-24.04
+            runner: ubuntu-latest
           - platform: linux-aarch64
             runner: ubuntu-24.04-arm
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install ninja-build
-
-      - name: Build Dawnlight mod
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DDUSK_DIR="$PWD"
-          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
-
-      - name: Upload mod package
-        uses: actions/upload-artifact@v7
-        with:
-          name: dawnlight-mod-${{ matrix.platform }}
-          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
-
-  build-apple:
-    name: Build Apple (${{ matrix.platform }})
-    runs-on: macos-latest
-    needs: resolve-sdk
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
           - platform: macos-arm64
-            preset: x-macos-ci-arm64
-            arch: arm64
-            artifact_pattern: dusklight-*-macos-appleclang-arm64
-            sdk_stub: stub-macos-arm64
+            runner: macos-latest
           - platform: macos-x86_64
-            preset: x-macos-ci-x86_64
-            arch: x86_64
-            artifact_pattern: dusklight-*-macos-appleclang-x86_64
-            sdk_stub: stub-macos-x86_64
+            runner: macos-latest
+            cmake_args: -DCMAKE_OSX_ARCHITECTURES=x86_64
           - platform: ios-arm64
-            preset: x-ios-ci
-            arch: arm64
-            artifact_pattern: dusklight-*-ios-appleclang-arm64
-            sdk_stub: stub-ios-arm64
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Install dependencies
-        run: brew install cmake ninja
-
-      - name: Install Rust iOS target
-        if: matrix.platform == 'ios-arm64'
-        run: |
-          rustup toolchain install stable
-          rustup target add aarch64-apple-ios
-
-      - name: Install Rust x86_64 macOS target
-        if: matrix.platform == 'macos-x86_64'
-        run: |
-          rustup toolchain install stable
-          rustup target add x86_64-apple-darwin
-
-      - name: Configure host dependencies
-        run: cmake --preset ${{ matrix.preset }}
-
-      - name: Download host SDK
-        uses: actions/download-artifact@v6
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
-          pattern: ${{ matrix.artifact_pattern }}
-          path: host-build
-          merge-multiple: true
-
-      - name: Build Dawnlight mod
-        shell: bash
-        run: |
-          set -euo pipefail
-          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
-          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
-          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
-          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
-          args=(
-            -S mods/dawnlight
-            -B build/dawnlight-mod
-            -G Ninja
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo
-            -DDUSK_DIR="$PWD"
-            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}"
-            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include"
-            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
-          )
-          if [[ "${{ matrix.platform }}" == "ios-arm64" ]]; then
-            args+=(
-              -DCMAKE_TOOLCHAIN_FILE="$PWD/ios.toolchain.cmake"
-              -DPLATFORM=OS64
-              -DDEPLOYMENT_TARGET=14.0
-              -DENABLE_BITCODE=OFF
-              -DENABLE_ARC=OFF
-              -DENABLE_VISIBILITY=ON
-              -DBUILD_SHARED_LIBS=OFF
-              -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
-              -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew
-            )
-          else
-            args+=(
-              -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }}
-              -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
-              -DCMAKE_DISABLE_FIND_PACKAGE_PkgConfig=ON
-              -DCMAKE_IGNORE_PREFIX_PATH=/opt/homebrew
-            )
-          fi
-          cmake "${args[@]}"
-          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
-
-      - name: Upload mod package
-        uses: actions/upload-artifact@v7
-        with:
-          name: dawnlight-mod-${{ matrix.platform }}
-          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
-
-  build-windows:
-    name: Build Windows (${{ matrix.platform }})
-    runs-on: windows-latest
-    needs: resolve-sdk
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
+            runner: macos-latest
+            cmake_args: >-
+              -DCMAKE_SYSTEM_NAME=iOS
+              -DCMAKE_OSX_ARCHITECTURES=arm64
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0
           - platform: windows-amd64
-            preset: x-windows-ci-msvc
+            runner: windows-latest
             msvc_arch: amd64
-            vcpkg_arch: x64
-            artifact_pattern: dusklight-*-win32-msvc-x86_64
-            sdk_stub: windows-amd64.lib
           - platform: windows-arm64
-            preset: x-windows-ci-arm64-msvc
+            runner: windows-latest
             msvc_arch: amd64_arm64
-            vcpkg_arch: arm64
-            artifact_pattern: dusklight-*-win32-msvc-arm64
-            sdk_stub: windows-arm64.lib
+          - platform: android-aarch64
+            runner: ubuntu-latest
+            android_ndk: "29.0.14206865"
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
+
+      - name: Read pinned Dusklight version
+        id: dusklight
+        shell: bash
+        run: echo "version=$(sed -n 's/.*set(DUSKLIGHT_VERSION "\([^"]*\)").*/\1/p' mods/dawnlight/CMakeLists.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Dusklight sources
+        uses: actions/cache@v6
         with:
-          fetch-depth: 0
-          submodules: recursive
+          path: mods/dawnlight/dusklight
+          key: dusklight-${{runner.os}}-${{steps.dusklight.outputs.version}}
 
       - name: Enable Visual Studio environment
-        uses: ilammy/msvc-dev-cmd@v1
+        if: matrix.msvc_arch
+        uses: step-security/msvc-dev-cmd@v1
         with:
-          arch: ${{ matrix.msvc_arch }}
+          arch: ${{matrix.msvc_arch}}
 
-      - name: Override VCPKG_ROOT
-        shell: pwsh
-        run: echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+      - name: Install ninja
+        if: matrix.msvc_arch
+        run: choco install ninja
 
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          choco install ninja -y
-          vcpkg install freetype:${{ matrix.vcpkg_arch }}-windows zstd:${{ matrix.vcpkg_arch }}-windows
-
-      - name: Configure host dependencies
-        shell: pwsh
-        run: cmake --preset ${{ matrix.preset }}
-
-      - name: Download host SDK
-        uses: actions/download-artifact@v6
-        with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
-          pattern: ${{ matrix.artifact_pattern }}
-          path: host-build
-          merge-multiple: true
-
-      - name: Build Dawnlight mod
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $rmluiCore = Get-ChildItem -Path build -Recurse -Filter Core.h | Where-Object { $_.FullName -like "*RmlUi*" } | Select-Object -First 1
-          $sdlTouch = Get-ChildItem -Path build -Recurse -Filter SDL_touch.h | Where-Object { $_.FullName -like "*SDL3*" } | Select-Object -First 1
-          $rmluiInclude = Split-Path (Split-Path $rmluiCore.FullName -Parent) -Parent
-          $sdlInclude = Split-Path (Split-Path $sdlTouch.FullName -Parent) -Parent
-          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja `
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo `
-            -DDUSK_DIR="$PWD" `
-            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}" `
-            -DDAWNLIGHT_RMLUI_INCLUDE="$rmluiInclude" `
-            -DDAWNLIGHT_SDL3_INCLUDE="$sdlInclude"
-          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
-
-      - name: Upload mod package
-        uses: actions/upload-artifact@v7
-        with:
-          name: dawnlight-mod-${{ matrix.platform }}
-          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
-
-  build-android:
-    name: Build Android (${{ matrix.platform }})
-    runs-on: ubuntu-latest
-    needs: resolve-sdk
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: android-aarch64
-            preset: x-android-ci-arm64
-            abi: arm64-v8a
-            rust_target: aarch64-linux-android
-            artifact_pattern: dusklight-*-android-arm64
-            sdk_stub: stub-android-aarch64.so
-
-    env:
-      ANDROID_NDK_VERSION: "29.0.14206865"
-
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: recursive
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install ninja-build
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Android SDK
+      - name: Install Android NDK
+        if: matrix.android_ndk
         uses: android-actions/setup-android@v4
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;36.1.0" "ndk;${ANDROID_NDK_VERSION}"
-
-      - name: Install Rust Android target
-        run: |
-          rustup toolchain install stable
-          rustup target add ${{ matrix.rust_target }}
-
-      - name: Configure host dependencies
-        run: cmake --preset ${{ matrix.preset }}
-
-      - name: Download host SDK
-        uses: actions/download-artifact@v6
         with:
-          github-token: ${{ github.token }}
-          repository: ${{ github.repository }}
-          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
-          pattern: ${{ matrix.artifact_pattern }}
-          path: host-build
-          merge-multiple: true
+          packages: ndk;${{matrix.android_ndk}}
 
-      - name: Build Dawnlight mod
+      - name: Configure CMake
         shell: bash
         run: |
-          set -euo pipefail
-          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
-          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
-          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
-          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
-          ndk="$ANDROID_HOME/ndk/${ANDROID_NDK_VERSION}"
-          cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
-            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DDUSK_DIR="$PWD" \
-            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}" \
-            -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
-            -DANDROID_ABI=${{ matrix.abi }} \
-            -DANDROID_PLATFORM=android-29 \
-            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include" \
-            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
-          cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
+          args=(-S mods/dawnlight -B build -G Ninja ${{matrix.cmake_args}})
+          if [[ -n "${{matrix.android_ndk}}" ]]; then
+            args+=(-DCMAKE_TOOLCHAIN_FILE="$ANDROID_HOME/ndk/${{matrix.android_ndk}}/build/cmake/android.toolchain.cmake"
+                   -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-28)
+          fi
+          cmake "${args[@]}"
 
-      - name: Upload mod package
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: dawnlight-mod-${{ matrix.platform }}
-          path: build/dawnlight-mod/mods/dawnlight_mod.dusk
+          name: mod-${{matrix.platform}}
+          path: build/mods/*.dusk
+          if-no-files-found: error
 
-  package:
-    name: Package Combined Mod
+  combine:
+    name: Combine bundles
+    needs: build
     runs-on: ubuntu-latest
-    needs:
-      - build-linux
-      - build-apple
-      - build-windows
-      - build-android
-
+    permissions:
+      actions: read
+      contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - name: Download platform packages
-        uses: actions/download-artifact@v6
+      - name: Download platform bundles
+        uses: actions/download-artifact@v8
         with:
-          path: artifacts
-          pattern: dawnlight-mod-*
+          pattern: mod-*
+          path: dist
 
       - name: Install symgen
         run: |
@@ -383,22 +114,21 @@ jobs:
             "https://github.com/encounter/symgen/releases/download/${SYMGEN_VERSION}/symgen-linux-x86_64"
           chmod +x symgen
 
-      - name: Combine mod packages
-        shell: bash
+      - name: Merge bundles
         run: |
-          set -euo pipefail
-          python3 tools/merge_mod.py -o dawnlight_mod.dusk --symgen ./symgen \
-            artifacts/*/*.dusk
+          name=$(basename dist/mod-linux-x86_64/*.dusk)
+          python3 tools/merge_mod.py -o "combined/$name" --symgen ./symgen \
+            dist/*/*.dusk
 
-      - name: Upload combined mod package
+      - name: Upload combined bundle
         uses: actions/upload-artifact@v7
         with:
-          name: dawnlight-mod-combined
-          path: dawnlight_mod.dusk
+          name: mod-combined
+          path: combined/*.dusk
+          if-no-files-found: error
 
-      - name: Upload release asset
+      - name: Attach to release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dawnlight_mod.dusk
-          body_path: README.md
+        env:
+          GH_TOKEN: ${{github.token}}
+        run: gh release create "$GITHUB_REF_NAME" combined/*.dusk --verify-tag --generate-notes

@@ -11,3 +11,6 @@
 
 # decomp-toolkit writes files with LF
 config/**/*.txt  text eol=lf
+
+# Dawnlight bundles are byte-compared across platform builds.
+mods/dawnlight/** text=auto eol=lf

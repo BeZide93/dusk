@@ -23,6 +23,7 @@ orig/*/*
 
 # Build files
 build/
+mods/dawnlight/dusklight/
 .ninja_*
 build.ninja
 
