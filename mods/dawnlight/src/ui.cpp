@@ -353,12 +353,6 @@ ModResult build_controls_tab(
     {
         return MOD_ERROR;
     }
-    if (add_toggle(ctx, left, "D-Pad Down Item Slot", dpad_down_item_slot_config_var(),
-            "Adds an additional item slot on D-Pad Down.")
-        != MOD_OK)
-    {
-        return MOD_ERROR;
-    }
     return MOD_OK;
 }
 
@@ -604,7 +598,7 @@ ModResult build_mod_panel(ModContext* ctx, UiElementHandle panel, void*, ModErro
         return MOD_ERROR;
     }
     if (add_text(ctx, panel, "Manual Shielding and R Jump") != MOD_OK) return MOD_ERROR;
-    if (add_text(ctx, panel, "Z and D-Pad Down item slots") != MOD_OK) return MOD_ERROR;
+    if (add_text(ctx, panel, "Z item slot") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Intro Skip new-save mode") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "Boss Rush prelaunch mode, hub, and portal prompts") != MOD_OK) return MOD_ERROR;
     if (add_text(ctx, panel, "HUD Layout Editor") != MOD_OK) return MOD_ERROR;

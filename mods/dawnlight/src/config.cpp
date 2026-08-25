@@ -34,7 +34,6 @@ ConfigVarHandle s_cinemaZoomPercent = 0;
 ConfigVarHandle s_manualShielding = 0;
 ConfigVarHandle s_rJump = 0;
 ConfigVarHandle s_zItemSlot = 0;
-ConfigVarHandle s_dpadDownItemSlot = 0;
 ConfigVarHandle s_checkForUpdates = 0;
 ConfigVarHandle s_bossrushHardmodeHazards = 0;
 ConfigVarHandle s_hudLayout = 0;
@@ -721,7 +720,6 @@ ModResult register_config(ModError* error) {
         register_bool("manual-shielding", true, s_manualShielding) != MOD_OK ||
         register_bool("r-jump", true, s_rJump) != MOD_OK ||
         register_bool("z-item-slot", true, s_zItemSlot) != MOD_OK ||
-        register_bool("dpad-down-item-slot", true, s_dpadDownItemSlot) != MOD_OK ||
         register_bool("check-for-updates", true, s_checkForUpdates) != MOD_OK ||
         register_bool("bossrush-hardmode-hazards", false, s_bossrushHardmodeHazards) != MOD_OK ||
         register_int("hud-layout", static_cast<int64_t>(HudLayout::GameCube), s_hudLayout) !=
@@ -836,10 +834,6 @@ bool r_jump_enabled() {
 
 bool z_item_slot_enabled() {
     return get_bool(s_zItemSlot, true);
-}
-
-bool dpad_down_item_slot_enabled() {
-    return get_bool(s_dpadDownItemSlot, true);
 }
 
 bool check_for_updates_enabled() {
@@ -1017,10 +1011,6 @@ ConfigVarHandle r_jump_config_var() {
 
 ConfigVarHandle z_item_slot_config_var() {
     return s_zItemSlot;
-}
-
-ConfigVarHandle dpad_down_item_slot_config_var() {
-    return s_dpadDownItemSlot;
 }
 
 ConfigVarHandle check_for_updates_config_var() {

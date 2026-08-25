@@ -5,8 +5,8 @@ upstream mod services that are available today.
 
 ## Active Features
 
-- Z and D-Pad Down item slots with item-wheel assignment, HUD icons, ammo, oil,
-  bottle contents, and combine prompts.
+- Z item slot with item-wheel assignment, HUD icons, ammo, oil, bottle contents,
+  and combine prompts.
 - Midna moved off Z when the Z item slot is enabled, including touch and prompt
   support.
 - Aim Movement, Vanilla/3rd Person/Cinema aim modes, Cinema Zoom, touch/gyro aim
