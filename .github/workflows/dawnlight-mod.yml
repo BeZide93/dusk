@@ -7,9 +7,49 @@ on:
       - 'v*'
 
 permissions:
+  actions: read
   contents: write
 
 jobs:
+  resolve-sdk:
+    name: Resolve Host SDK
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.resolve.outputs.run_id }}
+      head_sha: ${{ steps.resolve.outputs.head_sha }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Find compatible host build
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          while IFS=$'\t' read -r run_id head_sha; do
+            if git merge-base --is-ancestor "$head_sha" "$GITHUB_SHA" 2>/dev/null; then
+              echo "Using host SDK from Build run $run_id ($head_sha)"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          done < <(
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow build.yml \
+              --status success \
+              --limit 100 \
+              --json databaseId,headSha \
+              --jq '.[] | [.databaseId, .headSha] | @tsv'
+          )
+
+          echo "No successful compatible Build workflow run found" >&2
+          exit 1
+
   build-linux:
     name: Build Linux (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
@@ -66,6 +106,7 @@ jobs:
   build-apple:
     name: Build Apple (${{ matrix.platform }})
     runs-on: macos-latest
+    needs: resolve-sdk
     strategy:
       fail-fast: false
       matrix:
@@ -73,12 +114,18 @@ jobs:
           - platform: macos-arm64
             preset: x-macos-ci-arm64
             arch: arm64
+            artifact_pattern: dusklight-*-macos-appleclang-arm64
+            sdk_stub: stub-macos-arm64
           - platform: macos-x86_64
             preset: x-macos-ci-x86_64
             arch: x86_64
+            artifact_pattern: dusklight-*-macos-appleclang-x86_64
+            sdk_stub: stub-macos-x86_64
           - platform: ios-arm64
             preset: x-ios-ci
             arch: arm64
+            artifact_pattern: dusklight-*-ios-appleclang-arm64
+            sdk_stub: stub-ios-arm64
 
     steps:
       - uses: actions/checkout@v6
@@ -104,6 +151,16 @@ jobs:
       - name: Configure host dependencies
         run: cmake --preset ${{ matrix.preset }}
 
+      - name: Download host SDK
+        uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
+          pattern: ${{ matrix.artifact_pattern }}
+          path: host-build
+          merge-multiple: true
+
       - name: Build Dawnlight mod
         shell: bash
         run: |
@@ -118,6 +175,7 @@ jobs:
             -G Ninja
             -DCMAKE_BUILD_TYPE=RelWithDebInfo
             -DDUSK_DIR="$PWD"
+            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}"
             -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include"
             -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
           )
@@ -153,6 +211,7 @@ jobs:
   build-windows:
     name: Build Windows (${{ matrix.platform }})
     runs-on: windows-latest
+    needs: resolve-sdk
     strategy:
       fail-fast: false
       matrix:
@@ -161,6 +220,8 @@ jobs:
             preset: x-windows-ci-msvc
             msvc_arch: amd64
             vcpkg_arch: x64
+            artifact_pattern: dusklight-*-win32-msvc-x86_64
+            sdk_stub: windows-amd64.lib
 
     steps:
       - uses: actions/checkout@v6
@@ -187,6 +248,16 @@ jobs:
         shell: pwsh
         run: cmake --preset ${{ matrix.preset }}
 
+      - name: Download host SDK
+        uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
+          pattern: ${{ matrix.artifact_pattern }}
+          path: host-build
+          merge-multiple: true
+
       - name: Build Dawnlight mod
         shell: pwsh
         run: |
@@ -198,6 +269,7 @@ jobs:
           cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja `
             -DCMAKE_BUILD_TYPE=RelWithDebInfo `
             -DDUSK_DIR="$PWD" `
+            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}" `
             -DDAWNLIGHT_RMLUI_INCLUDE="$rmluiInclude" `
             -DDAWNLIGHT_SDL3_INCLUDE="$sdlInclude"
           cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
@@ -211,6 +283,7 @@ jobs:
   build-android:
     name: Build Android (${{ matrix.platform }})
     runs-on: ubuntu-latest
+    needs: resolve-sdk
     strategy:
       fail-fast: false
       matrix:
@@ -219,6 +292,8 @@ jobs:
             preset: x-android-ci-arm64
             abi: arm64-v8a
             rust_target: aarch64-linux-android
+            artifact_pattern: dusklight-*-android-arm64
+            sdk_stub: stub-android-aarch64.so
 
     env:
       ANDROID_NDK_VERSION: "29.0.14206865"
@@ -254,6 +329,16 @@ jobs:
       - name: Configure host dependencies
         run: cmake --preset ${{ matrix.preset }}
 
+      - name: Download host SDK
+        uses: actions/download-artifact@v6
+        with:
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.resolve-sdk.outputs.run_id }}
+          pattern: ${{ matrix.artifact_pattern }}
+          path: host-build
+          merge-multiple: true
+
       - name: Build Dawnlight mod
         shell: bash
         run: |
@@ -266,6 +351,7 @@ jobs:
           cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
             -DDUSK_DIR="$PWD" \
+            -DDUSK_GAME_EXE="$PWD/host-build/sdk/${{ matrix.sdk_stub }}" \
             -DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake" \
             -DANDROID_ABI=${{ matrix.abi }} \
             -DANDROID_PLATFORM=android-29 \
