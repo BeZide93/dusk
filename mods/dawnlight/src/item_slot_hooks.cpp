@@ -21,8 +21,6 @@
 #include "JSystem/J2DGraph/J2DScreen.h"
 #include "JSystem/J2DGraph/J2DPicture.h"
 #include "JSystem/J2DGraph/J2DTextBox.h"
-#include "JSystem/JKernel/JKRExpHeap.h"
-#include "JSystem/JKernel/JKRMemArchive.h"
 #define private public
 #include "d/d_meter2.h"
 #include "d/d_menu_ring.h"
@@ -30,8 +28,6 @@
 #include "d/d_meter2_draw.h"
 #undef private
 #include "m_Do/m_Do_controller_pad.h"
-#include "m_Do/m_Do_dvd_thread.h"
-#include "m_Do/m_Do_ext.h"
 #include "dusk/ui/controls.hpp"
 #include "mods/hook.hpp"
 #include "mods/service.hpp"
@@ -143,54 +139,19 @@ Rml::Element* s_skipTouchElement = nullptr;
 bool s_skipTouchMidnaMode = false;
 bool s_skipTouchMidnaPressed = false;
 std::string s_skipTouchMidnaSource;
-bool s_zPromptAsDpadLeftThisFrame = false;
+bool s_midnaPromptThisFrame = false;
 bool s_zPromptCustomVisualsActive = false;
-bool s_applyZPromptDpadIcon = false;
+bool s_hideZPromptButton = false;
 bool s_hideZPromptAfterExecute = false;
 
 struct ZPromptVisualState {
-    J2DPicture* icon = nullptr;
-    J2DPicture* overlay = nullptr;
-    ResTIMG const* textures[2] = {};
-    ResTIMG const* overlayTextures[2] = {};
-    JUtility::TColor black = 0;
-    JUtility::TColor white = 0xFFFFFFFF;
-    JUtility::TColor cornerColors[4] = {};
-    JUtility::TColor overlayBlack = 0;
-    JUtility::TColor overlayWhite = 0xFFFFFFFF;
-    JUtility::TColor overlayCornerColors[4] = {};
-    JGeometry::TVec2<s16> overlayTexCoords[4] = {};
-    JGeometry::TBox2<f32> overlayBounds = {};
-    f32 overlayScaleX = 1.0f;
-    f32 overlayScaleY = 1.0f;
-    f32 overlayTranslateX = 0.0f;
-    f32 overlayTranslateY = 0.0f;
-    f32 overlayRotateX = 0.0f;
-    f32 overlayRotateY = 0.0f;
-    f32 overlayRotateZ = 0.0f;
-    f32 overlayRotateOffsetX = 0.0f;
-    f32 overlayRotateOffsetY = 0.0f;
-    char overlayRotAxis = ROTATE_Z;
-    u8 overlayBasePosition = 0;
+    J2DPane* root = nullptr;
     J2DPane* hiddenPanes[16] = {};
     bool hiddenVisible[16] = {};
-    u8 textureCount = 0;
-    u8 overlayTextureCount = 0;
-    u8 overlayAlpha = 0xFF;
     u8 hiddenCount = 0;
-    bool iconVisible = false;
-    bool overlayVisible = false;
-    bool overlayActive = false;
-    bool labelVisible = false;
 };
 
 ZPromptVisualState s_zPromptVisualState;
-mDoDvdThd_mountArchive_c* s_dpadPromptArchiveMount = nullptr;
-JKRArchive* s_dpadPromptArchive = nullptr;
-u8* s_dpadPromptTextureBuffer = nullptr;
-u32 s_dpadPromptTextureSize = 0;
-u8 s_dpadPromptArchivePathIndex = 0;
-bool s_dpadPromptArchiveUnavailable = false;
 
 void reset_z_prompt_visual_state() {
     s_zPromptVisualState = ZPromptVisualState();
@@ -200,12 +161,6 @@ void clear_z_prompt_custom_visuals() {
     reset_z_prompt_visual_state();
     s_zPromptCustomVisualsActive = false;
 }
-
-struct J2DPictureTexCoordAccess : J2DPicture {
-    static JGeometry::TVec2<s16>* coords(J2DPicture* picture) {
-        return reinterpret_cast<J2DPictureTexCoordAccess*>(picture)->field_0x10a;
-    }
-};
 
 struct HudPaneTransformState {
     J2DPane* pane = nullptr;
@@ -297,15 +252,6 @@ J2DPane* prompt_pane(dMeterButton_c* meter, u64 tag) {
                                                                   nullptr;
 }
 
-J2DPicture* prompt_picture(dMeterButton_c* meter, u64 tag) {
-    J2DPane* pane = prompt_pane(meter, tag);
-    if (pane == nullptr || pane->getTypeID() != 18) {
-        return nullptr;
-    }
-
-    return static_cast<J2DPicture*>(pane);
-}
-
 void set_prompt_pane_visible(dMeterButton_c* meter, u64 tag, bool visible) {
     J2DPane* pane = prompt_pane(meter, tag);
     if (pane == nullptr) {
@@ -368,8 +314,8 @@ void save_and_hide_z_prompt_pane(J2DPane* pane) {
     pane->hide();
 }
 
-void hide_z_prompt_extra_layers(J2DPane* pane, J2DPane* icon, J2DPane* overlay, J2DPane* midna) {
-    if (pane == nullptr || pane == icon || pane == overlay || pane == midna) {
+void hide_z_prompt_extra_layers(J2DPane* pane, J2DPane* midna) {
+    if (pane == nullptr || pane == midna) {
         return;
     }
 
@@ -377,7 +323,7 @@ void hide_z_prompt_extra_layers(J2DPane* pane, J2DPane* icon, J2DPane* overlay, 
         for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
              child = child->getNextChildPane())
         {
-            hide_z_prompt_extra_layers(child, icon, overlay, midna);
+            hide_z_prompt_extra_layers(child, midna);
         }
         return;
     }
@@ -391,122 +337,8 @@ void hide_z_prompt_extra_layers(J2DPane* pane, J2DPane* icon, J2DPane* overlay, 
     for (J2DPane* child = pane->getFirstChildPane(); child != nullptr;
          child = child->getNextChildPane())
     {
-        hide_z_prompt_extra_layers(child, icon, overlay, midna);
+        hide_z_prompt_extra_layers(child, midna);
     }
-}
-
-JKRArchive* dpad_prompt_archive() {
-    if (s_dpadPromptArchive != nullptr || s_dpadPromptArchiveUnavailable) {
-        return s_dpadPromptArchive;
-    }
-
-    if (s_dpadPromptArchiveMount != nullptr) {
-        if (!s_dpadPromptArchiveMount->sync()) {
-            return nullptr;
-        }
-
-        s_dpadPromptArchive = static_cast<JKRArchive*>(s_dpadPromptArchiveMount->getArchive());
-        s_dpadPromptArchiveMount->destroy();
-        s_dpadPromptArchiveMount = nullptr;
-        if (s_dpadPromptArchive == nullptr) {
-            s_dpadPromptArchiveUnavailable = true;
-        }
-        return s_dpadPromptArchive;
-    }
-
-    constexpr const char* paths[] = {
-        "/res/Layout/clctresR.arc",
-        "/res/LayoutRevo/clctresR.arc",
-    };
-
-    while (s_dpadPromptArchivePathIndex < sizeof(paths) / sizeof(paths[0])) {
-        s_dpadPromptArchiveMount =
-            mDoDvdThd_mountArchive_c::create(paths[s_dpadPromptArchivePathIndex++], 0,
-                                             static_cast<JKRHeap*>(mDoExt_getJ2dHeap()));
-        if (s_dpadPromptArchiveMount != nullptr) {
-            return nullptr;
-        }
-    }
-
-    s_dpadPromptArchiveUnavailable = true;
-    return nullptr;
-}
-
-ResTIMG const* load_dpad_prompt_texture_from_archive() {
-    if (s_dpadPromptTextureBuffer != nullptr) {
-        return reinterpret_cast<ResTIMG const*>(s_dpadPromptTextureBuffer);
-    }
-
-    JKRArchive* archive = dpad_prompt_archive();
-    if (archive == nullptr) {
-        return nullptr;
-    }
-
-    constexpr const char* dpadNames[] = {
-        "im_juji_key_03.bti",
-        "im_juji_key.bti",
-    };
-
-    for (const char* name : dpadNames) {
-        void* resource = archive->getResource('TIMG', name);
-        if (resource == nullptr) {
-            continue;
-        }
-
-        const u32 size = archive->getExpandedResSize(resource);
-        if (size == 0 || size == 0xFFFFFFFF) {
-            archive->removeResource(resource);
-            continue;
-        }
-        archive->removeResource(resource);
-
-        auto* buffer = static_cast<u8*>(
-            JKRAllocFromHeap(static_cast<JKRHeap*>(mDoExt_getJ2dHeap()), size, 0x20));
-        if (buffer == nullptr) {
-            continue;
-        }
-
-        const u32 readSize = archive->readResource(buffer, size, 'TIMG', name);
-        if (readSize == 0) {
-            JKRFreeToHeap(mDoExt_getJ2dHeap(), buffer);
-            continue;
-        }
-
-        s_dpadPromptTextureBuffer = buffer;
-        s_dpadPromptTextureSize = readSize;
-        return reinterpret_cast<ResTIMG const*>(s_dpadPromptTextureBuffer);
-    }
-
-    return nullptr;
-}
-
-ResTIMG const* z_prompt_dpad_texture(dMeterButton_c*) {
-    constexpr const char* dpadNames[] = {
-        "im_juji_key_03.bti",
-        "im_juji_key.bti",
-    };
-
-    JKRArchive* archives[] = {
-        dComIfGp_getCollectResArchive(),
-        dComIfGp_getMain2DArchive(),
-        dComIfGp_getMeterButtonArchive(),
-    };
-
-    for (JKRArchive* archive : archives) {
-        if (archive == nullptr) {
-            continue;
-        }
-
-        for (const char* name : dpadNames) {
-            if (auto* dpadTexture =
-                    static_cast<ResTIMG const*>(archive->getResource('TIMG', name)))
-            {
-                return dpadTexture;
-            }
-        }
-    }
-
-    return load_dpad_prompt_texture_from_archive();
 }
 
 void restore_z_prompt_visuals(dMeterButton_c* meter) {
@@ -515,83 +347,10 @@ void restore_z_prompt_visuals(dMeterButton_c* meter) {
     }
 
     if (meter->mpButtonScreen == nullptr ||
-        prompt_picture(meter, 'zbtn') != s_zPromptVisualState.icon ||
-        prompt_picture(meter, MULTI_CHAR('z_btnl')) != s_zPromptVisualState.overlay)
+        prompt_pane(meter, MULTI_CHAR('zbtn_n')) != s_zPromptVisualState.root)
     {
         clear_z_prompt_custom_visuals();
         return;
-    }
-
-    if (s_zPromptVisualState.icon != nullptr) {
-        for (u8 i = 0; i < s_zPromptVisualState.textureCount; ++i) {
-            if (s_zPromptVisualState.textures[i] != nullptr) {
-                s_zPromptVisualState.icon->changeTexture(s_zPromptVisualState.textures[i], i);
-            }
-        }
-        if (JUTTexture* texture = s_zPromptVisualState.icon->getTexture(0)) {
-            s_zPromptVisualState.icon->setTexCoord(texture, BIND15, MIRROR0, false);
-        }
-        s_zPromptVisualState.icon->setBlackWhite(s_zPromptVisualState.black,
-                                                 s_zPromptVisualState.white);
-        s_zPromptVisualState.icon->setCornerColor(s_zPromptVisualState.cornerColors[0],
-                                                  s_zPromptVisualState.cornerColors[1],
-                                                  s_zPromptVisualState.cornerColors[2],
-                                                  s_zPromptVisualState.cornerColors[3]);
-        if (s_zPromptVisualState.iconVisible) {
-            s_zPromptVisualState.icon->show();
-        } else {
-            s_zPromptVisualState.icon->hide();
-        }
-    }
-
-    if (J2DPane* label = prompt_pane(meter, MULTI_CHAR('z_btnl'))) {
-        if (s_zPromptVisualState.labelVisible) {
-            label->show();
-        } else {
-            label->hide();
-        }
-    }
-
-    if (s_zPromptVisualState.overlayActive && s_zPromptVisualState.overlay != nullptr) {
-        for (u8 i = 0; i < s_zPromptVisualState.overlayTextureCount; ++i) {
-            if (s_zPromptVisualState.overlayTextures[i] != nullptr) {
-                s_zPromptVisualState.overlay->changeTexture(
-                    s_zPromptVisualState.overlayTextures[i], i);
-            }
-        }
-        s_zPromptVisualState.overlay->setBlackWhite(s_zPromptVisualState.overlayBlack,
-                                                    s_zPromptVisualState.overlayWhite);
-        s_zPromptVisualState.overlay->setCornerColor(
-            s_zPromptVisualState.overlayCornerColors[0],
-            s_zPromptVisualState.overlayCornerColors[1],
-            s_zPromptVisualState.overlayCornerColors[2],
-            s_zPromptVisualState.overlayCornerColors[3]);
-        s_zPromptVisualState.overlay->place(s_zPromptVisualState.overlayBounds);
-        s_zPromptVisualState.overlay->scale(s_zPromptVisualState.overlayScaleX,
-                                            s_zPromptVisualState.overlayScaleY);
-        s_zPromptVisualState.overlay->translate(s_zPromptVisualState.overlayTranslateX,
-                                                s_zPromptVisualState.overlayTranslateY);
-        s_zPromptVisualState.overlay->mRotateX = s_zPromptVisualState.overlayRotateX;
-        s_zPromptVisualState.overlay->mRotateY = s_zPromptVisualState.overlayRotateY;
-        s_zPromptVisualState.overlay->mRotateZ = s_zPromptVisualState.overlayRotateZ;
-        s_zPromptVisualState.overlay->mRotateOffsetX =
-            s_zPromptVisualState.overlayRotateOffsetX;
-        s_zPromptVisualState.overlay->mRotateOffsetY =
-            s_zPromptVisualState.overlayRotateOffsetY;
-        s_zPromptVisualState.overlay->mRotAxis = s_zPromptVisualState.overlayRotAxis;
-        s_zPromptVisualState.overlay->mBasePosition = s_zPromptVisualState.overlayBasePosition;
-        s_zPromptVisualState.overlay->calcMtx();
-        s_zPromptVisualState.overlay->setAlpha(s_zPromptVisualState.overlayAlpha);
-        JGeometry::TVec2<s16>* overlayCoords =
-            J2DPictureTexCoordAccess::coords(s_zPromptVisualState.overlay);
-        for (u8 i = 0; i < 4; ++i) {
-            overlayCoords[i] = s_zPromptVisualState.overlayTexCoords[i];
-        }
-        if (s_zPromptVisualState.overlayVisible) {
-            s_zPromptVisualState.overlay->show();
-        } else {
-            s_zPromptVisualState.overlay->hide();
-        }
     }
 
     for (u8 i = 0; i < s_zPromptVisualState.hiddenCount; ++i) {
@@ -610,115 +369,23 @@ void restore_z_prompt_visuals(dMeterButton_c* meter) {
     clear_z_prompt_custom_visuals();
 }
 
-void apply_z_prompt_visuals(dMeterButton_c* meter) {
+void hide_z_prompt_button_visuals(dMeterButton_c* meter) {
     if (meter == nullptr || meter->mpButtonScreen == nullptr) {
         return;
     }
 
-    J2DPicture* icon = prompt_picture(meter, 'zbtn');
-    J2DPicture* overlay = prompt_picture(meter, MULTI_CHAR('z_btnl'));
-    ResTIMG const* dpadTexture = z_prompt_dpad_texture(meter);
-    if (icon == nullptr || dpadTexture == nullptr) {
+    J2DPane* root = prompt_pane(meter, MULTI_CHAR('zbtn_n'));
+    J2DPane* midna = prompt_pane(meter, MULTI_CHAR('midona'));
+    if (root == nullptr || midna == nullptr) {
         return;
     }
 
-    if (!s_zPromptCustomVisualsActive || s_zPromptVisualState.icon != icon ||
-        s_zPromptVisualState.overlay != overlay)
-    {
+    if (!s_zPromptCustomVisualsActive || s_zPromptVisualState.root != root) {
         reset_z_prompt_visual_state();
-        s_zPromptVisualState.icon = icon;
-        s_zPromptVisualState.overlay = overlay;
-        s_zPromptVisualState.textureCount = std::min<u8>(icon->getTextureCount(), 2);
-        for (u8 i = 0; i < s_zPromptVisualState.textureCount; ++i) {
-            if (JUTTexture* texture = icon->getTexture(i)) {
-                s_zPromptVisualState.textures[i] = texture->getTexInfo();
-            }
-        }
-        s_zPromptVisualState.black = icon->getBlack();
-        s_zPromptVisualState.white = icon->getWhite();
-        for (u8 i = 0; i < 4; ++i) {
-            s_zPromptVisualState.cornerColors[i] = icon->corner(i);
-        }
-        s_zPromptVisualState.iconVisible = icon->isVisible();
-        if (J2DPane* label = prompt_pane(meter, MULTI_CHAR('z_btnl'))) {
-            s_zPromptVisualState.labelVisible = label->isVisible();
-        }
-        if (overlay != nullptr && overlay != icon) {
-            s_zPromptVisualState.overlayTextureCount =
-                std::min<u8>(overlay->getTextureCount(), 2);
-            for (u8 i = 0; i < s_zPromptVisualState.overlayTextureCount; ++i) {
-                if (JUTTexture* texture = overlay->getTexture(i)) {
-                    s_zPromptVisualState.overlayTextures[i] = texture->getTexInfo();
-                }
-            }
-            s_zPromptVisualState.overlayBlack = overlay->getBlack();
-            s_zPromptVisualState.overlayWhite = overlay->getWhite();
-            JGeometry::TVec2<s16>* overlayCoords = J2DPictureTexCoordAccess::coords(overlay);
-            for (u8 i = 0; i < 4; ++i) {
-                s_zPromptVisualState.overlayCornerColors[i] = overlay->corner(i);
-                s_zPromptVisualState.overlayTexCoords[i] = overlayCoords[i];
-            }
-            s_zPromptVisualState.overlayBounds = overlay->getBounds();
-            s_zPromptVisualState.overlayScaleX = overlay->getScaleX();
-            s_zPromptVisualState.overlayScaleY = overlay->getScaleY();
-            s_zPromptVisualState.overlayTranslateX = overlay->getTranslateX();
-            s_zPromptVisualState.overlayTranslateY = overlay->getTranslateY();
-            s_zPromptVisualState.overlayRotateX = overlay->mRotateX;
-            s_zPromptVisualState.overlayRotateY = overlay->mRotateY;
-            s_zPromptVisualState.overlayRotateZ = overlay->mRotateZ;
-            s_zPromptVisualState.overlayRotateOffsetX = overlay->mRotateOffsetX;
-            s_zPromptVisualState.overlayRotateOffsetY = overlay->mRotateOffsetY;
-            s_zPromptVisualState.overlayRotAxis = overlay->mRotAxis;
-            s_zPromptVisualState.overlayBasePosition = overlay->mBasePosition;
-            s_zPromptVisualState.overlayAlpha = overlay->getAlpha();
-            s_zPromptVisualState.overlayVisible = overlay->isVisible();
-            s_zPromptVisualState.overlayActive =
-                s_zPromptVisualState.overlayTextureCount > 0;
-        }
+        s_zPromptVisualState.root = root;
     }
 
-    for (u8 i = 0; i < s_zPromptVisualState.textureCount; ++i) {
-        icon->changeTexture(dpadTexture, i);
-    }
-    if (JUTTexture* texture = icon->getTexture(0)) {
-        icon->setTexCoord(texture, BIND15, J2DMirror_X, false);
-    }
-    icon->setBlackWhite(JUtility::TColor(0x00000000), JUtility::TColor(0xFFFFFFFF));
-    icon->setCornerColor(JUtility::TColor(0xFFFFFFFF));
-    icon->show();
-    if (s_zPromptVisualState.overlayActive && overlay != nullptr && overlay != icon) {
-        for (u8 i = 0; i < s_zPromptVisualState.overlayTextureCount; ++i) {
-            overlay->changeTexture(dpadTexture, i);
-        }
-
-        overlay->mBounds = icon->mBounds;
-        overlay->mBounds.f.x = overlay->mBounds.i.x + icon->mBounds.getWidth() * (1.0f / 3.0f);
-        overlay->mScaleX = icon->mScaleX;
-        overlay->mScaleY = icon->mScaleY;
-        overlay->mTranslateX = icon->mTranslateX;
-        overlay->mTranslateY = icon->mTranslateY;
-        overlay->mRotateX = icon->mRotateX;
-        overlay->mRotateY = icon->mRotateY;
-        overlay->mRotateZ = icon->mRotateZ;
-        overlay->mRotateOffsetX = icon->mRotateOffsetX;
-        overlay->mRotateOffsetY = icon->mRotateOffsetY;
-        overlay->mRotAxis = icon->mRotAxis;
-        overlay->mBasePosition = icon->mBasePosition;
-        overlay->calcMtx();
-        overlay->setBlackWhite(JUtility::TColor(0x00000000), JUtility::TColor(0xFFFFFFFF));
-        overlay->setCornerColor(JUtility::TColor(0xFF000090));
-        overlay->setAlpha(0x90);
-        JGeometry::TVec2<s16>* overlayCoords = J2DPictureTexCoordAccess::coords(overlay);
-        overlayCoords[0].set(256, 0);
-        overlayCoords[1].set(171, 0);
-        overlayCoords[2].set(256, 256);
-        overlayCoords[3].set(171, 256);
-        overlay->show();
-    } else {
-        set_prompt_pane_visible(meter, MULTI_CHAR('z_btnl'), false);
-    }
-    hide_z_prompt_extra_layers(prompt_pane(meter, MULTI_CHAR('zbtn_n')), icon, overlay,
-                               prompt_pane(meter, MULTI_CHAR('midona')));
+    hide_z_prompt_extra_layers(root, midna);
     s_zPromptCustomVisualsActive = true;
 }
 
@@ -3145,15 +2812,15 @@ HookAction before_meter_button_set_string(ModContext*, void* args, void*, void*)
         return HOOK_CONTINUE;
     }
 
-    s_zPromptAsDpadLeftThisFrame = true;
+    s_midnaPromptThisFrame = true;
     return HOOK_CONTINUE;
 }
 
 HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
-    const bool replacePrompt = s_zPromptAsDpadLeftThisFrame && z_item_slot_enabled();
-    s_zPromptAsDpadLeftThisFrame = false;
+    const bool replacePrompt = s_midnaPromptThisFrame && z_item_slot_enabled();
+    s_midnaPromptThisFrame = false;
     auto* meter = mods::arg<dMeterButton_c*>(args, 0);
-    s_applyZPromptDpadIcon = false;
+    s_hideZPromptButton = false;
     s_hideZPromptAfterExecute = false;
 
     if (!replacePrompt) {
@@ -3168,7 +2835,7 @@ HookAction before_meter_button_execute(ModContext*, void* args, void*, void*) {
         return HOOK_CONTINUE;
     }
 
-    s_applyZPromptDpadIcon = true;
+    s_hideZPromptButton = true;
     return HOOK_CONTINUE;
 }
 
@@ -3180,19 +2847,19 @@ void after_meter_button_execute(ModContext*, void* args, void*, void*) {
         s_hideZPromptAfterExecute = false;
     }
 
-    if (!s_applyZPromptDpadIcon) {
+    if (!s_hideZPromptButton) {
         return;
     }
 
     if (meter == nullptr || !meter->isButtonShowBit(dMeterButton_c::BUTTON_Z_e)) {
         restore_z_prompt_visuals(meter);
         hide_z_prompt_panes(meter);
-        s_applyZPromptDpadIcon = false;
+        s_hideZPromptButton = false;
         return;
     }
 
-    apply_z_prompt_visuals(meter);
-    s_applyZPromptDpadIcon = false;
+    hide_z_prompt_button_visuals(meter);
+    s_hideZPromptButton = false;
 }
 
 HookAction before_touch_sync_action_bar(ModContext*, void*, void*, void*) {
@@ -3420,22 +3087,6 @@ ModResult install_item_slot_hooks(ModError* error) {
 
 void shutdown_item_slot_hooks() {
     clear_ring_z_prompt_refs();
-
-    if (s_dpadPromptTextureBuffer != nullptr) {
-        JKRFreeToHeap(static_cast<JKRHeap*>(mDoExt_getJ2dHeap()), s_dpadPromptTextureBuffer);
-        s_dpadPromptTextureBuffer = nullptr;
-        s_dpadPromptTextureSize = 0;
-    }
-
-    if (s_dpadPromptArchive != nullptr) {
-        JKRUnmountArchive(s_dpadPromptArchive);
-        s_dpadPromptArchive = nullptr;
-    }
-
-    if (s_dpadPromptArchiveMount != nullptr && s_dpadPromptArchiveMount->sync()) {
-        s_dpadPromptArchiveMount->destroy();
-        s_dpadPromptArchiveMount = nullptr;
-    }
 }
 
 }  // namespace dawnlight
