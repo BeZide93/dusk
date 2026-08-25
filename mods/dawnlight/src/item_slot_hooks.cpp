@@ -77,6 +77,7 @@ DEFINE_HOOK(&dMeter2Draw_c::drawButtonCross, MeterDrawButtonCrossHook);
 DEFINE_HOOK(&dMeter2_c::moveButtonCross, MeterMoveButtonCrossHook);
 DEFINE_HOOK(&dMeterButton_c::setString, MeterButtonSetStringHook);
 DEFINE_HOOK(&dMeterButton_c::_execute, MeterButtonExecuteHook);
+DEFINE_HOOK(&dMeterButton_c::draw, MeterButtonDrawHook);
 DEFINE_HOOK(&dMeterMap_c::draw, MeterMapDrawHook);
 DEFINE_HOOK(&daAlink_c::midnaTalkTrigger, MidnaTalkTriggerHook);
 DEFINE_HOOK(&mDoCPd_c::read, PadReadHook);
@@ -252,6 +253,22 @@ J2DPane* prompt_pane(dMeterButton_c* meter, u64 tag) {
                                                                   nullptr;
 }
 
+J2DPicture* prompt_picture(dMeterButton_c* meter, u64 tag) {
+    J2DPane* pane = prompt_pane(meter, tag);
+    if (pane == nullptr || pane->getTypeID() != 18) {
+        return nullptr;
+    }
+
+    return static_cast<J2DPicture*>(pane);
+}
+
+ResTIMG const* loaded_dpad_quarter_texture() {
+    auto* archive = dComIfGp_getMain2DArchive();
+    return archive != nullptr ?
+               static_cast<ResTIMG const*>(archive->getResource('TIMG', "cross_key_00.bti")) :
+               nullptr;
+}
+
 void set_prompt_pane_visible(dMeterButton_c* meter, u64 tag, bool visible) {
     J2DPane* pane = prompt_pane(meter, tag);
     if (pane == nullptr) {
@@ -387,6 +404,66 @@ void hide_z_prompt_button_visuals(dMeterButton_c* meter) {
 
     hide_z_prompt_extra_layers(root, midna);
     s_zPromptCustomVisualsActive = true;
+}
+
+void draw_z_prompt_dpad(dMeterButton_c* meter) {
+    if (!s_zPromptCustomVisualsActive || !z_item_slot_enabled() || meter == nullptr ||
+        !meter->isButtonShowBit(dMeterButton_c::BUTTON_Z_e))
+    {
+        return;
+    }
+
+    J2DPicture* icon = prompt_picture(meter, 'zbtn');
+    ResTIMG const* quarterTexture = loaded_dpad_quarter_texture();
+    if (icon == nullptr || quarterTexture == nullptr || icon->getTextureCount() == 0) {
+        return;
+    }
+
+    const bool wasVisible = icon->isVisible();
+    const u8 textureCount = std::min<u8>(icon->getTextureCount(), 2);
+    ResTIMG const* originalTextures[2] = {};
+    for (u8 i = 0; i < textureCount; ++i) {
+        JUTTexture* texture = icon->getTexture(i);
+        originalTextures[i] = texture != nullptr ? texture->getTexInfo() : nullptr;
+        icon->changeTexture(quarterTexture, i);
+    }
+
+    const JUtility::TColor originalBlack = icon->getBlack();
+    const JUtility::TColor originalWhite = icon->getWhite();
+    JUtility::TColor originalCorners[4];
+    for (u8 i = 0; i < 4; ++i) {
+        originalCorners[i] = icon->corner(i);
+    }
+    Mtx originalMtx;
+    MTXCopy(*icon->getMtx(), originalMtx);
+
+    const JGeometry::TBox2<f32>& bounds = icon->getGlbBounds();
+    const f32 width = bounds.f.x - bounds.i.x;
+    const f32 height = bounds.f.y - bounds.i.y;
+    const f32 halfWidth = width * 0.5f;
+    const f32 halfHeight = height * 0.5f;
+
+    icon->show();
+    icon->setBlackWhite(JUtility::TColor(0x00000000), JUtility::TColor(0xFFFFFFFF));
+    icon->setCornerColor(JUtility::TColor(0xFFFFFFFF));
+    icon->draw(bounds.i.x, bounds.i.y, halfWidth, halfHeight, false, false, false);
+    icon->draw(bounds.i.x + halfWidth, bounds.i.y, halfWidth, halfHeight, true, false, false);
+    icon->draw(bounds.i.x, bounds.i.y + halfHeight, halfWidth, halfHeight, false, true, false);
+    icon->draw(bounds.i.x + halfWidth, bounds.i.y + halfHeight, halfWidth, halfHeight, true, true,
+               false);
+
+    icon->setMtx(originalMtx);
+    icon->setBlackWhite(originalBlack, originalWhite);
+    icon->setCornerColor(originalCorners[0], originalCorners[1], originalCorners[2],
+                         originalCorners[3]);
+    for (u8 i = 0; i < textureCount; ++i) {
+        if (originalTextures[i] != nullptr) {
+            icon->changeTexture(originalTextures[i], i);
+        }
+    }
+    if (!wasVisible) {
+        icon->hide();
+    }
 }
 
 bool z_item_menu_or_pause_context();
@@ -2862,6 +2939,10 @@ void after_meter_button_execute(ModContext*, void* args, void*, void*) {
     s_hideZPromptButton = false;
 }
 
+void after_meter_button_draw(ModContext*, void* args, void*, void*) {
+    draw_z_prompt_dpad(mods::arg<dMeterButton_c*>(args, 0));
+}
+
 HookAction before_touch_sync_action_bar(ModContext*, void*, void*, void*) {
     if (s_skipTouchMidnaPressed) {
         s_inTouchActionBarSync = false;
@@ -3054,6 +3135,9 @@ ModResult install_item_slot_hooks(ModError* error) {
     }
     if (result == MOD_OK) {
         result = mods::hook_add_post<MeterButtonExecuteHook>(svc_hook, after_meter_button_execute);
+    }
+    if (result == MOD_OK) {
+        result = mods::hook_add_post<MeterButtonDrawHook>(svc_hook, after_meter_button_draw);
     }
 #if defined(__ANDROID__)
     if (result == MOD_OK) {
