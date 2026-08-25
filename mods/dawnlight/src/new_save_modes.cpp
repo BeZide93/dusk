@@ -340,9 +340,12 @@ using CreateActor7Fn =
     fpc_ProcID (*)(s16, u32, const cXyz*, int, const csXyz*, const cXyz*, s8);
 using CreateActor8Fn =
     fpc_ProcID (*)(s16, u32, const cXyz*, int, const csXyz*, const cXyz*, s8, u32);
+using CreateActor9Fn =
+    fpc_ProcID (*)(s16, u32, const cXyz*, int, const csXyz*, const cXyz*, s8, u32, u8);
 
 CreateActor7Fn sCreateActor7 = nullptr;
 CreateActor8Fn sCreateActor8 = nullptr;
+CreateActor9Fn sCreateActor9 = nullptr;
 bool sCreateActorResolveAttempted = false;
 
 void resolve_create_actor() {
@@ -353,6 +356,13 @@ void resolve_create_actor() {
 
     void* symbol = nullptr;
 #if defined(_WIN32)
+    if (svc_hook->resolve(
+            mod_ctx, "?fopAcM_create@@YAIFIPEBUcXyz@@HPEBVcsXyz@@0CIE@Z", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor9 = reinterpret_cast<CreateActor9Fn>(symbol);
+        return;
+    }
     if (svc_hook->resolve(
             mod_ctx, "?fopAcM_create@@YAIFIPEBUcXyz@@HPEBVcsXyz@@0CI@Z", &symbol,
             nullptr) == MOD_OK)
@@ -368,6 +378,12 @@ void resolve_create_actor() {
         return;
     }
 #elif defined(__ANDROID__)
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_ajh", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor9 = reinterpret_cast<CreateActor9Fn>(symbol);
+        return;
+    }
     if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_a", &symbol,
             nullptr) == MOD_OK)
     {
@@ -381,6 +397,12 @@ void resolve_create_actor() {
         return;
     }
 #else
+    if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_ajh", &symbol,
+            nullptr) == MOD_OK)
+    {
+        sCreateActor9 = reinterpret_cast<CreateActor9Fn>(symbol);
+        return;
+    }
     if (svc_hook->resolve(mod_ctx, "_Z13fopAcM_createsjPK4cXyziPK5csXyzS1_aj", &symbol,
             nullptr) == MOD_OK)
     {
@@ -398,6 +420,10 @@ void resolve_create_actor() {
 fpc_ProcID create_actor(s16 procName, u32 parameters, const cXyz* pos, int roomNo,
     const csXyz* angle, const cXyz* scale, s8 argument) {
     resolve_create_actor();
+
+    if (sCreateActor9 != nullptr) {
+        return sCreateActor9(procName, parameters, pos, roomNo, angle, scale, argument, 0, 0xff);
+    }
 
     if (sCreateActor8 != nullptr) {
         return sCreateActor8(procName, parameters, pos, roomNo, angle, scale, argument, 0);
