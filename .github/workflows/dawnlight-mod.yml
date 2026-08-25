@@ -10,6 +10,9 @@ permissions:
   actions: read
   contents: write
 
+env:
+  SYMGEN_VERSION: v1.3.3
+
 jobs:
   resolve-sdk:
     name: Resolve Host SDK
@@ -59,10 +62,8 @@ jobs:
         include:
           - platform: linux-x86_64
             runner: ubuntu-24.04
-            preset: x-linux-ci-gcc
           - platform: linux-aarch64
             runner: ubuntu-24.04-arm
-            preset: x-linux-ci-gcc
 
     steps:
       - uses: actions/checkout@v6
@@ -73,28 +74,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get -y install ninja-build clang lld mold openssl libcurl4-openssl-dev \
-            zlib1g-dev libglu1-mesa-dev libdbus-1-dev libvulkan-dev libxi-dev libxrandr-dev libasound2-dev \
-            libpulse-dev libudev-dev libpng-dev libncurses5-dev libx11-xcb-dev libfreetype-dev \
-            libxinerama-dev libxcursor-dev python3-markupsafe libgtk-3-dev libssl-dev \
-            libxss-dev libfuse2 libusb-1.0-0-dev libdecor-0-dev libpipewire-0.3-dev libunwind-dev
-
-      - name: Configure host dependencies
-        run: cmake --preset ${{ matrix.preset }}
+          sudo apt-get -y install ninja-build
 
       - name: Build Dawnlight mod
         shell: bash
         run: |
           set -euo pipefail
-          rmlui_core="$(find build -path '*/RmlUi/Core.h' -print -quit)"
-          sdl_touch="$(find build -path '*/SDL3/SDL_touch.h' -print -quit)"
-          rmlui_include="$(dirname "$(dirname "$rmlui_core")")"
-          sdl_include="$(dirname "$(dirname "$sdl_touch")")"
           cmake -S mods/dawnlight -B build/dawnlight-mod -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DDUSK_DIR="$PWD" \
-            -DDAWNLIGHT_RMLUI_INCLUDE="$rmlui_include" \
-            -DDAWNLIGHT_SDL3_INCLUDE="$sdl_include"
+            -DDUSK_DIR="$PWD"
           cmake --build build/dawnlight-mod --target dawnlight_mod_package --parallel
 
       - name: Upload mod package
@@ -222,6 +210,12 @@ jobs:
             vcpkg_arch: x64
             artifact_pattern: dusklight-*-win32-msvc-x86_64
             sdk_stub: windows-amd64.lib
+          - platform: windows-arm64
+            preset: x-windows-ci-arm64-msvc
+            msvc_arch: amd64_arm64
+            vcpkg_arch: arm64
+            artifact_pattern: dusklight-*-win32-msvc-arm64
+            sdk_stub: windows-arm64.lib
 
     steps:
       - uses: actions/checkout@v6
@@ -383,18 +377,18 @@ jobs:
           path: artifacts
           pattern: dawnlight-mod-*
 
+      - name: Install symgen
+        run: |
+          curl -fsSL -o symgen \
+            "https://github.com/encounter/symgen/releases/download/${SYMGEN_VERSION}/symgen-linux-x86_64"
+          chmod +x symgen
+
       - name: Combine mod packages
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p combined
-          while IFS= read -r -d '' dusk; do
-            echo "Merging $dusk"
-            tmp="$(mktemp -d)"
-            unzip -q "$dusk" -d "$tmp"
-            cp -a "$tmp"/. combined/
-          done < <(find artifacts -name '*.dusk' -print0)
-          (cd combined && zip -qr ../dawnlight_mod.dusk mod.json lib res)
+          python3 tools/merge_mod.py -o dawnlight_mod.dusk --symgen ./symgen \
+            artifacts/*/*.dusk
 
       - name: Upload combined mod package
         uses: actions/upload-artifact@v7
