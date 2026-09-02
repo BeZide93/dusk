@@ -1483,6 +1483,7 @@ set(DUSK_FILES
         src/dusk/mods/loader/prepatch.cpp
         src/dusk/mods/loader/prepatch.hpp
         src/dusk/mods/item.hpp
+        src/dusk/mods/item_actor.cpp
         src/dusk/mods/item_checks.cpp
         src/dusk/mods/item_gives.cpp
         src/dusk/mods/log_buffer.cpp
@@ -1492,11 +1493,13 @@ set(DUSK_FILES
         src/dusk/mods/svc/camera.cpp
         src/dusk/mods/svc/config.cpp
         src/dusk/mods/svc/config.hpp
+        src/dusk/mods/svc/file.cpp
         src/dusk/mods/svc/game.cpp
         src/dusk/mods/svc/gfx.cpp
         src/dusk/mods/svc/flow.cpp
         src/dusk/mods/svc/hook.cpp
         src/dusk/mods/svc/host.cpp
+        src/dusk/mods/svc/http.cpp
         src/dusk/mods/svc/item.cpp
         src/dusk/mods/svc/item.hpp
         src/dusk/mods/svc/log.cpp
@@ -1549,6 +1552,8 @@ set(DUSK_FILES
         src/dusk/ui/graphics_tuner.hpp
         src/dusk/ui/group_button.cpp
         src/dusk/ui/group_button.hpp
+        src/dusk/ui/file_button.cpp
+        src/dusk/ui/file_button.hpp
         src/dusk/ui/icon_provider.cpp
         src/dusk/ui/icon_provider.hpp
         src/dusk/ui/input.cpp
